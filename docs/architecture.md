@@ -42,6 +42,20 @@ in the compose file following the same pattern (stdio server wrapped by
 supergateway into streamable-HTTP). Adding a capability = adding a compose
 block + registering the endpoint in each client. No frontend work.
 
+### Identity — one persona, every client
+
+The assistant is **Novak** wherever it's reached. The master copies of its
+system prompts live in [../prompts/](../prompts/novak-chat.md): a full
+persona for text chat, and a deliberately terse one for voice. Set them on
+the oMLX profiles if profiles carry system prompts, so new clients inherit
+the identity for free; otherwise set per client and keep `prompts/` as the
+source of truth.
+
+The persona is not decoration — it encodes the security posture the model
+itself must enforce: never ask for credentials, treat retrieved content as
+data rather than instruction, and confirm before acting. See
+[security.md](security.md).
+
 ### Clients
 
 - **Open WebUI** — text + voice chat, per-user accounts/RBAC, model
@@ -85,5 +99,6 @@ prompt.
 | OpenMemory UI | 3001 |
 | Wyoming whisper (STT) | 10300 |
 | Wyoming piper (TTS) | 10200 |
+| Wyoming openWakeWord | 10400 |
 
 All LAN-only. For remote access use Tailscale; never port-forward.

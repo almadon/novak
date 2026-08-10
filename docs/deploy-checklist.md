@@ -19,6 +19,9 @@ work top to bottom.
 - [ ] Download Qwen3-4B-Instruct 4bit + Qwen3-14B 4bit (admin UI → HF search).
 - [ ] Set idle TTL on the 14B (15–30 min); none on the 4B.
 - [ ] Create profiles `ha-voice`, `chat`, `deep`.
+- [ ] **Verify** whether oMLX profiles carry a system prompt. If yes, paste
+      the personas from `prompts/` there (one place, every client inherits).
+      If no, set them per client and keep `prompts/` as the master copy.
 - [ ] **Verify** whether oMLX serves `/v1/embeddings`; if not, use clients' built-in local embedders.
 - [ ] Confirm oMLX auto-starts after a reboot (launch-at-login setting or a launchd agent).
 
@@ -40,7 +43,13 @@ work top to bottom.
       **local** endpoints (oMLX / local embedder), *not* OpenAI — this is the
       one service that defaults to a cloud key. Check its settings screen.
       Note the exact MCP endpoint path for clients.
-- [ ] Wyoming images run on arm64 (`rhasspy/wyoming-whisper`, `rhasspy/wyoming-piper`).
+- [ ] Wyoming images run on arm64 (`rhasspy/wyoming-whisper`, `rhasspy/wyoming-piper`,
+      `rhasspy/wyoming-openwakeword`).
+- [ ] **openwakeword will crash-loop until a matching model exists** — either
+      train `hey_novak` (see ../wakeword/README.md) and put it in
+      `wakeword/models/`, or set `WAKEWORD_MODEL` to a stock word for now.
+      Confirm the model file extension the current image expects (`.tflite`
+      vs `.onnx`) — docs mention both.
 - [ ] `docker compose ps` — everything `running`, nothing restarting.
 
 ## Open WebUI
@@ -48,6 +57,9 @@ work top to bottom.
 - [ ] First account created = admin; then disable open signup
       (Admin → Settings → Users).
 - [ ] Models from oMLX (incl. profiles) appear in the model switcher.
+- [ ] Novak persona applied (oMLX profile, or Open WebUI model preset if not).
+      Sanity check: ask "who are you?" — it should answer as Novak. Then ask
+      it for an API key and confirm it declines.
 - [ ] Register MCP servers (Admin → Settings → Tools, native MCP/streamable-HTTP):
       Outline `http://<mini>:8001/mcp`, Vikunja `http://<mini>:8002/mcp`,
       OpenMemory per its path.
@@ -58,10 +70,15 @@ work top to bottom.
 
 - [ ] HACS: install openai-compatible-conversation (or Extended OpenAI
       Conversation for function-calling device control).
-- [ ] Wyoming integrations: STT 10300, TTS 10200.
+- [ ] Wyoming integrations: STT 10300, TTS 10200, wake word 10400.
 - [ ] MCP integration(s): OpenMemory (+ Outline if desired).
-- [ ] Assist pipeline assembled; test from an HA Voice device:
-      a device command, then a memory question ("what do you know about me?").
+- [ ] Decide the wake-word path: trained `hey_novak` for Wyoming satellites,
+      or a stock microWakeWord trigger if you're on Voice PE hardware
+      (see ../wakeword/README.md — custom words aren't supported there).
+- [ ] Assist pipeline named "Novak"; test from a voice device: a device
+      command, then a memory question ("what do you know about me?").
+- [ ] Voice answers are short (1–2 sentences) and contain no markdown —
+      if they ramble, the voice persona didn't take.
 
 ## Resilience test (do this once)
 

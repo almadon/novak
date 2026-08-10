@@ -110,6 +110,20 @@ services:
     volumes:
       - piper:/data
 
+  # Server-side wake word detection ("hey novak"). Only used by Wyoming
+  # satellites — HA Voice PE detects on-device with microWakeWord instead.
+  # See wakeword/README.md before training a model.
+  openwakeword:
+    image: rhasspy/wyoming-openwakeword:latest
+    restart: unless-stopped
+    command: >
+      --preload-model ${WAKEWORD_MODEL:-hey_novak}
+      --custom-model-dir /custom
+    ports:
+      - "${OPENWAKEWORD_PORT:-10400}:10400"
+    volumes:
+      - ./wakeword/models:/custom:ro
+
 volumes:
   open-webui:
   qdrant:

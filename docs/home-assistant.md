@@ -18,8 +18,9 @@ Settings:
 - Base URL: `http://<mini>:<OMLX_PORT>/v1`
 - API key: the oMLX key
 - Model: `ha-voice` (the fast 4B profile — voice latency is unforgiving)
-- Keep the system prompt short; oMLX's SSD prompt cache makes the repeated
-  prefix cheap either way.
+- System prompt: [../prompts/novak-voice.md](../prompts/novak-voice.md)
+  (skip if the oMLX profile already carries it — don't set it twice).
+  Keep it short: long prompts produce long spoken answers.
 
 ## 2. Wyoming STT/TTS
 
@@ -47,12 +48,25 @@ agent's toolset small** — each tool call is a model round-trip and voice
 should answer in ~1–2s. Memory + HA devices + Outline search is a good
 ceiling; do not attach Vikunja/email/etc. to the voice pipeline.
 
-## 4. Assist pipeline
+## 4. Wake word — "Hey Novak"
 
-Settings → Voice assistants → Add assistant:
+Add a third Wyoming integration pointing at `tcp://<mini>:10400` for the
+openWakeWord service, then select the wake word in the pipeline below.
+
+Read [../wakeword/README.md](../wakeword/README.md) first — it covers
+training the model (synthetic, ~no effort) and one significant constraint:
+**HA Voice PE hardware detects wake words on-device with microWakeWord,
+which has no custom-training path**, so "Hey Novak" works for Wyoming
+satellites but not (currently) for Voice PE. On Voice PE, keep a stock
+trigger like "okay nabu" — the assistant still answers as Novak.
+
+## 5. Assist pipeline
+
+Settings → Voice assistants → Add assistant, named **Novak**:
 
 - Conversation agent: the openai-compatible agent (→ `ha-voice`)
 - STT: whisper, TTS: piper
+- Wake word: `hey_novak` (satellites) or a stock word (Voice PE)
 - Expose only the entities you actually want voice-controllable.
 
 ## Latency expectations

@@ -34,11 +34,20 @@ settings — no extra RAM. Create:
 - **`ha-voice`** → Qwen3-4B: temperature ~0.3, short max tokens (voice
   answers should be one or two sentences), reasoning/thinking OFF if the
   model supports toggling it (latency).
+  System prompt: [../prompts/novak-voice.md](../prompts/novak-voice.md)
 - **`chat`** → Qwen3-14B: your defaults for conversation.
+  System prompt: [../prompts/novak-chat.md](../prompts/novak-chat.md)
 - **`deep`** → Qwen3-14B: thinking ON, higher max tokens, for harder
-  questions.
+  questions. Same chat persona.
 
 Clients then select `ha-voice` / `chat` / `deep` as the model name.
+
+**On where the persona lives**: set it in the oMLX profile if profiles
+support a system prompt — then every client gets a Novak that behaves
+consistently, including ones added later, and there's one place to edit.
+If they don't, fall back to setting it per client (Open WebUI model preset,
+HA agent's prompt field) and treat `prompts/` as the master copy so the
+copies don't drift. Verify which on the host.
 
 ## If desktop contention is ever still noticeable
 

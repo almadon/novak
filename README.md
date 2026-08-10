@@ -48,6 +48,8 @@ server and the same MCP tools. Nothing important lives inside any single UI.
 | [scripts/up.sh](scripts/up.sh) | Starts the stack; pulls secrets from macOS Keychain |
 | [scripts/power.sh](scripts/power.sh) | pmset settings for 24/7 operation |
 | [omlx/SETTINGS.md](omlx/SETTINGS.md) | oMLX configuration: models, memory limits, TTLs, profiles |
+| [prompts/](prompts/novak-chat.md) | Novak's persona — master copy of the chat and voice system prompts |
+| [wakeword/](wakeword/README.md) | "Hey Novak" wake word: training, and the Voice PE caveat |
 | [docs/architecture.md](docs/architecture.md) | Full architecture and rationale |
 | [docs/security.md](docs/security.md) | Secrets handling, least privilege, prompt-injection guardrails |
 | [docs/home-assistant.md](docs/home-assistant.md) | HA + HA Voice wiring (conversation agent, MCP, Wyoming) |

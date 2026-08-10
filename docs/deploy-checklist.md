@@ -14,7 +14,7 @@ work top to bottom.
 ## oMLX (see ../omlx/SETTINGS.md)
 
 - [ ] Note the server port → set `OMLX_PORT` in `.env`.
-- [ ] Enable API-key auth → Keychain item `mini-ai/OMLX_API_KEY`.
+- [ ] Enable API-key auth → Keychain item `novak/OMLX_API_KEY`.
 - [ ] Bind to LAN; confirm reachable from another machine: `curl http://<mini>:<port>/v1/models`
 - [ ] Download Qwen3-4B-Instruct 4bit + Qwen3-14B 4bit (admin UI → HF search).
 - [ ] Set idle TTL on the 14B (15–30 min); none on the 4B.
@@ -24,7 +24,7 @@ work top to bottom.
 
 ## Secrets
 
-- [ ] `security add-generic-password -s "mini-ai/OMLX_API_KEY" -a mini-ai -w`
+- [ ] `security add-generic-password -s "novak/OMLX_API_KEY" -a novak -w`
 - [ ] Same for `OUTLINE_API_KEY` (created read-only in Outline) and `VIKUNJA_API_TOKEN`.
 - [ ] `.env` has no real secrets in it.
 

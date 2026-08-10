@@ -10,7 +10,7 @@ them onto whatever the admin UI calls them.
 | Setting | Value | Why |
 |---|---|---|
 | Max process memory | default (RAM − 8GB ≈ 16GB) | The "nice"-like balloon: oMLX can use up to ~16GB, macOS always keeps ~8GB, LRU-evicts models under pressure. Leave the default. |
-| API key auth | **enable** | Anything on the LAN can otherwise use the server. Store the key in Keychain as `mini-ai/OMLX_API_KEY`. |
+| API key auth | **enable** | Anything on the LAN can otherwise use the server. Store the key in Keychain as `novak/OMLX_API_KEY`. |
 | Bind address | LAN interface | Needed so Docker containers and HA can reach it. Do not port-forward from the router. |
 | SSD KV cache (DFlash) | enable, generous size (50GB+) | Warm restarts + fast repeated-prefix prefill (HA system prompts, Open WebUI personas). SSD is cheap; latency isn't. |
 

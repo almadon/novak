@@ -1,9 +1,9 @@
-# mini-ai stack. oMLX runs natively on the host (Metal/MLX cannot run in
+# Novak stack. oMLX runs natively on the host (Metal/MLX cannot run in
 # Docker); everything here reaches it via host.docker.internal.
 # Start with scripts/up.sh (pulls secrets from Keychain), not bare
 # `docker compose up`.
 
-name: mini-ai
+name: novak
 
 services:
   # ── Chat frontend ─────────────────────────────────────────────────────

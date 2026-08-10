@@ -20,10 +20,10 @@ server (or env var on an existing one) instead.
 Add a secret:
 
 ```bash
-security add-generic-password -s "mini-ai/OUTLINE_API_KEY" -a mini-ai -w
+security add-generic-password -s "novak/OUTLINE_API_KEY" -a novak -w
 ```
 
-`up.sh` loads any `mini-ai/*` Keychain item over the `.env` value.
+`up.sh` loads any `novak/*` Keychain item over the `.env` value.
 
 ## Rule 2 — least privilege per integration
 

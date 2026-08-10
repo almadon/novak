@@ -1,4 +1,4 @@
-# mini-ai — private LLM stack for the Mac mini M4 (24GB)
+# Novak — private LLM stack for the Mac mini M4 (24GB)
 
 A self-hosted, model-switching AI hub built around **oMLX** for inference, with
 **Open WebUI** for text/voice chat, **MCP servers** as the plugin system

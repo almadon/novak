@@ -1,0 +1,117 @@
+# mini-ai stack. oMLX runs natively on the host (Metal/MLX cannot run in
+# Docker); everything here reaches it via host.docker.internal.
+# Start with scripts/up.sh (pulls secrets from Keychain), not bare
+# `docker compose up`.
+
+name: mini-ai
+
+services:
+  # ── Chat frontend ─────────────────────────────────────────────────────
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    restart: unless-stopped
+    ports:
+      - "${OPENWEBUI_PORT:-3000}:8080"
+    environment:
+      OPENAI_API_BASE_URL: "http://host.docker.internal:${OMLX_PORT:-8080}/v1"
+      OPENAI_API_KEY: "${OMLX_API_KEY:-none}"
+      ENABLE_OLLAMA_API: "false"
+      WEBUI_URL: "http://${HOST_NAME:-mini.local}:${OPENWEBUI_PORT:-3000}"
+      # Keep everything local: no external telemetry-ish integrations.
+      ENABLE_OPENAI_API: "true"
+    volumes:
+      - open-webui:/app/backend/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ── MCP servers (the plugin system) ───────────────────────────────────
+  # Pattern: stdio MCP server wrapped by supergateway → streamable-HTTP,
+  # consumable by both Open WebUI (native MCP) and Home Assistant (MCP
+  # integration). To add a plugin, copy one of these blocks.
+  outline-mcp:
+    image: node:22-alpine
+    restart: unless-stopped
+    command: >
+      npx -y supergateway
+      --stdio "npx -y outline-mcp-server"
+      --outputTransport streamableHttp
+      --port 8000
+    environment:
+      OUTLINE_API_URL: "${OUTLINE_API_URL}"
+      OUTLINE_API_KEY: "${OUTLINE_API_KEY}"
+    ports:
+      - "${OUTLINE_MCP_PORT:-8001}:8000"
+
+  vikunja-mcp:
+    image: node:22-alpine
+    restart: unless-stopped
+    command: >
+      npx -y supergateway
+      --stdio "npx -y @aimbitgmbh/vikunja-mcp"
+      --outputTransport streamableHttp
+      --port 8000
+    environment:
+      VIKUNJA_URL: "${VIKUNJA_URL}"
+      VIKUNJA_API_TOKEN: "${VIKUNJA_API_TOKEN}"
+      # Vikunja has no trash/undo — leave destructive tools disabled.
+    ports:
+      - "${VIKUNJA_MCP_PORT:-8002}:8000"
+
+  # ── Shared long-term memory (OpenMemory / mem0) ───────────────────────
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    volumes:
+      - qdrant:/qdrant/storage
+
+  openmemory-mcp:
+    image: mem0/openmemory-mcp:latest
+    restart: unless-stopped
+    depends_on:
+      - qdrant
+    ports:
+      - "${OPENMEMORY_PORT:-8765}:8765"
+    environment:
+      USER: "${OPENMEMORY_USER:-tmeuze}"
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: "6333"
+      # LLM + embedder must point at LOCAL services, not OpenAI — configure
+      # in the OpenMemory settings/config on first run. See deploy checklist.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  openmemory-ui:
+    image: mem0/openmemory-ui:latest
+    restart: unless-stopped
+    depends_on:
+      - openmemory-mcp
+    ports:
+      - "${OPENMEMORY_UI_PORT:-3001}:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "http://${HOST_NAME:-mini.local}:${OPENMEMORY_PORT:-8765}"
+      NEXT_PUBLIC_USER_ID: "${OPENMEMORY_USER:-tmeuze}"
+
+  # ── Wyoming voice services for HA Voice ───────────────────────────────
+  whisper:
+    image: rhasspy/wyoming-whisper:latest
+    restart: unless-stopped
+    command: --model ${WHISPER_MODEL:-small-int8} --language en
+    ports:
+      - "${WHISPER_PORT:-10300}:10300"
+    volumes:
+      - whisper:/data
+
+  piper:
+    image: rhasspy/wyoming-piper:latest
+    restart: unless-stopped
+    command: --voice ${PIPER_VOICE:-en_US-lessac-medium}
+    ports:
+      - "${PIPER_PORT:-10200}:10200"
+    volumes:
+      - piper:/data
+
+volumes:
+  open-webui:
+  qdrant:
+  whisper:
+  piper:

@@ -25,11 +25,33 @@ work top to bottom.
 - [ ] **Verify** whether oMLX serves `/v1/embeddings`; if not, use clients' built-in local embedders.
 - [ ] Confirm oMLX auto-starts after a reboot (launch-at-login setting or a launchd agent).
 
+## Before you start (off-host)
+
+- [ ] **Lockfiles exist.** `console/package-lock.json` and
+      `memory-mcp/package-lock.json` are committed. Without them the Docker
+      build fails on `npm ci` — run `npm install` in each first.
+- [ ] **Pocket ID client registered** for the console: `groups` scope enabled,
+      redirect URI `http://<host>:3002/api/auth/callback/pocketid` for every
+      hostname you'll use (LAN name *and* Tailscale name if both).
+- [ ] **`admins.novak` group exists** in Pocket ID with you in it.
+
 ## Secrets
 
 - [ ] `security add-generic-password -s "novak/OMLX_API_KEY" -a novak -w`
 - [ ] Same for `OUTLINE_API_KEY` (created read-only in Outline) and `VIKUNJA_API_TOKEN`.
+- [ ] Same for `CONSOLE_AUTH_SECRET` (`openssl rand -base64 32`),
+      `OIDC_CLIENT_SECRET`, `MEM0_POSTGRES_PASSWORD`, `MEM0_JWT_SECRET`.
+- [ ] `MEMORY_TOKEN_MAP` — JSON of `{"<token>": "<pocket-id-sub>"}`, tokens
+      ≥16 chars (`openssl rand -hex 24`). Only needed once you have real users.
 - [ ] `.env` has no real secrets in it.
+- [ ] `./scripts/up.sh` no longer refuses to start (it checks for `changeme`).
+
+**Ordering:** `MEM0_API_KEY` is issued by the Mem0 server on first start, so it
+can't be set in advance. First run is two passes:
+
+- [ ] `docker compose up -d mem0-db mem0` — let it bootstrap, note the key.
+- [ ] `security add-generic-password -s "novak/MEM0_API_KEY" -a novak -w`
+- [ ] `./scripts/up.sh` for the rest.
 
 ## Docker stack — items to verify on first `./scripts/up.sh`
 
@@ -38,11 +60,19 @@ work top to bottom.
 - [ ] **outline-mcp-server env var names** (`OUTLINE_API_URL`/`OUTLINE_API_KEY`)
       against its README; it may also support native HTTP mode, which would
       let you drop supergateway for that service.
-- [ ] **OpenMemory images/config**: `mem0/openmemory-mcp` + `mem0/openmemory-ui`
-      tags exist and start; configure its LLM + embedder to point at
-      **local** endpoints (oMLX / local embedder), *not* OpenAI — this is the
-      one service that defaults to a cloud key. Check its settings screen.
-      Note the exact MCP endpoint path for clients.
+- [ ] **Mem0 image/tag**: `docker-compose.yml` marks the image `VERIFY` — the
+      self-hosted server's image path was not confirmed off-host. Check
+      upstream's own compose file.
+- [ ] **Mem0 LLM + embedder point at oMLX, not OpenAI.** This is the one
+      service that defaults to a cloud key; confirm the env var names against
+      upstream and that no request leaves the machine.
+- [ ] **Never set `AUTH_DISABLED`** on the Mem0 service — it holds every
+      user's memories.
+- [ ] **memory-mcp starts and answers**: `curl http://<mini>:8003/healthz`.
+      Endpoint paths in `memory-mcp/src/mem0.ts` came from documentation, not
+      observed traffic — expect to correct them against the real server.
+- [ ] Test isolation: with two token→user entries, confirm each token sees only
+      its own memories, and that `delete_memory` refuses another user's id.
 - [ ] Wyoming images run on arm64 (`rhasspy/wyoming-whisper`, `rhasspy/wyoming-piper`,
       `rhasspy/wyoming-openwakeword`).
 - [ ] **openwakeword will crash-loop until a matching model exists** — either
@@ -62,16 +92,40 @@ work top to bottom.
       it for an API key and confirm it declines.
 - [ ] Register MCP servers (Admin → Settings → Tools, native MCP/streamable-HTTP):
       Outline `http://<mini>:8001/mcp`, Vikunja `http://<mini>:8002/mcp`,
-      OpenMemory per its path.
+      memory `http://<mini>:8003/mcp` **with an `Authorization: Bearer <token>`
+      header** matching that user's entry in `MEMORY_TOKEN_MAP`.
+- [ ] Note: Open WebUI runs on a VPS, so these URLs must be reachable from
+      there — Tailscale names, not `mini.local`.
 - [ ] Voice call mode works (local Whisper STT + TTS in Audio settings).
 - [ ] Create per-user accounts; check user A cannot see user B's chats.
+
+## Console (see ../console/README.md)
+
+Nothing here has ever been built or run — expect breakage, particularly around
+Auth.js v5 (still pre-1.0) and the MCP SDK API.
+
+- [ ] `docker compose logs console` — it started rather than crash-looping.
+- [ ] Sign in via Pocket ID redirects correctly and comes back.
+- [ ] `/admin` loads for you (you're in `admins.novak`).
+- [ ] **Test the gate that matters**: with a user *not* in `admins.novak`,
+      `/admin` refuses, and a direct `PUT /api/admin/registry` returns 403 —
+      not just a hidden button.
+- [ ] Remove yourself from `admins.novak` in Pocket ID, then retry a mutating
+      admin action **without logging out**. It should fail immediately; that's
+      the userinfo re-check working.
+- [ ] `python3 console/reconciler/reconcile.py --dry-run` runs clean (needs
+      `pip3 install --user pyyaml`).
+- [ ] Confirm the reconciler refuses an `elevated`/`dangerous` registry entry
+      that's enabled without `accepted_by`/`accepted_on`.
 
 ## Home Assistant (see home-assistant.md)
 
 - [ ] HACS: install openai-compatible-conversation (or Extended OpenAI
       Conversation for function-calling device control).
 - [ ] Wyoming integrations: STT 10300, TTS 10200, wake word 10400.
-- [ ] MCP integration(s): OpenMemory (+ Outline if desired).
+- [ ] MCP integration(s): memory `http://<mini>:8003/mcp` (+ Outline if
+      desired). HA connects **unauthenticated** and gets the shared household
+      identity — it cannot send a bearer token. See home-assistant.md.
 - [ ] Decide the wake-word path: trained `hey_novak` for Wyoming satellites,
       or a stock microWakeWord trigger if you're on Voice PE hardware
       (see ../wakeword/README.md — custom words aren't supported there).

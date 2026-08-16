@@ -30,6 +30,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  # NOTE: there is no reverse proxy here on purpose. TLS for these services is
+  # terminated by the existing internal proxy on another host — see proxy/
+  # for the config to add there, and docs/decisions.md #16 for why.
+
   # ── Console (profiles, memory views, MCP catalog) ─────────────────────
   # Lives in its own repository: novak-konzol. It is an OPTIONAL client of
   # this stack — the registry below can be edited by hand and applied with

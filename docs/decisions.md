@@ -275,3 +275,46 @@ local. Voice is the more reliable interface, not the less.
 **Revisit if:** something new needs public reach. That's a per-service decision
 with the same shape as a risk acceptance in the registry — write down what it
 is, why it needs to face the internet, and what's in front of it.
+
+## 16. TLS on the local network, using the proxy that already exists
+
+Separate question from #15. That one was about who can reach things; this is
+about whether traffic can be read in transit.
+
+First, correcting a common assumption: **Tailscale traffic was already
+encrypted.** It's WireGuard underneath, so tailnet hops were never sniffable.
+The actual gap was the **LAN** — Home Assistant talking to memory, a browser
+reaching the console, anything hitting a published port by IP.
+
+**Novak does not run its own reverse proxy.** There is already an internal
+proxy on another host; adding a second inside this stack would duplicate
+infrastructure for no gain. [`proxy/`](../proxy/README.md) holds config to add
+to the existing one, in both Caddy and Traefik form, since a move to Traefik is
+planned.
+
+```
+   browser / HA ──TLS──▶ existing internal proxy ──Tailscale──▶ the Mac
+```
+
+Both hops encrypted, nothing new deployed. The last hop is WireGuard rather
+than TLS, which is not a weaker guarantee.
+
+Certificates use a **DNS-01** challenge — it proves domain ownership by writing
+a DNS record instead of accepting an inbound connection, which is the only way
+to get real certificates for names that resolve to a private address behind no
+port forwarding.
+
+**Performance cost:** negligible. TLS 1.3 adds one round trip at connection
+setup, and the symmetric crypto is hardware-accelerated. Not measurable against
+token streaming.
+
+**What stays plaintext:** the Wyoming voice services. Wyoming is a TCP protocol
+and the ESPHome satellites can't do TLS to a hostname; proxying them would
+break them. So voice audio is readable by anything on the local network. That
+is the same network the microphones already sit on, but it is a real gap and
+nothing here closes it.
+
+**The other loose end:** for the proxy on another host to reach these services,
+they bind on the tailnet rather than localhost — so anything on the tailnet can
+reach them directly and skip the TLS. Tailscale ACLs are the answer, not
+firewall rules on the Mac.

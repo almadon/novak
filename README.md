@@ -77,6 +77,11 @@ The VPS reaches the Mac over [Tailscale](https://tailscale.com), a private
 network between your own devices. So you can use the chat interface from
 anywhere, while your home network accepts no incoming connections at all.
 
+Traffic between Tailscale devices is already encrypted, so that hop is covered.
+Traffic across your **local** network is not, by default — see
+[proxy/](proxy/README.md) for putting HTTPS in front of these services using a
+reverse proxy you already run.
+
 This is deliberate. The chat interface is designed to face the internet. The
 model server and the memory service are not — they assume everyone talking to
 them is friendly.

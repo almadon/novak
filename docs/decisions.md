@@ -81,7 +81,7 @@ If it vanished, no data would be lost.
 ## 6. The console has no control over Docker
 
 The console can add and remove MCP servers. It does this by writing a file
-(`console/registry/mcp-servers.yaml`); a separate script on the host reads that
+(`registry/mcp-servers.yaml`); a separate script on the host reads that
 file and starts containers.
 
 **Why not let the console run Docker directly:** anything that can create a
@@ -178,3 +178,29 @@ local. Existing sessions last 8 hours, so brief outages don't lock you out.
 Also worth knowing: with the model at home and Open WebUI on a VPS, chat stops
 working if the link between them drops. Voice keeps working, because it's all
 local. Voice is the more reliable interface, not the less.
+
+## 12. The console lives in its own repository
+
+The web console was extracted to a separate repo, `novak-console`. The registry
+it edits and the reconciler that applies that registry **stayed here**.
+
+That division is the point. The registry describes what *this* stack runs, so
+it belongs to this stack; the reconciler is the only thing with power over
+containers, so it stays as far from the web app as possible. What moved out is
+just the user interface.
+
+The entire interface between the two repos is one bind-mounted directory. The
+console writes a file. Something else, with no network exposure, acts on it.
+
+**The console is optional.** Editing `registry/mcp-servers.yaml` by hand and
+running `reconciler/reconcile.py` is a fully supported path — the stack has no
+dependency on the console existing, and the deploy checklist treats it as a
+skippable section.
+
+**Cost:** two repos to keep in step, and the console is now consumed as a
+published image rather than built in place, which means its CI has to work
+before it can be deployed.
+**Why anyway:** it's a Next.js app with a different toolchain, different CI, and
+a different release rhythm from a pile of compose files — and making the
+boundary a repository boundary means it can't quietly grow tendrils into the
+stack it's supposed to merely view.

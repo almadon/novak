@@ -34,20 +34,22 @@ Not everything runs in one place — see
 
 **Before the mini:**
 
-1. **Generate lockfiles.** `console/` and `memory-mcp/` are built with
-   `npm ci`, which needs a `package-lock.json` that does not exist yet. Without
-   this the Docker build fails immediately:
+1. **Generate the lockfile.** `memory-mcp/` is built with `npm ci`, which needs
+   a `package-lock.json` that does not exist yet. Without it the Docker build
+   fails immediately:
 
    ```bash
-   (cd console && npm install) && (cd memory-mcp && npm install)
+   (cd memory-mcp && npm install)
    ```
 
-   Commit both lockfiles. This is also what unblocks CI.
+   Commit the lockfile. This is also what unblocks CI.
 
-2. **Register an OIDC client in Pocket ID** for the console, with the `groups`
-   scope enabled and a redirect URI per hostname you'll reach it by:
-   `http://<host>:3002/api/auth/callback/pocketid`. Create an `admins.novak`
-   group and put yourself in it — admin functions check for it.
+2. **Optional — the console.** It lives in a separate repo
+   ([novak-console](../novak-console/README.md)) and is not required: the MCP
+   registry can be edited by hand and applied with `reconciler/reconcile.py`.
+   To use it, register an OIDC client in Pocket ID with the `groups` scope and
+   a redirect URI per hostname (`http://<host>:3002/api/auth/callback/pocketid`),
+   create an `admins.novak` group, and put yourself in it.
 
 **On the mini:**
 
@@ -78,8 +80,9 @@ it in Keychain, then bring up the rest.
 | Path | What it is |
 |---|---|
 | [docker-compose.yml](docker-compose.yml) | Open WebUI, Console, MCP servers, Mem0, Wyoming voice services |
-| [console/](console/README.md) | Web console: profiles, memories, MCP catalog (Pocket ID OIDC) |
 | [memory-mcp/](memory-mcp/README.md) | MCP front end for Mem0, with per-user scoping |
+| [registry/](registry/mcp-servers.yaml) | The MCP catalog — what runs, and at what risk level |
+| [reconciler/](reconciler/reconcile.py) | Applies the registry; the only thing here that touches Docker |
 | [.env.example](.env.example) | Non-secret configuration; copy to `.env` |
 | [scripts/bootstrap.sh](scripts/bootstrap.sh) | One-shot host setup |
 | [scripts/up.sh](scripts/up.sh) | Starts the stack; pulls secrets from macOS Keychain |
@@ -87,6 +90,8 @@ it in Keychain, then bring up the rest.
 | [omlx/SETTINGS.md](omlx/SETTINGS.md) | oMLX configuration: models, memory limits, TTLs, profiles |
 | [prompts/](prompts/novak-chat.md) | Novak's persona — master copy of the chat and voice system prompts |
 | [wakeword/](wakeword/README.md) | "Hey Novak" wake word: training, and the Voice PE caveat |
+| [docs/what-sets-novak-apart.md](docs/what-sets-novak-apart.md) | What's different here, and what this deliberately isn't |
+| [docs/how-memory-works.md](docs/how-memory-works.md) | **Start here** for the memory layer and `memory-mcp` |
 | [docs/architecture.md](docs/architecture.md) | Full architecture and rationale |
 | [docs/decisions.md](docs/decisions.md) | Every decision made, why, and what it cost |
 | [docs/credits.md](docs/credits.md) | Upstream projects, licences, what was evaluated |
@@ -99,9 +104,9 @@ it in Keychain, then bring up the rest.
 - No custom web frontend *for chat*. New capabilities are added as MCP servers,
   which every client picks up. Build UI only for things chat can't express, and
   build it as a view over these same services.
-  The [console](console/README.md) is that exception, not a violation: browsing
-  memories, editing a persona, and managing plugins aren't things you can do by
-  chatting. It owns no state that matters — if it vanished, nothing would be
-  lost. See [docs/decisions.md](docs/decisions.md) #5.
+  The [console](../novak-console/README.md) is that exception, not a violation:
+  browsing memories, editing a persona, and managing plugins aren't things you
+  can do by chatting. It lives in its own repo, is optional, and owns no state
+  that matters. See [docs/decisions.md](docs/decisions.md) #5.
 - No cloud model fallback. If a feature needs a cloud API, it gets its own
   MCP server with its own scoped key — the chat model never sees credentials.

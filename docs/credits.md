@@ -68,7 +68,7 @@ Every entry above is something that can change under you. Before adding one:
 
 1. Record it here with a link and licence.
 2. Give it a `source` and `risk` block in
-   [console/registry/mcp-servers.yaml](../console/registry/mcp-servers.yaml) if
+   [registry/mcp-servers.yaml](../registry/mcp-servers.yaml) if
    it's an MCP server.
 3. Pin a version. Several existing MCP servers run `npx -y` at container start,
    which fetches the latest release every time — no pinning, and a failure if

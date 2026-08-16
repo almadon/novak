@@ -31,11 +31,20 @@ services:
       - "host.docker.internal:host-gateway"
 
   # ── Console (profiles, memory views, MCP catalog) ─────────────────────
-  # Deliberately has NO docker socket. It writes console/registry/*.yaml;
-  # console/reconciler/reconcile.py (run on the host) is what touches
-  # containers. See console/README.md for why.
+  # Lives in its own repository: novak-console. It is an OPTIONAL client of
+  # this stack — the registry below can be edited by hand and applied with
+  # reconciler/reconcile.py without the console existing at all.
+  #
+  # Deliberately has NO docker socket. It writes registry/*.yaml over the bind
+  # mount; reconciler/reconcile.py (run on the host) is what touches
+  # containers. See that repo's README for why.
+  #
+  # VERIFY the image path once the console repo's CI publishes to Forgejo's
+  # package registry. For local development, override with:
+  #   CONSOLE_IMAGE=novak-console:dev
+  # after building it in the console repo.
   console:
-    build: ./console
+    image: "${CONSOLE_IMAGE:-git.a64.one/tmeuze/novak-console:latest}"
     restart: unless-stopped
     ports:
       - "${CONSOLE_PORT:-3002}:3002"
@@ -51,14 +60,15 @@ services:
       MEM0_URL: "http://mem0:8000"
       MEM0_API_KEY: "${MEM0_API_KEY}"
     volumes:
-      # The one writable path. Keep this repo under git — it is the audit log
-      # for catalog changes.
-      - ./console/registry:/app/registry
+      # The one writable path, and the entire interface between the console
+      # and this stack. Keep this repo under git — it is the audit log for
+      # catalog changes.
+      - ./registry:/app/registry
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
   # ── MCP servers (the plugin system) ───────────────────────────────────
-  # NOTE: these blocks are being migrated to console/registry/mcp-servers.yaml,
+  # NOTE: these blocks are being migrated to registry/mcp-servers.yaml,
   # which the reconciler renders into docker-compose.mcp.yml. Until that
   # cutover, they are defined here and duplicated in the registry — do not
   # enable both at once or the published ports will collide.

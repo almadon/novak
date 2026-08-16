@@ -20,7 +20,7 @@ them onto whatever the admin UI calls them.
 |---|---|---|---|
 | Voice / quick tools | `mlx-community/Qwen3-4B-Instruct-2507-4bit` | ~2.5GB | **none — always loaded.** Voice latency cannot absorb a model load. |
 | Main chat | `mlx-community/Qwen3-14B-4bit` | ~8.5GB | 15–30 min. Unloads when you're at the desk doing other things; SSD cache makes reloads warm. |
-| Embeddings (memory/RAG) | small MLX embedding model if oMLX serves `/v1/embeddings` — **verify**; otherwise let OpenMemory/Open WebUI use their built-in local embedders | <1GB | none |
+| Embeddings (memory/RAG) | small MLX embedding model if oMLX serves `/v1/embeddings` — **verify**; otherwise let Mem0/Open WebUI use their built-in local embedders | <1GB | none |
 
 Worst case all-hot ≈ 12GB — inside the 16GB ceiling with the OS comfortable.
 Do **not** add a 30B-class model on this machine; 4-bit ≈ 17GB will fight
@@ -41,6 +41,12 @@ settings — no extra RAM. Create:
   questions. Same chat persona.
 
 Clients then select `ha-voice` / `chat` / `deep` as the model name.
+
+**Novak does not choose models for you.** There is no automatic routing by task
+difficulty — the client picks a profile and that's what answers. HA is pinned to
+`ha-voice` because voice can't wait for a model load; in Open WebUI you pick from
+the dropdown. Automatic tier-switching (easy questions → 4B, hard → 14B) would be
+a real feature to build, not something that exists today.
 
 **On where the persona lives**: set it in the oMLX profile if profiles
 support a system prompt — then every client gets a Novak that behaves

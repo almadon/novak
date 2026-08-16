@@ -51,13 +51,13 @@ if [ ${#placeholders[@]} -gt 0 ]; then
   exit 1
 fi
 
-# --build so local changes to console/ and memory-mcp/ actually take effect;
-# without it compose reuses a stale image after an edit.
+# --build so local changes to memory-mcp/ actually take effect; without it
+# compose reuses a stale image after an edit. The console is pulled as a
+# published image (built in its own repo), so this does not rebuild it.
 docker compose up -d --build --remove-orphans
 docker compose ps
 
-# NOTE: the MCP registry reconciler (console/reconciler/reconcile.py) is NOT
-# run here yet. The registry currently duplicates the outline/vikunja service
-# blocks in docker-compose.yml, so running both would collide on ports
-# 8001/8002. Once those blocks are removed from compose, add the reconciler
-# call here. See console/README.md.
+# NOTE: the MCP registry reconciler (reconciler/reconcile.py) is NOT run here
+# yet. The registry currently duplicates the outline/vikunja service blocks in
+# docker-compose.yml, so running both would collide on ports 8001/8002. Once
+# those blocks are removed from compose, add the reconciler call here.

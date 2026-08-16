@@ -27,13 +27,16 @@ work top to bottom.
 
 ## Before you start (off-host)
 
-- [ ] **Lockfiles exist.** `console/package-lock.json` and
-      `memory-mcp/package-lock.json` are committed. Without them the Docker
-      build fails on `npm ci` — run `npm install` in each first.
-- [ ] **Pocket ID client registered** for the console: `groups` scope enabled,
-      redirect URI `http://<host>:3002/api/auth/callback/pocketid` for every
-      hostname you'll use (LAN name *and* Tailscale name if both).
-- [ ] **`admins.novak` group exists** in Pocket ID with you in it.
+- [ ] **Lockfile exists.** `memory-mcp/package-lock.json` is committed. Without
+      it the Docker build fails on `npm ci` — run `npm install` there first.
+- [ ] *(Only if using the console — it lives in the `novak-console` repo and is
+      optional)* Pocket ID client registered: `groups` scope enabled, redirect
+      URI `http://<host>:3002/api/auth/callback/pocketid` for every hostname
+      you'll use (LAN name *and* Tailscale name if both).
+- [ ] *(Console only)* **`admins.novak` group exists** in Pocket ID with you in it.
+- [ ] *(Console only)* Its CI has published an image, and `CONSOLE_IMAGE` in
+      `.env` points at it. Otherwise remove the `console` service from
+      `docker-compose.yml` — the stack does not need it.
 
 ## Secrets
 
@@ -99,12 +102,22 @@ can't be set in advance. First run is two passes:
 - [ ] Voice call mode works (local Whisper STT + TTS in Audio settings).
 - [ ] Create per-user accounts; check user A cannot see user B's chats.
 
-## Console (see ../console/README.md)
+## Registry / reconciler (no console needed)
 
-Nothing here has ever been built or run — expect breakage, particularly around
-Auth.js v5 (still pre-1.0) and the MCP SDK API.
+- [ ] `python3 reconciler/reconcile.py --dry-run` runs clean (needs
+      `pip3 install --user pyyaml`).
+- [ ] Confirm it refuses an `elevated`/`dangerous` registry entry that's
+      enabled without `accepted_by`/`accepted_on`.
+
+## Console — optional (repo: `novak-console`)
+
+Nothing there has ever been built or run — expect breakage, particularly around
+Auth.js v5 (still pre-1.0). **Skip this whole section if you're not using it;**
+the registry above works fine edited by hand.
 
 - [ ] `docker compose logs console` — it started rather than crash-looping.
+- [ ] The bind mount works: it can read `registry/mcp-servers.yaml` from *this*
+      repo, not a copy of its own.
 - [ ] Sign in via Pocket ID redirects correctly and comes back.
 - [ ] `/admin` loads for you (you're in `admins.novak`).
 - [ ] **Test the gate that matters**: with a user *not* in `admins.novak`,
@@ -113,11 +126,6 @@ Auth.js v5 (still pre-1.0) and the MCP SDK API.
 - [ ] Remove yourself from `admins.novak` in Pocket ID, then retry a mutating
       admin action **without logging out**. It should fail immediately; that's
       the userinfo re-check working.
-- [ ] `python3 console/reconciler/reconcile.py --dry-run` runs clean (needs
-      `pip3 install --user pyyaml`).
-- [ ] Confirm the reconciler refuses an `elevated`/`dangerous` registry entry
-      that's enabled without `accepted_by`/`accepted_on`.
-
 ## Home Assistant (see home-assistant.md)
 
 - [ ] HACS: install openai-compatible-conversation (or Extended OpenAI

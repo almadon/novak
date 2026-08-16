@@ -9,7 +9,7 @@
 # passes. (Use `npm ci` rather than `npm install` on purpose — CI should build
 # the exact versions that were committed, not silently pick up newer ones.)
 #
-# The console has its own CI in the novak-console repo.
+# The console has its own CI in the novak-konzol repo.
 
 name: ci
 

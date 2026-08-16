@@ -114,6 +114,32 @@ def validate(entry: dict, seen_names: set[str], seen_ports: set[int]) -> dict:
     if name in seen_names:
         raise ValidationError(f"duplicate name {name!r}")
 
+    kind = entry.get("kind", "container")
+    if kind not in ("container", "external"):
+        raise ValidationError(f"[{name}] kind must be 'container' or 'external', got {kind!r}")
+
+    enabled_raw = req("enabled")
+    if not isinstance(enabled_raw, bool):
+        raise ValidationError(f"[{name}] enabled must be true/false, got {enabled_raw!r}")
+
+    if kind == "external":
+        # Nothing is started; we only catalogue it. Still validate risk, so an
+        # external endpoint with broad powers gets accepted on the record too.
+        url = req("url")
+        if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+            raise ValidationError(f"[{name}] external entries need an http(s) url, got {url!r}")
+        for forbidden in ("image", "command", "port"):
+            if forbidden in entry:
+                raise ValidationError(
+                    f"[{name}] kind is 'external' so {forbidden!r} makes no sense here"
+                )
+        seen_names.add(name)
+        return {
+            "name": name, "kind": kind, "url": url, "enabled": enabled_raw,
+            "risk": validate_risk(name, entry, enabled_raw),
+            "source": entry.get("source"),
+        }
+
     image = req("image")
     if not isinstance(image, str) or not IMAGE_RE.match(image):
         raise ValidationError(f"[{name}] invalid image {image!r}")
@@ -124,9 +150,7 @@ def validate(entry: dict, seen_names: set[str], seen_ports: set[int]) -> dict:
     if port in seen_ports:
         raise ValidationError(f"[{name}] duplicate port {port}")
 
-    enabled = req("enabled")
-    if not isinstance(enabled, bool):
-        raise ValidationError(f"[{name}] enabled must be true/false, got {enabled!r}")
+    enabled = enabled_raw
 
     command = entry.get("command")
     if command is not None:
@@ -149,7 +173,7 @@ def validate(entry: dict, seen_names: set[str], seen_ports: set[int]) -> dict:
     seen_names.add(name)
     seen_ports.add(port)
     return {
-        "name": name, "image": image, "port": port,
+        "name": name, "kind": "container", "image": image, "port": port,
         "enabled": enabled, "command": command, "env": env,
         "risk": risk, "source": source,
     }
@@ -158,7 +182,8 @@ def validate(entry: dict, seen_names: set[str], seen_ports: set[int]) -> dict:
 def render(servers: list[dict]) -> dict:
     services = {}
     for s in servers:
-        if not s["enabled"]:
+        # External endpoints are catalogued, not run.
+        if s["kind"] == "external" or not s["enabled"]:
             continue
         svc = {
             "image": s["image"],
@@ -208,8 +233,13 @@ def main() -> int:
 
     enabled = [s for s in servers if s["enabled"]]
     disabled = [s for s in servers if not s["enabled"]]
-    print(f"enabled:  {', '.join(s['name'] for s in enabled) or '(none)'}")
+    running = [s for s in enabled if s["kind"] == "container"]
+    external = [s for s in enabled if s["kind"] == "external"]
+
+    print(f"running:  {', '.join(s['name'] for s in running) or '(none)'}")
     print(f"disabled: {', '.join(s['name'] for s in disabled) or '(none)'}")
+    for s in external:
+        print(f"external: {s['name']} -> {s['url']} (not started; point clients here)")
 
     # Surface accepted risk on every run, so a `dangerous` server that was
     # accepted months ago doesn't quietly fade into the background.

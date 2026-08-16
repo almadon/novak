@@ -18,7 +18,7 @@ single UI.
                            │
   shared services    ├─ oMLX ──────────── inference, model switching  [mini]
   (the hub)          ├─ memory-mcp ────── per-user memory, over Mem0
-                     ├─ Outline MCP ───── canonical knowledgebase
+                     ├─ Outline ───────── knowledgebase (serves MCP itself)
                      ├─ Vikunja MCP ───── tasks
                      └─ Wyoming STT/TTS ─ whisper + piper for HA Voice
 ```
@@ -45,7 +45,7 @@ Not everything runs in one place — see
    Commit the lockfile. This is also what unblocks CI.
 
 2. **Optional — the console.** It lives in a separate repo
-   ([novak-console](../novak-console/README.md)) and is not required: the MCP
+   ([novak-konzol](../konzol/README.md)) and is not required: the MCP
    registry can be edited by hand and applied with `reconciler/reconcile.py`.
    To use it, register an OIDC client in Pocket ID with the `groups` scope and
    a redirect URI per hostname (`http://<host>:3002/api/auth/callback/pocketid`),
@@ -104,7 +104,7 @@ it in Keychain, then bring up the rest.
 - No custom web frontend *for chat*. New capabilities are added as MCP servers,
   which every client picks up. Build UI only for things chat can't express, and
   build it as a view over these same services.
-  The [console](../novak-console/README.md) is that exception, not a violation:
+  The [console](../konzol/README.md) is that exception, not a violation:
   browsing memories, editing a persona, and managing plugins aren't things you
   can do by chatting. It lives in its own repo, is optional, and owns no state
   that matters. See [docs/decisions.md](docs/decisions.md) #5.

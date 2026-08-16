@@ -29,7 +29,7 @@ work top to bottom.
 
 - [ ] **Lockfile exists.** `memory-mcp/package-lock.json` is committed. Without
       it the Docker build fails on `npm ci` — run `npm install` there first.
-- [ ] *(Only if using the console — it lives in the `novak-console` repo and is
+- [ ] *(Only if using the console — it lives in the `novak-konzol` repo and is
       optional)* Pocket ID client registered: `groups` scope enabled, redirect
       URI `http://<host>:3002/api/auth/callback/pocketid` for every hostname
       you'll use (LAN name *and* Tailscale name if both).
@@ -41,7 +41,8 @@ work top to bottom.
 ## Secrets
 
 - [ ] `security add-generic-password -s "novak/OMLX_API_KEY" -a novak -w`
-- [ ] Same for `OUTLINE_API_KEY` (created read-only in Outline) and `VIKUNJA_API_TOKEN`.
+- [ ] Same for `VIKUNJA_API_TOKEN`. (`OUTLINE_API_KEY` only if something
+      still needs it — Outline's own MCP endpoint handles its own auth.)
 - [ ] Same for `CONSOLE_AUTH_SECRET` (`openssl rand -base64 32`),
       `OIDC_CLIENT_SECRET`, `MEM0_POSTGRES_PASSWORD`, `MEM0_JWT_SECRET`.
 - [ ] `MEMORY_TOKEN_MAP` — JSON of `{"<token>": "<pocket-id-sub>"}`, tokens
@@ -60,9 +61,9 @@ can't be set in advance. First run is two passes:
 
 - [ ] **supergateway flags**: `--outputTransport streamableHttp` is current
       usage — check `npx supergateway --help` if a container crash-loops.
-- [ ] **outline-mcp-server env var names** (`OUTLINE_API_URL`/`OUTLINE_API_KEY`)
-      against its README; it may also support native HTTP mode, which would
-      let you drop supergateway for that service.
+- [ ] **Outline needs no wrapper.** It serves MCP natively at
+      `https://et.a64.one/mcp`. Confirm that endpoint answers and what auth it
+      wants; `OUTLINE_API_KEY` may now only be needed by other tooling.
 - [ ] **Mem0 image/tag**: `docker-compose.yml` marks the image `VERIFY` — the
       self-hosted server's image path was not confirmed off-host. Check
       upstream's own compose file.
@@ -94,7 +95,7 @@ can't be set in advance. First run is two passes:
       Sanity check: ask "who are you?" — it should answer as Novak. Then ask
       it for an API key and confirm it declines.
 - [ ] Register MCP servers (Admin → Settings → Tools, native MCP/streamable-HTTP):
-      Outline `http://<mini>:8001/mcp`, Vikunja `http://<mini>:8002/mcp`,
+      Outline `https://et.a64.one/mcp` (native, no wrapper), Vikunja `http://<mini>:8002/mcp`,
       memory `http://<mini>:8003/mcp` **with an `Authorization: Bearer <token>`
       header** matching that user's entry in `MEMORY_TOKEN_MAP`.
 - [ ] Note: Open WebUI runs on a VPS, so these URLs must be reachable from
@@ -109,7 +110,7 @@ can't be set in advance. First run is two passes:
 - [ ] Confirm it refuses an `elevated`/`dangerous` registry entry that's
       enabled without `accepted_by`/`accepted_on`.
 
-## Console — optional (repo: `novak-console`)
+## Console — optional (repo: `novak-konzol`)
 
 Nothing there has ever been built or run — expect breakage, particularly around
 Auth.js v5 (still pre-1.0). **Skip this whole section if you're not using it;**

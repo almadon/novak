@@ -23,9 +23,11 @@ tomorrow, nothing of value would be lost.
 
 Human-curated documents are the source of truth, and they live in Outline —
 already running, already searchable, and auditable: you can read and correct
-what the AI "knows" in a normal wiki. The Outline MCP server gives every
-model and client the same search/read (and optionally write) tools. Prefer
-this over an opaque vector store for anything you'd want to audit.
+what the AI "knows" in a normal wiki. Outline **serves MCP itself** at
+`https://et.a64.one/mcp` — no wrapper container — giving every model and
+client the same search/read (and optionally write) tools. Prefer this over an
+opaque vector store for anything you'd want to audit, and prefer a service's
+native MCP endpoint over wrapping it whenever one exists.
 
 ### Memory — Mem0 self-hosted, fronted by memory-mcp
 
@@ -144,7 +146,7 @@ Two consequences worth being explicit about:
 |---|---|
 | oMLX | per app config (`OMLX_PORT`) |
 | Open WebUI | 3000 |
-| Outline MCP | 8001 |
+| Outline MCP | external — `https://et.a64.one/mcp` |
 | Vikunja MCP | 8002 |
 | Mem0 (REST) | 8765 |
 | memory-mcp (MCP) | 8003 |

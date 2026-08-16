@@ -31,7 +31,7 @@ services:
       - "host.docker.internal:host-gateway"
 
   # ── Console (profiles, memory views, MCP catalog) ─────────────────────
-  # Lives in its own repository: novak-console. It is an OPTIONAL client of
+  # Lives in its own repository: novak-konzol. It is an OPTIONAL client of
   # this stack — the registry below can be edited by hand and applied with
   # reconciler/reconcile.py without the console existing at all.
   #
@@ -39,12 +39,16 @@ services:
   # mount; reconciler/reconcile.py (run on the host) is what touches
   # containers. See that repo's README for why.
   #
-  # VERIFY the image path once the console repo's CI publishes to Forgejo's
-  # package registry. For local development, override with:
-  #   CONSOLE_IMAGE=novak-console:dev
-  # after building it in the console repo.
+  # VERIFY THE REGISTRY HOST. Two different hostnames are in play and it is not
+  # clear which serves the container registry:
+  #   - git remotes use  ssh://git@nex.a64.one/tmeuze/novak-konzol.git
+  #   - the Caddy config routes  git.a64.one -> forgejo
+  # Container registries speak HTTP, so git.a64.one is the likelier one, but
+  # this was not confirmed. Set CONSOLE_IMAGE explicitly rather than trusting
+  # this default. For local development:
+  #   CONSOLE_IMAGE=novak-konzol:dev
   console:
-    image: "${CONSOLE_IMAGE:-git.a64.one/tmeuze/novak-console:latest}"
+    image: "${CONSOLE_IMAGE:-git.a64.one/tmeuze/novak-konzol:latest}"
     restart: unless-stopped
     ports:
       - "${CONSOLE_PORT:-3002}:3002"
@@ -75,19 +79,11 @@ services:
   # Pattern: stdio MCP server wrapped by supergateway → streamable-HTTP,
   # consumable by both Open WebUI (native MCP) and Home Assistant (MCP
   # integration). To add a plugin, copy one of these blocks.
-  outline-mcp:
-    image: node:22-alpine
-    restart: unless-stopped
-    command: >
-      npx -y supergateway
-      --stdio "npx -y outline-mcp-server"
-      --outputTransport streamableHttp
-      --port 8000
-    environment:
-      OUTLINE_API_URL: "${OUTLINE_API_URL}"
-      OUTLINE_API_KEY: "${OUTLINE_API_KEY}"
-    ports:
-      - "${OUTLINE_MCP_PORT:-8001}:8000"
+  #
+  # Outline is NOT here: it serves MCP natively at https://et.a64.one/mcp, so
+  # there is no wrapper container, no supergateway, and no npx-at-runtime for
+  # it. It is catalogued in registry/mcp-servers.yaml as `kind: external`.
+  # Prefer that shape whenever a service speaks MCP itself.
 
   vikunja-mcp:
     image: node:22-alpine

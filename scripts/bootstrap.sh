@@ -22,20 +22,35 @@ if ! brew list --cask orbstack >/dev/null 2>&1 && [ ! -d /Applications/OrbStack.
 else
   echo "already installed"
 fi
-open -a OrbStack || true
+# `open -a OrbStack` fails when the app isn't registered with Launch Services
+# (fresh install, or installed somewhere other than /Applications), which is
+# what "Unable to find application named 'OrbStack'" means. Try the explicit
+# bundle path first, since that works regardless of registration.
+if [ -d /Applications/OrbStack.app ]; then
+  open /Applications/OrbStack.app
+elif ! open -a OrbStack 2>/dev/null; then
+  warn "OrbStack installed but could not be launched — start it manually once,"
+  warn "then re-run. Docker commands will fail until it has run at least once."
+fi
 
 step "oMLX"
+# oMLX is not in homebrew-core — it needs its own tap. (An earlier version of
+# this script guessed `brew install --cask omlx`, which does not exist.)
 if [ ! -d /Applications/oMLX.app ] && ! command -v omlx >/dev/null 2>&1; then
-  # Cask name unverified off-host — fall back to manual install if it fails.
-  if ! brew install --cask omlx 2>/dev/null && ! brew install omlx 2>/dev/null; then
-    warn "brew install failed — download oMLX from https://omlx.ai and install manually,"
-    warn "then re-run this script."
+  brew tap jundot/omlx https://github.com/jundot/omlx
+  if ! brew install jundot/omlx/omlx; then
+    warn "brew install failed — download the .dmg from https://github.com/jundot/omlx"
+    warn "and install manually, then re-run this script."
     exit 1
   fi
 else
   echo "already installed"
 fi
-open -a oMLX 2>/dev/null || true
+if [ -d /Applications/oMLX.app ]; then
+  open /Applications/oMLX.app
+elif ! open -a oMLX 2>/dev/null; then
+  warn "oMLX installed but could not be launched — start it manually once."
+fi
 
 step "24/7 power settings (needs sudo)"
 sudo "$REPO_DIR/scripts/power.sh"

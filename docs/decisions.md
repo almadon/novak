@@ -181,7 +181,7 @@ local. Voice is the more reliable interface, not the less.
 
 ## 12. The console lives in its own repository
 
-The web console was extracted to a separate repo, `novak-console`. The registry
+The web console was extracted to a separate repo, `novak-konzol`. The registry
 it edits and the reconciler that applies that registry **stayed here**.
 
 That division is the point. The registry describes what *this* stack runs, so

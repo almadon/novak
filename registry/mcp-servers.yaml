@@ -5,17 +5,31 @@
 # from macOS Keychain via scripts/up.sh. The console can report that a required
 # var is present; it can never read or display the value.
 #
+# Two kinds of entry:
+#
+#   kind: container  (default) — an MCP server we run. The reconciler starts it.
+#   kind: external              — an MCP endpoint that already exists somewhere
+#                                 else and that we merely point clients at.
+#                                 Nothing is started; it is catalogued here so
+#                                 the risk level and credit still get recorded.
+#
 # Schema per entry:
-#   name     required  identifier + container/service name (a-z0-9-)
-#   image    required  container image
-#   command  optional  passed to the container
-#   port     required  host port to publish (container side is always 8000)
-#   env      optional  env var NAMES to pass through from the host environment
-#   enabled  required  false leaves it defined but not started
-#   clients  optional  which clients should auto-register it (informational
-#                      today; wiring is still manual in Open WebUI / HA)
+#   name     required  identifier (a-z0-9-); also the service name for containers
+#   kind     optional  container | external      (default: container)
+#   enabled  required  false leaves it catalogued but not started/advertised
+#   clients  optional  which clients should register it (informational today;
+#                      wiring is still manual in Open WebUI / HA)
 #   source   optional  upstream project URL + license, for credit
 #   risk     optional  see below; defaults to standard
+#
+#   container only:
+#     image    required  container image
+#     command  optional  passed to the container
+#     port     required  host port to publish (container side is always 8000)
+#     env      optional  env var NAMES passed through from the host environment
+#
+#   external only:
+#     url      required  the MCP endpoint clients should use
 #
 # ── Risk levels ("danger zone") ─────────────────────────────────────────
 # The point is not to stop you installing something powerful. It is to make
@@ -33,20 +47,16 @@
 # reconciler/reconcile.py. Turning it off again needs no ceremony.
 
 servers:
+  # Outline serves MCP itself — no wrapper container, no supergateway, no
+  # npx-at-runtime. Clients point straight at it.
   - name: outline
-    image: node:22-alpine
-    command: >
-      npx -y supergateway
-      --stdio "npx -y outline-mcp-server"
-      --outputTransport streamableHttp
-      --port 8000
-    port: 8001
-    env: [OUTLINE_API_URL, OUTLINE_API_KEY]
+    kind: external
+    url: https://et.a64.one/mcp
     enabled: true
     clients: [open-webui, home-assistant]
     source:
-      url: https://github.com/mgprocurement/outline-mcp-server
-      license: VERIFY
+      url: https://github.com/outline/outline
+      license: BSL 1.1 — check before any commercial use
     risk:
       level: standard
 

@@ -15,7 +15,7 @@ this repo are code we wrote:
 | `memory-mcp/` | ~400 lines | The subject of this document |
 | `reconciler/reconcile.py` | ~200 lines | Applies the MCP registry |
 
-(A third, the web console, lives in the separate `novak-console` repo and is
+(A third, the web console, lives in the separate `novak-konzol` repo and is
 optional — it has never been run.)
 
 Everything else — oMLX, Open WebUI, Mem0, Outline, Vikunja, Whisper, Piper,

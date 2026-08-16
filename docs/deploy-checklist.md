@@ -27,8 +27,9 @@ work top to bottom.
 
 ## Before you start (off-host)
 
-- [ ] **Lockfile exists.** `memory-mcp/package-lock.json` is committed. Without
-      it the Docker build fails on `npm ci` — run `npm install` there first.
+- [ ] **Integration images published.** MCP servers come from the
+      `novak-integracije` repo. `memory-mcp` has no lockfile, so its CI and
+      Docker build both fail until `npm install` is run there and committed.
 - [ ] *(Only if using the console — it lives in the `novak-konzol` repo and is
       optional)* Pocket ID client registered: `groups` scope enabled, redirect
       URI `http://<host>:3002/api/auth/callback/pocketid` for every hostname
@@ -73,7 +74,7 @@ can't be set in advance. First run is two passes:
 - [ ] **Never set `AUTH_DISABLED`** on the Mem0 service — it holds every
       user's memories.
 - [ ] **memory-mcp starts and answers**: `curl http://<mini>:8003/healthz`.
-      Endpoint paths in `memory-mcp/src/mem0.ts` came from documentation, not
+      Endpoint paths in its `src/mem0.ts` came from documentation, not
       observed traffic — expect to correct them against the real server.
 - [ ] Test isolation: with two token→user entries, confirm each token sees only
       its own memories, and that `delete_memory` refuses another user's id.

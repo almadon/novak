@@ -34,15 +34,10 @@ Not everything runs in one place — see
 
 **Before the mini:**
 
-1. **Generate the lockfile.** `memory-mcp/` is built with `npm ci`, which needs
-   a `package-lock.json` that does not exist yet. Without it the Docker build
-   fails immediately:
-
-   ```bash
-   (cd memory-mcp && npm install)
-   ```
-
-   Commit the lockfile. This is also what unblocks CI.
+1. **Build the integration images.** MCP servers live in the
+   [novak-integracije](../integracije/README.md) repo and are consumed here as
+   published images. `memory-mcp` has no lockfile yet, so its build fails until
+   you run `npm install` there and commit the result.
 
 2. **Optional — the console.** It lives in a separate repo
    ([novak-konzol](../konzol/README.md)) and is not required: the MCP
@@ -80,7 +75,7 @@ it in Keychain, then bring up the rest.
 | Path | What it is |
 |---|---|
 | [docker-compose.yml](docker-compose.yml) | Open WebUI, Console, MCP servers, Mem0, Wyoming voice services |
-| [memory-mcp/](memory-mcp/README.md) | MCP front end for Mem0, with per-user scoping |
+| [novak-integracije](../integracije/README.md) | MCP front end for Mem0, with per-user scoping |
 | [registry/](registry/mcp-servers.yaml) | The MCP catalog — what runs, and at what risk level |
 | [reconciler/](reconciler/reconcile.py) | Applies the registry; the only thing here that touches Docker |
 | [.env.example](.env.example) | Non-secret configuration; copy to `.env` |

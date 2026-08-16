@@ -204,3 +204,43 @@ before it can be deployed.
 a different release rhythm from a pile of compose files — and making the
 boundary a repository boundary means it can't quietly grow tendrils into the
 stack it's supposed to merely view.
+
+## 13. Three repos: core, integrations, console
+
+Extending #12. The split is now:
+
+| Repo | Holds | Why there |
+|---|---|---|
+| `novak` (srz) | compose, docs, registry, reconciler | The orchestration and the decisions |
+| `novak-integracije` | MCP servers and adapters, incl. `memory-mcp` | Capabilities, replaceable individually |
+| `novak-konzol` | the web console | A client, and optional |
+
+The dividing line is **what a given install runs** versus **what exists to be
+run**. The registry says "this machine runs memory and vikunja at these risk
+levels" — that's per-deployment, so it stays in core. The integrations repo is
+the catalogue of things that *could* be run. Those are different questions and
+they change at different rates.
+
+The reconciler stays in core because it's the only component with power over
+containers, and it should sit as far as possible from anything a third party
+might contribute to.
+
+**Cost:** three repos, and integrations are now consumed as published images —
+so an integration's CI has to work before you can deploy it.
+**Why anyway:** "bring your own engine, hardware, integration" only works if
+adding one doesn't mean editing the core. And a store needs a shelf.
+
+## 14. MCP servers are defined in the registry, not in compose
+
+Consequence of #13 that's worth stating separately, because it closed a real
+piece of debt: `docker-compose.yml` no longer contains any MCP server. They are
+registry entries, rendered by the reconciler into a second compose file that
+`scripts/up.sh` applies alongside the first.
+
+Previously both files described the same servers, and the docs carried a
+warning not to enable both or the ports would collide. That warning is gone
+because the duplication is gone.
+
+`up.sh` now runs the reconciler as a **hard gate**: if a registry entry is
+enabled at `elevated` or `dangerous` without a recorded acceptance, the whole
+start fails rather than quietly skipping that one service.

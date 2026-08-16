@@ -60,6 +60,27 @@ servers:
     risk:
       level: standard
 
+  # First-party. Source lives in the novak-integracije repo; this references
+  # the image its CI publishes. VERIFY the registry host (see docker-compose.yml).
+  - name: memory
+    image: git.a64.one/tmeuze/novak-memory-mcp:latest
+    port: 8003
+    env: [MEM0_URL, MEM0_API_KEY, MEMORY_TOKEN_MAP, MEMORY_DEFAULT_USER]
+    enabled: true
+    clients: [open-webui, home-assistant]
+    source:
+      url: https://nex.a64.one/tmeuze/novak-integracije
+      license: first-party
+    risk:
+      level: elevated
+      why:
+        - "Holds every user's memories; a misconfiguration exposes all of them."
+        - "delete_memory is permanent — Mem0 has no trash."
+        - "With MEMORY_DEFAULT_USER set, it answers unauthenticated callers with
+           the shared household identity. Keep the port on Tailscale only."
+      accepted_by: tmeuze
+      accepted_on: 2026-08-16
+
   - name: vikunja
     image: node:22-alpine
     command: >

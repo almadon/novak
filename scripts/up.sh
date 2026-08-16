@@ -51,13 +51,25 @@ if [ ${#placeholders[@]} -gt 0 ]; then
   exit 1
 fi
 
-# --build so local changes to memory-mcp/ actually take effect; without it
-# compose reuses a stale image after an edit. The console is pulled as a
-# published image (built in its own repo), so this does not rebuild it.
-docker compose up -d --build --remove-orphans
-docker compose ps
+# MCP servers live in registry/mcp-servers.yaml, not in docker-compose.yml.
+# The reconciler validates that registry, refuses to proceed if an elevated or
+# dangerous entry is enabled without a recorded acceptance, renders
+# docker-compose.mcp.yml, and brings everything up together.
+#
+# It is a hard gate on purpose: a failed risk acceptance should stop the whole
+# start, not quietly skip one service.
+PY=$(command -v python3 || true)
+if [ -z "$PY" ]; then
+  echo "✋ python3 not found — needed by reconciler/reconcile.py" >&2
+  exit 1
+fi
+if ! "$PY" -c 'import yaml' 2>/dev/null; then
+  echo "✋ PyYAML missing — run: pip3 install --user pyyaml" >&2
+  exit 1
+fi
+"$PY" reconciler/reconcile.py
 
-# NOTE: the MCP registry reconciler (reconciler/reconcile.py) is NOT run here
-# yet. The registry currently duplicates the outline/vikunja service blocks in
-# docker-compose.yml, so running both would collide on ports 8001/8002. Once
-# those blocks are removed from compose, add the reconciler call here.
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.mcp.yml \
+  ps

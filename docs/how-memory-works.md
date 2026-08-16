@@ -1,7 +1,8 @@
 # How memory works
 
 Plain-language explanation of the memory layer and the one piece of custom code
-in it. Read this before changing anything in `memory-mcp/`.
+in it. It lives in the `novak-integracije` repo — read this before changing
+anything there.
 
 **Nothing here has been run yet.** This describes how it is designed to work.
 
@@ -12,11 +13,10 @@ this repo are code we wrote:
 
 | Thing | Size | What it is |
 |---|---|---|
-| `memory-mcp/` | ~400 lines | The subject of this document |
-| `reconciler/reconcile.py` | ~200 lines | Applies the MCP registry |
+| `memory-mcp/` | ~400 lines | The subject of this document (in `novak-integracije`) |
+| `reconciler/reconcile.py` | ~200 lines | Applies the MCP registry (in this repo) |
 
-(A third, the web console, lives in the separate `novak-konzol` repo and is
-optional — it has never been run.)
+(A third, the web console, is in `novak-konzol` and is optional — never run.)
 
 Everything else — oMLX, Open WebUI, Mem0, Outline, Vikunja, Whisper, Piper,
 Postgres — is upstream software we configure but don't maintain.

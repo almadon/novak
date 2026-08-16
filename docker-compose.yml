@@ -71,34 +71,15 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  # ── MCP servers (the plugin system) ───────────────────────────────────
-  # NOTE: these blocks are being migrated to registry/mcp-servers.yaml,
-  # which the reconciler renders into docker-compose.mcp.yml. Until that
-  # cutover, they are defined here and duplicated in the registry — do not
-  # enable both at once or the published ports will collide.
-  # Pattern: stdio MCP server wrapped by supergateway → streamable-HTTP,
-  # consumable by both Open WebUI (native MCP) and Home Assistant (MCP
-  # integration). To add a plugin, copy one of these blocks.
+  # ── MCP servers ───────────────────────────────────────────────────────
+  # They are NOT defined here. registry/mcp-servers.yaml is the source of
+  # truth; reconciler/reconcile.py renders it into docker-compose.mcp.yml and
+  # scripts/up.sh applies both files together.
   #
-  # Outline is NOT here: it serves MCP natively at https://et.a64.one/mcp, so
-  # there is no wrapper container, no supergateway, and no npx-at-runtime for
-  # it. It is catalogued in registry/mcp-servers.yaml as `kind: external`.
-  # Prefer that shape whenever a service speaks MCP itself.
-
-  vikunja-mcp:
-    image: node:22-alpine
-    restart: unless-stopped
-    command: >
-      npx -y supergateway
-      --stdio "npx -y @aimbitgmbh/vikunja-mcp"
-      --outputTransport streamableHttp
-      --port 8000
-    environment:
-      VIKUNJA_URL: "${VIKUNJA_URL}"
-      VIKUNJA_API_TOKEN: "${VIKUNJA_API_TOKEN}"
-      # Vikunja has no trash/undo — leave destructive tools disabled.
-    ports:
-      - "${VIKUNJA_MCP_PORT:-8002}:8000"
+  # To add one, add a registry entry — not a service block here. Two kinds:
+  #   kind: container  we run it (memory, vikunja)
+  #   kind: external   it already speaks MCP (Outline at https://et.a64.one/mcp)
+  # Prefer external whenever a service has its own MCP endpoint.
 
   # ── Shared long-term memory (Mem0 self-hosted) ────────────────────────
   # OpenMemory (the original choice) was deprecated and sunset upstream. Its
@@ -137,20 +118,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  # MCP front end for Mem0, with per-user scoping. See memory-mcp/README.md —
-  # the caller cannot choose which user's memories it reads.
-  memory-mcp:
-    build: ./memory-mcp
-    restart: unless-stopped
-    depends_on:
-      - mem0
-    ports:
-      - "${MEMORY_MCP_PORT:-8003}:8000"
-    environment:
-      MEM0_URL: "http://mem0:8000"
-      MEM0_API_KEY: "${MEM0_API_KEY}"
-      MEMORY_TOKEN_MAP: "${MEMORY_TOKEN_MAP}"
-      MEMORY_DEFAULT_USER: "${MEMORY_DEFAULT_USER:-}"
+  # memory-mcp is not defined here — it is a registry entry (`memory`), built
+  # from the novak-integracije repo. See registry/mcp-servers.yaml.
 
   # ── Wyoming voice services for HA Voice ───────────────────────────────
   whisper:

@@ -27,13 +27,29 @@ what the AI "knows" in a normal wiki. The Outline MCP server gives every
 model and client the same search/read (and optionally write) tools. Prefer
 this over an opaque vector store for anything you'd want to audit.
 
-### Memory — OpenMemory (mem0), via MCP
+### Memory — Mem0 self-hosted, fronted by memory-mcp
 
 Accumulated per-user facts (preferences, people, ongoing context). Runs
-locally with Qdrant; exposed over MCP so Open WebUI, HA, and future clients
-share one store. The OpenMemory UI (port 3001) lets you inspect and delete
-memories. Do not rely on Open WebUI's built-in Memory feature for anything
-important — it is siloed inside Open WebUI.
+locally on Postgres/pgvector.
+
+This layer was rebuilt because **OpenMemory was deprecated and sunset
+upstream**. Its replacement, the unified Mem0 self-hosted server, is
+multi-user (`user_id` per request, per-user API keys) but **REST-only** — and
+MCP is what lets HA and Open WebUI share one store. So a small first-party
+shim, [../memory-mcp/](../memory-mcp/README.md), exposes Mem0 over MCP and
+injects the caller's `user_id` from a bearer token. The caller cannot name a
+user; that is what keeps one person's memories out of another's context, and
+what stops a prompt-injected document from asking the model to read someone
+else's history.
+
+The console (not the shim) is the inspect/edit surface — it authenticates via
+Pocket ID and calls Mem0's REST API directly. Do not rely on Open WebUI's
+built-in Memory feature for anything important; it is siloed inside Open WebUI.
+
+Backend choice is deliberately replaceable: the Mem0-specific code is confined
+to [../memory-mcp/src/mem0.ts](../memory-mcp/src/mem0.ts). Identity resolution
+and the MCP surface are backend-agnostic, so swapping memory engines means
+rewriting one file, not the integration.
 
 ### Tools / plugins — one MCP server per capability
 
@@ -69,7 +85,7 @@ data rather than instruction, and confirm before acting. See
 ## Data flow examples
 
 **Text chat**: browser → Open WebUI → oMLX (`chat`); tool calls go Open
-WebUI → MCP servers → Outline/Vikunja/OpenMemory.
+WebUI → MCP servers → Outline/Vikunja/memory-mcp.
 
 **Voice via HA**: speaker → HA Assist → Wyoming whisper (STT, on the mini)
 → conversation agent → oMLX (`ha-voice`) with HA-registered MCP tools →
@@ -87,6 +103,41 @@ servers you deliberately add that talk to external APIs (email, utilities)
 — each with its own scoped credential, never proxied through a model
 prompt.
 
+## Placement — this stack is distributed, not single-host
+
+`docker-compose.yml` was written assuming everything runs on the mini beside
+oMLX (hence `host.docker.internal`). That is not the deployment: Open WebUI
+already runs on a separate VPS. Placement now has to be decided per service,
+the same pinned-vs-replicated reasoning used for the proxy/DNS config.
+
+What constrains each piece:
+
+| Service | Constraint | Where |
+|---|---|---|
+| oMLX | Metal/MLX — cannot be containerized or moved | mini, mandatory |
+| Mem0 + Postgres | **every memory write triggers LLM extraction calls** — wants to be next to oMLX, or each write pays a round trip | with oMLX |
+| memory-mcp | thin; follows Mem0 | with Mem0 |
+| Wyoming STT/TTS | voice latency budget is ~1–2s end to end; keep close to HA and the satellites | with HA |
+| Open WebUI | just a frontend; only needs to reach oMLX | already on VPS |
+| Console | reaches Mem0 often, Pocket ID once per session | with Mem0 (decided) |
+
+The console runs beside Mem0 for data locality. The accepted cost: **Pocket ID
+is on a VPS, so a WAN outage prevents logging in to a console that is otherwise
+entirely local.** Existing sessions survive (8h JWT), so a brief outage is not
+locking. If that becomes annoying, the fix is a break-glass path, not moving
+the console — moving it just relocates the problem onto every memory read.
+
+Two consequences worth being explicit about:
+
+- **Open WebUI depends on the WAN link to think.** With oMLX at one site and
+  Open WebUI at another, chat stops working when the link does. Voice through
+  HA, if HA and oMLX are co-located, keeps working. That is an argument for
+  treating voice as the more reliable interface, not the more fragile one.
+- **Prompt content transits whichever host runs the frontend.** That host sees
+  plaintext. This is consistent with the threat model — the concern is a public
+  *model vendor*, and a VPS you control is not one — but it does mean the VPS
+  is now in scope for the same care as the mini.
+
 ## Ports
 
 | Service | Port |
@@ -95,8 +146,9 @@ prompt.
 | Open WebUI | 3000 |
 | Outline MCP | 8001 |
 | Vikunja MCP | 8002 |
-| OpenMemory API/MCP | 8765 |
-| OpenMemory UI | 3001 |
+| Mem0 (REST) | 8765 |
+| memory-mcp (MCP) | 8003 |
+| Console | 3002 |
 | Wyoming whisper (STT) | 10300 |
 | Wyoming piper (TTS) | 10200 |
 | Wyoming openWakeWord | 10400 |

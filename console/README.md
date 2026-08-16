@@ -9,7 +9,7 @@ This exists because of the *second half* of the repo's non-goal:
 > build it as a view over these same services.**
 
 Memory browsing, persona editing, and plugin configuration are things chat can't
-express. Everything here is a view over oMLX / OpenMemory / Outline / the MCP
+express. Everything here is a view over oMLX / Mem0 / Outline / the MCP
 servers — the console owns no state that matters. If it disappeared, nothing of
 value would be lost, same as Open WebUI.
 
@@ -73,7 +73,7 @@ Admin functions require `admins.novak` in the OIDC `groups` claim from Pocket ID
 ### 4. Identity is shared, not invented
 
 The Pocket ID subject (`sub`) is the primary key for everything per-user —
-including the OpenMemory `user_id`. The console does not maintain its own user
+including the Mem0 `user_id`. The console does not maintain its own user
 table, passwords, or roles. One identity across Open WebUI, the console, and
 memory.
 
@@ -85,10 +85,11 @@ like everything else.
 
 ## Known open items
 
-- **OpenMemory multi-user is unverified.** The stack currently pins a single user
-  (`OPENMEMORY_USER`, `NEXT_PUBLIC_USER_ID`). Whether the OpenMemory API supports
-  listing/filtering by arbitrary `user_id` needs confirming on-host before
-  per-person memory views can work. This is the biggest unknown in the design.
+- **Memory backend resolved.** OpenMemory was deprecated upstream; the stack now
+  uses Mem0 self-hosted, which supports `user_id` per request. The console calls
+  its REST API directly (server-side, admin key), while model clients go through
+  [../memory-mcp/](../memory-mcp/README.md). Neither path lets a caller name
+  another user.
 - **Pocket ID availability coupling.** Pocket ID runs on a public VPS while Novak
   is LAN-only. A WAN outage locks admins out of a local console. Decide whether a
   break-glass path is wanted.

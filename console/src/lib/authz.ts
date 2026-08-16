@@ -23,7 +23,7 @@ export class AuthzError extends Error {
 }
 
 export interface Principal {
-  /** Pocket ID subject. Primary key for all per-user state, incl. OpenMemory user_id. */
+  /** Pocket ID subject. Primary key for all per-user state, incl. Mem0 user_id. */
   sub: string;
   email?: string;
   name?: string;

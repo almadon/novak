@@ -15,7 +15,7 @@ server and the same MCP tools. Nothing important lives inside any single UI.
                      └─ future clients
                            │
   shared services    ├─ oMLX ──────────── stateless inference, model switching
-  (the hub)          ├─ OpenMemory MCP ── per-user long-term memory (mem0)
+  (the hub)          ├─ memory-mcp ────── per-user long-term memory (Mem0)
                      ├─ Outline MCP ───── canonical knowledgebase
                      ├─ Vikunja MCP ───── tasks
                      └─ Wyoming STT/TTS ─ whisper + piper for HA Voice
@@ -42,7 +42,9 @@ server and the same MCP tools. Nothing important lives inside any single UI.
 
 | Path | What it is |
 |---|---|
-| [docker-compose.yml](docker-compose.yml) | Open WebUI, MCP servers, OpenMemory, Wyoming voice services |
+| [docker-compose.yml](docker-compose.yml) | Open WebUI, Console, MCP servers, Mem0, Wyoming voice services |
+| [console/](console/README.md) | Web console: profiles, memories, MCP catalog (Pocket ID OIDC) |
+| [memory-mcp/](memory-mcp/README.md) | MCP front end for Mem0, with per-user scoping |
 | [.env.example](.env.example) | Non-secret configuration; copy to `.env` |
 | [scripts/bootstrap.sh](scripts/bootstrap.sh) | One-shot host setup |
 | [scripts/up.sh](scripts/up.sh) | Starts the stack; pulls secrets from macOS Keychain |

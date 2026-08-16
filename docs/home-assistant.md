@@ -39,8 +39,21 @@ Kokoro-based Wyoming wrapper — one service block, nothing else changes.
 Settings → Devices & Services → Add Integration → **Model Context
 Protocol** (official, HA 2025.2+), once per server:
 
-- OpenMemory: `http://<mini>:8765` — check the OpenMemory docs/UI for the
-  exact MCP path (it is per-client/per-user, e.g. `/mcp/<client>/sse/<user>`).
+- memory-mcp: `http://<mini>:8003/mcp` — connects **unauthenticated** and gets
+  the shared household identity from `MEMORY_DEFAULT_USER`.
+
+  HA's MCP client integration supports **OAuth only** — no bearer tokens, no
+  custom headers — and the connection belongs to the integration rather than to
+  whoever is speaking. A voice satellite cannot tell you who is talking, so
+  voice deliberately shares one household memory instead of pretending
+  otherwise. Per-user memory lives in Open WebUI and the console.
+
+  Do not confuse this integration with HA's MCP *Server* (`mcp_server`), which
+  points the other way — HA exposing its own tools outward, authenticated with
+  a long-lived access token. That token and the IndieAuth flow are not usable
+  here.
+
+  Because this port answers unauthenticated callers, keep it on Tailscale only.
 - Outline MCP: `http://<mini>:8001/mcp`
 
 Their tools become available to the conversation agent. **Keep the voice

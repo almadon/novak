@@ -2,6 +2,12 @@
 # Docker); everything here reaches it via host.docker.internal.
 # Start with scripts/up.sh (pulls secrets from Keychain), not bare
 # `docker compose up`.
+#
+# PLACEMENT: this file is written for the mini, which runs oMLX and everything
+# that wants to be near it — Mem0, memory-mcp, the console, and the Wyoming
+# voice services. Open WebUI already runs on a separate VPS and reaches oMLX
+# over Tailscale; its service block here is for reference/local testing, not
+# the deployed instance. See docs/architecture.md § Placement.
 
 name: novak
 
@@ -40,7 +46,10 @@ services:
       OIDC_ISSUER: "${OIDC_ISSUER}"
       OIDC_CLIENT_ID: "${OIDC_CLIENT_ID}"
       OIDC_CLIENT_SECRET: "${OIDC_CLIENT_SECRET}"
-      OPENMEMORY_URL: "http://openmemory-mcp:8765"
+      # Console talks to Mem0's REST API directly (server-side, admin key),
+      # not through memory-mcp — it authenticates users itself via Pocket ID.
+      MEM0_URL: "http://mem0:8000"
+      MEM0_API_KEY: "${MEM0_API_KEY}"
     volumes:
       # The one writable path. Keep this repo under git — it is the audit log
       # for catalog changes.
@@ -85,39 +94,57 @@ services:
     ports:
       - "${VIKUNJA_MCP_PORT:-8002}:8000"
 
-  # ── Shared long-term memory (OpenMemory / mem0) ───────────────────────
-  qdrant:
-    image: qdrant/qdrant:latest
+  # ── Shared long-term memory (Mem0 self-hosted) ────────────────────────
+  # OpenMemory (the original choice) was deprecated and sunset upstream. Its
+  # replacement is the unified Mem0 self-hosted server, which is REST-only —
+  # memory-mcp (below) provides the MCP interface HA and Open WebUI need, and
+  # is where per-user scoping is enforced.
+  mem0-db:
+    # VERIFY image tag against the pgvector version Mem0 expects.
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${MEM0_POSTGRES_USER:-mem0}"
+      POSTGRES_PASSWORD: "${MEM0_POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${MEM0_POSTGRES_DB:-mem0}"
     volumes:
-      - qdrant:/qdrant/storage
+      - mem0-db:/var/lib/postgresql/data
 
-  openmemory-mcp:
-    image: mem0/openmemory-mcp:latest
+  mem0:
+    # VERIFY: image name/tag for the Mem0 self-hosted server was not confirmed
+    # off-host. Check upstream's compose before first run.
+    image: mem0/mem0-server:latest
     restart: unless-stopped
     depends_on:
-      - qdrant
+      - mem0-db
     ports:
-      - "${OPENMEMORY_PORT:-8765}:8765"
+      - "${MEM0_PORT:-8765}:8000"
     environment:
-      USER: "${OPENMEMORY_USER:-tmeuze}"
-      QDRANT_HOST: qdrant
-      QDRANT_PORT: "6333"
-      # LLM + embedder must point at LOCAL services, not OpenAI — configure
-      # in the OpenMemory settings/config on first run. See deploy checklist.
+      DATABASE_URL: "postgresql://${MEM0_POSTGRES_USER:-mem0}:${MEM0_POSTGRES_PASSWORD}@mem0-db:5432/${MEM0_POSTGRES_DB:-mem0}"
+      JWT_SECRET: "${MEM0_JWT_SECRET}"
+      # LLM + embedder must point at oMLX, not OpenAI. Confirm the exact var
+      # names against upstream — see docs/deploy-checklist.md.
+      OPENAI_BASE_URL: "http://host.docker.internal:${OMLX_PORT:-8080}/v1"
+      OPENAI_API_KEY: "${OMLX_API_KEY:-none}"
+      # Never set AUTH_DISABLED here. It bypasses auth entirely and this
+      # service holds every user's memories.
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  openmemory-ui:
-    image: mem0/openmemory-ui:latest
+  # MCP front end for Mem0, with per-user scoping. See memory-mcp/README.md —
+  # the caller cannot choose which user's memories it reads.
+  memory-mcp:
+    build: ./memory-mcp
     restart: unless-stopped
     depends_on:
-      - openmemory-mcp
+      - mem0
     ports:
-      - "${OPENMEMORY_UI_PORT:-3001}:3000"
+      - "${MEMORY_MCP_PORT:-8003}:8000"
     environment:
-      NEXT_PUBLIC_API_URL: "http://${HOST_NAME:-mini.local}:${OPENMEMORY_PORT:-8765}"
-      NEXT_PUBLIC_USER_ID: "${OPENMEMORY_USER:-tmeuze}"
+      MEM0_URL: "http://mem0:8000"
+      MEM0_API_KEY: "${MEM0_API_KEY}"
+      MEMORY_TOKEN_MAP: "${MEMORY_TOKEN_MAP}"
+      MEMORY_DEFAULT_USER: "${MEMORY_DEFAULT_USER:-}"
 
   # ── Wyoming voice services for HA Voice ───────────────────────────────
   whisper:
@@ -154,6 +181,6 @@ services:
 
 volumes:
   open-webui:
-  qdrant:
+  mem0-db:
   whisper:
   piper:

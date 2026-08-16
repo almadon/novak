@@ -53,13 +53,17 @@ model ("forward this thread to..."). Mitigations, in order of importance:
 
 - Every service binds to the LAN; router forwards nothing.
 - Enable oMLX API-key auth (LAN peers include IoT junk).
-- Open WebUI is the only multi-user surface — accounts + RBAC on, signup
-  disabled after your users exist.
+- Two multi-user surfaces: Open WebUI (accounts + RBAC on, signup disabled
+  after your users exist) and the Console (Pocket ID OIDC; admin functions
+  gated on the `admins.novak` group). Both LAN-only.
+- `memory-mcp` is multi-tenant but not a login surface: it maps a bearer token
+  to a `user_id` and never lets a caller name a user. Its token map is a
+  secret — Keychain, not `.env`.
 - Remote access via Tailscale only.
 
 ## Rule 5 — the stores are readable; audit them
 
-- OpenMemory UI (`:3001`): review and delete memories.
+- Console (`:3002`): review and delete memories, per user, behind Pocket ID.
 - Outline: the knowledgebase is a normal wiki — correct it there.
 - Open WebUI chat logs live in its Docker volume on the mini's disk.
   `data/` and `.env` are gitignored; keep the repo private regardless.

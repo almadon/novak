@@ -244,3 +244,34 @@ because the duplication is gone.
 `up.sh` now runs the reconciler as a **hard gate**: if a registry entry is
 enabled at `elevated` or `dangerous` without a recorded acceptance, the whole
 start fails rather than quietly skipping that one service.
+
+## 15. Internet exposure is decided per service, and the home network takes
+## nothing inbound
+
+Not everything gets the same treatment, and the split follows what each piece
+was *built* to withstand.
+
+| Service | Where | Reachable from | Why |
+|---|---|---|---|
+| Reverse proxy, Open WebUI | VPS (Constant) | the internet | Designed to face it: accounts, sessions, TLS at the proxy |
+| oMLX | Mac | Tailscale/LAN only | An inference API with no rate limiting; assumes friendly callers |
+| Mem0, memory-mcp | Mac | Tailscale/LAN only | Holds everyone's memories, and answers unauthenticated when the household identity is enabled |
+| Konzol | Mac | Tailscale/LAN only | Can reconfigure the stack |
+| Wyoming voice | Mac | LAN only | Talks to satellites on the local network |
+
+**The home network forwards no ports at all.** The VPS reaches the Mac over
+Tailscale. So the chat interface is usable from anywhere, while nothing at home
+accepts a connection from the internet.
+
+The useful way to think about it: *being on the internet is a property a
+service has to earn by being designed for it,* not a default you grant because
+it would be convenient. Open WebUI has accounts and sessions and expects
+strangers to knock. oMLX does not.
+
+**Cost:** the chat interface stops working if the link between the VPS and home
+drops — the model is at home. Voice keeps working, because voice is entirely
+local. Voice is the more reliable interface, not the less.
+
+**Revisit if:** something new needs public reach. That's a per-service decision
+with the same shape as a risk acceptance in the registry — write down what it
+is, why it needs to face the internet, and what's in front of it.

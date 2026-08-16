@@ -129,6 +129,25 @@ entirely local.** Existing sessions survive (8h JWT), so a brief outage is not
 locking. If that becomes annoying, the fix is a break-glass path, not moving
 the console — moving it just relocates the problem onto every memory read.
 
+### Reachability
+
+Public ingress lives on the VPS; the home network forwards nothing.
+
+```
+   internet ──▶ Caddy (VPS) ──▶ Open WebUI (VPS)
+                                     │
+                                     │  Tailscale
+                                     ▼
+                          oMLX · Mem0 · memory-mcp · Konzol   (Mac, home)
+                                     ▲
+                          Wyoming voice ── HA + satellites    (LAN)
+```
+
+Exposure is a per-service decision recorded in [decisions.md](decisions.md)
+#15. The rule: a service faces the internet only if it was built to — Open
+WebUI has accounts and sessions and expects strangers; oMLX and memory-mcp
+assume every caller is friendly, so they stay on Tailscale.
+
 Two consequences worth being explicit about:
 
 - **Open WebUI depends on the WAN link to think.** With oMLX at one site and

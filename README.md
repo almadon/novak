@@ -1,107 +1,174 @@
-# Novak — private LLM stack, centred on a Mac mini M4 (24GB)
+# Novak
 
-A self-hosted, model-switching AI hub built around **oMLX** for inference, with
-**Open WebUI** for text/voice chat, **MCP servers** as the plugin system
-(Outline, Vikunja, shared memory, and future integrations), and **Home
-Assistant / HA Voice** as a peer client of the same services.
+A private AI assistant that runs on your own hardware.
 
-Design principle: **the hub is a services layer, not a frontend.** Every
-client (Open WebUI, HA Assist, the console, future CLIs/apps) talks to the same
-inference server and the same MCP tools. Nothing important lives inside any
-single UI.
+You talk to it in a browser or out loud through Home Assistant. It remembers
+things about you, can look things up in your notes, and can act on your behalf
+through tools you choose to give it. Nothing you say to it leaves your machines.
 
-```
-                     ┌─ Open WebUI ───── text + voice chat        [on a VPS]
-  clients            ├─ HA Assist ────── voice, MCP client integration
-                     ├─ Console ──────── profiles, memories, MCP catalog
-                     └─ future clients
-                           │
-  shared services    ├─ oMLX ──────────── inference, model switching  [mini]
-  (the hub)          ├─ memory-mcp ────── per-user memory, over Mem0
-                     ├─ Outline ───────── knowledgebase (serves MCP itself)
-                     ├─ Vikunja MCP ───── tasks
-                     └─ Wyoming STT/TTS ─ whisper + piper for HA Voice
-```
+> **Status: not finished.** This has never been deployed. Some of it has never
+> even been run. Treat every instruction here as untested, and see
+> [What state is this in?](#what-state-is-this-in) before spending an evening
+> on it.
 
-Not everything runs in one place — see
-[docs/architecture.md](docs/architecture.md) § Placement.
+## What it can do
 
-## Fresh install
+- **Chat**, in a browser, with per-person accounts.
+- **Talk**, through Home Assistant voice hardware — ask questions, control the
+  house, get short spoken answers.
+- **Remember** things about each person, separately. You can read and edit
+  those memories, and delete ones you don't want.
+- **Look things up** in your own wiki, task list, and anything else you connect.
+- **Run locally.** The model runs on your Mac. There's no cloud provider in the
+  loop, so your conversations can't end up in someone's training data.
 
-> **Status: not yet deployed.** Nothing in this repo has been run on real
-> hardware. Steps 1 and 2 below are known blockers that must be cleared first.
-> Treat the whole checklist as unverified.
+## What it isn't
 
-**Before the mini:**
+Worth knowing before you invest time:
 
-1. **Build the integration images.** MCP servers live in the
-   [novak-integracije](../integracije/README.md) repo and are consumed here as
-   published images. `memory-mcp` has no lockfile yet, so its build fails until
-   you run `npm install` there and commit the result.
+- **Not an app you install.** It's a stack of services and a setup checklist.
+- **Not turnkey.** Expect an evening or two, and some troubleshooting.
+- **Not as capable as ChatGPT.** A model that fits on a Mac mini is smaller than
+  one running in a datacentre. It's good at conversation, recall, and simple
+  tools; it's weaker at hard reasoning and writing long correct code.
+- **Not a product.** No support, no upgrade path but your own.
 
-2. **Optional — the console.** It lives in a separate repo
-   ([novak-konzol](../konzol/README.md)) and is not required: the MCP
-   registry can be edited by hand and applied with `reconciler/reconcile.py`.
-   To use it, register an OIDC client in Pocket ID with the `groups` scope and
-   a redirect URI per hostname (`http://<host>:3002/api/auth/callback/pocketid`),
-   create an `admins.novak` group, and put yourself in it.
+## What you need
 
-**On the mini:**
-
-3. Get this repo onto the mini (AirDrop, rsync, or push to a private remote
-   and clone).
-4. Put secrets in Keychain (see [docs/security.md](docs/security.md)).
-   `scripts/up.sh` refuses to start if `CONSOLE_AUTH_SECRET`,
-   `MEM0_POSTGRES_PASSWORD`, or `MEM0_JWT_SECRET` are still `changeme`.
-5. Run the bootstrap:
-
-   ```bash
-   ./scripts/bootstrap.sh
-   ```
-
-   It installs Homebrew (if missing), OrbStack, and oMLX, applies 24/7 power
-   settings, and brings up the Docker stack.
-6. Work through [docs/deploy-checklist.md](docs/deploy-checklist.md) — it
-   lists every item that could not be verified off-host (ports, image tags,
-   flag names) and the one-time manual steps (model downloads, HA setup).
-
-**Ordering wrinkle:** `MEM0_API_KEY` is *issued by* the Mem0 server on its
-first start, but `memory-mcp` and the console need it to start. So the first
-run is two passes: bring up `mem0` and `mem0-db`, take the key it issues, put
-it in Keychain, then bring up the rest.
-
-## Repo map
-
-| Path | What it is |
+| | |
 |---|---|
-| [docker-compose.yml](docker-compose.yml) | Open WebUI, Console, MCP servers, Mem0, Wyoming voice services |
-| [novak-integracije](../integracije/README.md) | MCP front end for Mem0, with per-user scoping |
-| [registry/](registry/mcp-servers.yaml) | The MCP catalog — what runs, and at what risk level |
-| [reconciler/](reconciler/reconcile.py) | Applies the registry; the only thing here that touches Docker |
-| [.env.example](.env.example) | Non-secret configuration; copy to `.env` |
-| [scripts/bootstrap.sh](scripts/bootstrap.sh) | One-shot host setup |
-| [scripts/up.sh](scripts/up.sh) | Starts the stack; pulls secrets from macOS Keychain |
-| [scripts/power.sh](scripts/power.sh) | pmset settings for 24/7 operation |
-| [omlx/SETTINGS.md](omlx/SETTINGS.md) | oMLX configuration: models, memory limits, TTLs, profiles |
-| [prompts/](prompts/novak-chat.md) | Novak's persona — master copy of the chat and voice system prompts |
-| [wakeword/](wakeword/README.md) | "Hey Novak" wake word: training, and the Voice PE caveat |
-| [docs/what-sets-novak-apart.md](docs/what-sets-novak-apart.md) | What's different here, and what this deliberately isn't |
-| [docs/how-memory-works.md](docs/how-memory-works.md) | **Start here** for the memory layer and `memory-mcp` |
-| [docs/architecture.md](docs/architecture.md) | Full architecture and rationale |
-| [docs/decisions.md](docs/decisions.md) | Every decision made, why, and what it cost |
-| [docs/credits.md](docs/credits.md) | Upstream projects, licences, what was evaluated |
-| [docs/security.md](docs/security.md) | Secrets handling, least privilege, prompt-injection guardrails |
-| [docs/home-assistant.md](docs/home-assistant.md) | HA + HA Voice wiring (conversation agent, MCP, Wyoming) |
-| [docs/deploy-checklist.md](docs/deploy-checklist.md) | On-host verification checklist |
+| **A Mac** | Apple Silicon. This is tuned for a Mac mini M4 with 24GB. Less memory means smaller models. |
+| **Somewhere to run containers** | The same Mac is fine. |
+| **A domain name** | Only if you want to reach it from outside your home. |
+| **Home Assistant** | Only for voice. Everything else works without it. |
+| **Patience** | See above. |
 
-## Non-goals
+## How it fits together
 
-- No custom web frontend *for chat*. New capabilities are added as MCP servers,
-  which every client picks up. Build UI only for things chat can't express, and
-  build it as a view over these same services.
-  The [console](../konzol/README.md) is that exception, not a violation:
-  browsing memories, editing a persona, and managing plugins aren't things you
-  can do by chatting. It lives in its own repo, is optional, and owns no state
-  that matters. See [docs/decisions.md](docs/decisions.md) #5.
-- No cloud model fallback. If a feature needs a cloud API, it gets its own
-  MCP server with its own scoped key — the chat model never sees credentials.
+The important idea: **no single program is in charge.** The model server,
+the chat interface, memory, and voice are separate pieces that all speak to
+each other. Any one of them can be replaced without disturbing the rest.
+
+```
+    You, in a browser  ──▶  Open WebUI   ─┐
+                                          │
+    You, talking       ──▶  Home Assistant ┼──▶  oMLX  (runs the model)
+                                          │        │
+    You, managing      ──▶  Konzol        ─┘        │
+                                                   ▼
+                                     memory · notes · tasks · other tools
+```
+
+That structure isn't tidiness for its own sake. While this was being built, the
+memory system it originally used was shut down by its authors, and its most
+obvious replacement turned out to be discontinued too. Swapping it meant
+replacing one service. In an all-in-one product, that's a migration.
+
+## Where things run, and what's reachable
+
+Two machines, and only one of them is on the internet.
+
+| | Runs | Reachable from |
+|---|---|---|
+| **The Mac** (home) | the model, memory, voice | your network and Tailscale only — **nothing is port-forwarded** |
+| **A small VPS** | Open WebUI, and the reverse proxy that terminates TLS | the public internet |
+
+The VPS reaches the Mac over [Tailscale](https://tailscale.com), a private
+network between your own devices. So you can use the chat interface from
+anywhere, while your home network accepts no incoming connections at all.
+
+This is deliberate. The chat interface is designed to face the internet. The
+model server and the memory service are not — they assume everyone talking to
+them is friendly.
+
+## Setting it up
+
+Work through **[docs/deploy-checklist.md](docs/deploy-checklist.md)** — it's the
+real instructions. This is the short version so you know what you're in for.
+
+**Before you touch the Mac:**
+
+1. **Build the integration images.** The tools live in a separate repo,
+   [novak-integracije](../integracije/README.md), and are used here as
+   prebuilt images. They need building once.
+2. **Optional: the web console.** [novak-konzol](../konzol/README.md) is a
+   separate, optional piece for managing people and memories. Skip it to start —
+   everything it does can be done by editing a file.
+
+**On the Mac:**
+
+3. Copy this repo over.
+4. Put your passwords and API keys in the macOS Keychain — see
+   [docs/security.md](docs/security.md). The startup script refuses to run with
+   placeholder values still in place.
+5. Run `./scripts/bootstrap.sh`. It installs what's missing and starts things.
+6. Follow the checklist for the parts that need a human: downloading models,
+   connecting Home Assistant, and so on.
+
+**One awkward bit:** the memory service generates its own API key the first time
+it starts, but other services need that key to start. So the first run happens
+in two passes. The checklist walks through it.
+
+## What state is this in?
+
+Honest inventory:
+
+| Part | State |
+|---|---|
+| The design and the reasoning | Settled, written down |
+| Configuration and docs | Written, unverified against a real machine |
+| The memory tool | Written, **never run** |
+| The web console | Scaffolding, **never run** |
+| Everything else | Other people's software, configured but untested here |
+
+Anything marked `VERIFY` in a file is something that couldn't be checked without
+the actual hardware.
+
+## Documentation
+
+**Start here:**
+
+| | |
+|---|---|
+| [How memory works](docs/how-memory-works.md) | What "memory" actually means, in plain language |
+| [What sets Novak apart](docs/what-sets-novak-apart.md) | Why build it this way, and what it costs |
+| [Deploy checklist](docs/deploy-checklist.md) | The real setup instructions |
+
+**Going deeper:**
+
+| | |
+|---|---|
+| [Architecture](docs/architecture.md) | How the pieces fit, and why each is where it is |
+| [Decisions](docs/decisions.md) | Every significant choice, with reasoning and cost |
+| [Security](docs/security.md) | Secrets, permissions, and what the risks actually are |
+| [Home Assistant](docs/home-assistant.md) | Voice setup |
+| [Credits](docs/credits.md) | Whose software this is built from |
+| [oMLX settings](omlx/SETTINGS.md) | Which models, and how to tune them |
+
+**Reference:**
+
+| | |
+|---|---|
+| [registry/](registry/mcp-servers.yaml) | Which tools are installed, and how risky each is |
+| [reconciler/](reconciler/reconcile.py) | Applies that list. The only thing here that controls containers |
+| [prompts/](prompts/novak-chat.md) | The assistant's personality |
+| [wakeword/](wakeword/README.md) | Teaching it to answer to "Hey Novak" |
+
+## The three repositories
+
+| | |
+|---|---|
+| **novak** (this one) | The stack: what runs, how it's configured, and why |
+| [novak-integracije](../integracije/README.md) | Tools and integrations — the part that grows |
+| [novak-konzol](../konzol/README.md) | Optional web interface for managing it |
+
+## A note on adding things
+
+New capabilities are added as **tools the assistant can call**, not as features
+bolted into a user interface. That way every client — chat, voice, anything
+added later — gets them at once.
+
+Powerful tools are allowed, but the ones that can change your system or act
+irreversibly have to be switched on deliberately: the file records what a tool
+can do, who agreed to it, and when. Turning it back off takes nothing. The
+point isn't to stop you; it's so that in a year you can see what you agreed to.

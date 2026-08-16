@@ -1,0 +1,42 @@
+# Declarative MCP server catalog. The console writes this file; the reconciler
+# applies it. Git is the audit log.
+#
+# SECRETS DO NOT BELONG HERE. `env` lists variable *names* only — values come
+# from macOS Keychain via scripts/up.sh. The console can report that a required
+# var is present; it can never read or display the value.
+#
+# Schema per entry:
+#   name     required  identifier + container/service name (a-z0-9-)
+#   image    required  container image
+#   command  optional  passed to the container
+#   port     required  host port to publish (container side is always 8000)
+#   env      optional  env var NAMES to pass through from the host environment
+#   enabled  required  false leaves it defined but not started
+#   clients  optional  which clients should auto-register it (informational
+#                      today; wiring is still manual in Open WebUI / HA)
+
+servers:
+  - name: outline
+    image: node:22-alpine
+    command: >
+      npx -y supergateway
+      --stdio "npx -y outline-mcp-server"
+      --outputTransport streamableHttp
+      --port 8000
+    port: 8001
+    env: [OUTLINE_API_URL, OUTLINE_API_KEY]
+    enabled: true
+    clients: [open-webui, home-assistant]
+
+  - name: vikunja
+    image: node:22-alpine
+    command: >
+      npx -y supergateway
+      --stdio "npx -y @aimbitgmbh/vikunja-mcp"
+      --outputTransport streamableHttp
+      --port 8000
+    port: 8002
+    env: [VIKUNJA_URL, VIKUNJA_API_TOKEN]
+    enabled: true
+    # Deliberately not on the voice pipeline — see docs/home-assistant.md.
+    clients: [open-webui]

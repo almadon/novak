@@ -24,7 +24,35 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  # ── Console (profiles, memory views, MCP catalog) ─────────────────────
+  # Deliberately has NO docker socket. It writes console/registry/*.yaml;
+  # console/reconciler/reconcile.py (run on the host) is what touches
+  # containers. See console/README.md for why.
+  console:
+    build: ./console
+    restart: unless-stopped
+    ports:
+      - "${CONSOLE_PORT:-3002}:3002"
+    environment:
+      AUTH_SECRET: "${CONSOLE_AUTH_SECRET}"
+      AUTH_URL: "http://${HOST_NAME:-mini.local}:${CONSOLE_PORT:-3002}"
+      AUTH_TRUST_HOST: "true"
+      OIDC_ISSUER: "${OIDC_ISSUER}"
+      OIDC_CLIENT_ID: "${OIDC_CLIENT_ID}"
+      OIDC_CLIENT_SECRET: "${OIDC_CLIENT_SECRET}"
+      OPENMEMORY_URL: "http://openmemory-mcp:8765"
+    volumes:
+      # The one writable path. Keep this repo under git — it is the audit log
+      # for catalog changes.
+      - ./console/registry:/app/registry
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
   # ── MCP servers (the plugin system) ───────────────────────────────────
+  # NOTE: these blocks are being migrated to console/registry/mcp-servers.yaml,
+  # which the reconciler renders into docker-compose.mcp.yml. Until that
+  # cutover, they are defined here and duplicated in the registry — do not
+  # enable both at once or the published ports will collide.
   # Pattern: stdio MCP server wrapped by supergateway → streamable-HTTP,
   # consumable by both Open WebUI (native MCP) and Home Assistant (MCP
   # integration). To add a plugin, copy one of these blocks.

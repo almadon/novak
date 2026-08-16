@@ -1,0 +1,180 @@
+# Decisions
+
+Why things are the way they are. Each entry says what was decided, why, what it
+cost, and what would make it worth revisiting.
+
+Written in plain language on purpose. If a sentence here needs a glossary, it's
+a bad sentence — rewrite it.
+
+All entries dated 2026-08-16 unless noted.
+
+---
+
+## 1. The hub is a set of services, not an app
+
+Every client — Open WebUI, Home Assistant, the console, anything later — talks
+to the same inference server and the same tools. No single program owns the
+system.
+
+**Cost:** more moving parts than one all-in-one app.
+**Why anyway:** if any one piece dies or gets abandoned, the rest still works.
+This has already paid off twice (see #2 and #3).
+
+## 2. Not adopting Tater
+
+Tater is a capable all-in-one assistant platform: it runs models, voice, memory,
+and talks to Home Assistant. Rejected because it wants to *be* the system —
+Home Assistant becomes a plugin of Tater rather than an equal.
+
+Two of its supporting repos were retired within about three months of each
+other while we were evaluating it, which is a lot of churn to build on.
+
+**What it genuinely has that we don't:** firmware for purpose-built voice
+satellites like the Sat1. That firmware reports to Tater's own backend, so it
+can't simply be borrowed.
+**Revisit if:** you want the satellite hardware more than you want the
+architecture, or Tater's pace of change settles down.
+
+## 3. Memory: OpenMemory → Mem0 self-hosted
+
+The stack was originally built on OpenMemory. Upstream deprecated and shut it
+down. Its replacement, the Mem0 self-hosted server, supports multiple users
+properly — but only speaks REST, and we need MCP so Home Assistant and Open
+WebUI can share one memory store.
+
+So we added `memory-mcp/`, a small piece of our own code that puts an MCP
+front door on Mem0 and decides which user a request belongs to.
+
+**Cost:** a component to maintain, and Mem0's documentation is thin.
+**Why anyway:** all the thin-documentation pain is trapped in one file
+(`memory-mcp/src/mem0.ts`). Swapping memory engines later means rewriting that
+file, not redoing the integration.
+
+## 4. Memory engines we looked at and passed on
+
+- **Graphiti** (from the Zep team) — better at facts that change over time
+  ("Alice *used to* work at X"). Passed for now: it wants a graph database, and
+  it calls the language model several times for every memory it stores. On a
+  24GB Mac mini that's also answering voice in 1–2 seconds, that competes for
+  the same hardware.
+  **Revisit if:** tracking how facts change over time becomes something you
+  actually want. Pair it with Kuzu or FalkorDB, not Neo4j.
+- **Letta** — mature, but it's an agent framework that wants to run the
+  conversation itself. That's the same shape we rejected in #2.
+- **keep** — MCP-native and actively developed, but it has no concept of
+  users at all, and its multi-user option is a hosted cloud service. It's a
+  good tool for *agent* memory; it just can't separate people.
+
+Note: most "best memory framework" comparison articles are marketing from
+companies selling one of the options. Their benchmark numbers were not used.
+
+## 5. There is a web console, and that's allowed
+
+The README says "no custom web frontend." The full sentence also says: *build
+UI only for things chat can't express, and build it as a view over these same
+services.*
+
+Browsing memories, editing a persona, and managing plugins are things you can't
+sensibly do by chatting. So the console exists — but it owns nothing important.
+If it vanished, no data would be lost.
+
+## 6. The console has no control over Docker
+
+The console can add and remove MCP servers. It does this by writing a file
+(`console/registry/mcp-servers.yaml`); a separate script on the host reads that
+file and starts containers.
+
+**Why not let the console run Docker directly:** anything that can create a
+container can create one that has full access to the machine. There's no way to
+allow "create a container" safely. So the web-facing part simply never gets
+that power.
+
+**What this buys:** if someone breaks into the console, they can write a YAML
+file. That's it. And every change is a file in git, so you can see what changed
+and undo it.
+
+## 7. Staying on OrbStack (not Apple's container tool, not Podman)
+
+Apple's `container` reached 1.0 in June 2026 and gives each container its own
+small virtual machine — better separation than OrbStack, which uses one shared
+VM for everything.
+
+Passed because:
+- It has no `docker compose` support, and this whole stack is compose.
+- Its memory handling doesn't reliably give RAM back to the host. On a 24GB
+  machine that's also running language models, that's a real problem.
+- The extra separation was mostly answering a risk we removed in #6 anyway.
+
+Podman on macOS also runs a VM, so switching there changes a lot and gains
+little.
+**Revisit if:** Apple's tool gains compose support and the memory behaviour
+improves.
+
+## 8. Voice shares one memory; it does not try to tell people apart
+
+Per-person memory works in Open WebUI and the console, because those know who
+you are. Voice doesn't get it.
+
+Two separate reasons:
+1. Home Assistant's MCP client can only authenticate with OAuth — no tokens, no
+   custom headers — and the connection belongs to the integration, not to a
+   person.
+2. More fundamentally, a voice satellite doesn't know who is talking.
+
+So Home Assistant connects without logging in and gets a shared "household"
+identity. Personal memories still require a token and stay private.
+
+**Cost:** the port that serves household memory answers anyone who can reach
+it. Keep it on Tailscale, never on the open home network.
+**Revisit if:** speaker identification becomes trustworthy — but see #9, which
+is not as simple as it sounds.
+
+## 9. Speaker identification: useful, but not for deciding who sees what
+
+`wyoming-voice-match` is the best of the options examined — good model, fits our
+existing voice setup, and it cleans up audio by removing other voices before
+transcription. Worth adopting for that alone.
+
+**But it must not decide whose memories get read.** It identifies a speaker by
+adding a tag to the transcript text, like `[john] what's the weather`. That tag
+lives inside the words sent to the model, which means anyone who says the right
+words — or any document the model reads containing that text — can claim to be
+someone else. It tells you who's *probably* speaking; it doesn't prove it.
+
+Also: it adds 200–500ms on a CPU, and it's least accurate on short phrases,
+which is what voice commands are.
+
+**Safe path if you want per-person voice memory later:** strip the tag and pick
+the memory connection *before* the model sees anything, so the model never gets
+a say in whose data it's reading.
+
+## 10. Powerful integrations are allowed, but must be turned on deliberately
+
+`ha-mcp` gives a model 88+ tools over Home Assistant, including editing config
+files and creating automations. That's genuinely useful and genuinely
+dangerous — especially anywhere the model reads outside content like email or
+calendar entries, which could contain instructions aimed at it.
+
+Rather than ban things like this, the registry has a risk level. Anything above
+`standard` won't start until someone writes down what it can do, who accepted
+that, and when. Turning it off again needs no ceremony.
+
+The principle: your call, but make it on purpose, and leave a note for
+future-you.
+
+## 11. Where things run
+
+The stack is spread across machines, not all on the mini.
+
+- **Must be on the mini:** oMLX (needs Apple's GPU directly).
+- **Should be near oMLX:** memory — every memory written triggers model calls.
+- **Already elsewhere:** Open WebUI, on a VPS.
+- **Chosen: mini** — the console, so memory reads are local.
+
+**Cost of that last one:** login uses Pocket ID, which runs on a VPS. If the
+internet is down, you can't sign in to a console that is otherwise entirely
+local. Existing sessions last 8 hours, so brief outages don't lock you out.
+
+Also worth knowing: with the model at home and Open WebUI on a VPS, chat stops
+working if the link between them drops. Voice keeps working, because it's all
+local. Voice is the more reliable interface, not the less.

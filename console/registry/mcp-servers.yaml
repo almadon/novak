@@ -14,6 +14,23 @@
 #   enabled  required  false leaves it defined but not started
 #   clients  optional  which clients should auto-register it (informational
 #                      today; wiring is still manual in Open WebUI / HA)
+#   source   optional  upstream project URL + license, for credit
+#   risk     optional  see below; defaults to standard
+#
+# ── Risk levels ("danger zone") ─────────────────────────────────────────
+# The point is not to stop you installing something powerful. It is to make
+# sure powerful things are turned on deliberately, by a person, on a date,
+# with the reason written down — instead of drifting in unnoticed.
+#
+#   standard   Reads or writes one service you already run. The default.
+#   elevated   Can act outward in ways that are hard to undo (send mail, post,
+#              delete without a trash), or has a broad tool surface.
+#   dangerous  Can change the machine or the stack itself: edit config files,
+#              read arbitrary files, run code, manage other containers.
+#
+# Anything above `standard` must also carry `why`, `accepted_by`, and
+# `accepted_on`. The reconciler refuses to start it otherwise — see
+# reconciler/reconcile.py. Turning it off again needs no ceremony.
 
 servers:
   - name: outline
@@ -27,6 +44,11 @@ servers:
     env: [OUTLINE_API_URL, OUTLINE_API_KEY]
     enabled: true
     clients: [open-webui, home-assistant]
+    source:
+      url: https://github.com/mgprocurement/outline-mcp-server
+      license: VERIFY
+    risk:
+      level: standard
 
   - name: vikunja
     image: node:22-alpine
@@ -40,3 +62,35 @@ servers:
     enabled: true
     # Deliberately not on the voice pipeline — see docs/home-assistant.md.
     clients: [open-webui]
+    source:
+      url: https://www.npmjs.com/package/@aimbitgmbh/vikunja-mcp
+      license: VERIFY
+    risk:
+      level: elevated
+      why:
+        - "Vikunja has no trash or undo — a delete is permanent."
+      accepted_by: tmeuze
+      accepted_on: 2026-08-16
+
+  # Example of a `dangerous` entry, left disabled. ha-mcp exposes 88+ tools
+  # including file access and YAML config editing, and authenticates with a
+  # secret in the URL by default. Enable only with ha_auth mode, and never
+  # attach it to the voice pipeline — a malicious calendar entry or email that
+  # the model reads could otherwise reach these tools.
+  - name: ha-mcp
+    image: ghcr.io/homeassistant-ai/ha-mcp:latest # VERIFY image path
+    port: 8004
+    env: [HA_MCP_URL, HA_MCP_TOKEN]
+    enabled: false
+    clients: [open-webui]
+    source:
+      url: https://github.com/homeassistant-ai/ha-mcp
+      license: VERIFY
+    risk:
+      level: dangerous
+      why:
+        - "Can edit Home Assistant YAML config and read files on the HA host."
+        - "Can create and modify automations, which then run on their own."
+        - "Default auth puts a secret in the URL, which leaks into logs and history."
+      # No accepted_by/accepted_on: the reconciler will refuse to start this
+      # until a person fills those in. That is the intended friction.

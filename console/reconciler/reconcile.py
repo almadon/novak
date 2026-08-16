@@ -44,10 +44,58 @@ OUTPUT = REPO_DIR / "docker-compose.mcp.yml"
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$")
 ENV_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 IMAGE_RE = re.compile(r"^[A-Za-z0-9._/:@-]+$")
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+RISK_LEVELS = ("standard", "elevated", "dangerous")
 
 
 class ValidationError(Exception):
     pass
+
+
+def validate_risk(name: str, entry: dict, enabled: bool) -> dict:
+    """
+    Enforces the danger-zone rule: anything more powerful than `standard` may
+    only run if a person wrote down why, who accepted it, and when.
+
+    Disabled entries are checked for shape but not for acceptance — you can
+    describe something risky in the registry without having to justify it
+    until you actually turn it on.
+    """
+    risk = entry.get("risk") or {"level": "standard"}
+    if not isinstance(risk, dict):
+        raise ValidationError(f"[{name}] risk must be a mapping")
+
+    level = risk.get("level", "standard")
+    if level not in RISK_LEVELS:
+        raise ValidationError(f"[{name}] risk.level must be one of {RISK_LEVELS}, got {level!r}")
+
+    if level == "standard" or not enabled:
+        return {"level": level}
+
+    why = risk.get("why")
+    if not isinstance(why, list) or not why or not all(isinstance(w, str) and w.strip() for w in why):
+        raise ValidationError(
+            f"[{name}] risk.level is {level!r} and it is enabled, so risk.why must list "
+            f"at least one reason explaining what it can do."
+        )
+
+    accepted_by = risk.get("accepted_by")
+    if not isinstance(accepted_by, str) or not accepted_by.strip():
+        raise ValidationError(
+            f"[{name}] risk.level is {level!r} and it is enabled, so risk.accepted_by "
+            f"must name the person who accepted it."
+        )
+
+    accepted_on = risk.get("accepted_on")
+    accepted_on = accepted_on.isoformat() if hasattr(accepted_on, "isoformat") else accepted_on
+    if not isinstance(accepted_on, str) or not DATE_RE.match(accepted_on):
+        raise ValidationError(
+            f"[{name}] risk.level is {level!r} and it is enabled, so risk.accepted_on "
+            f"must be a date like 2026-08-16."
+        )
+
+    return {"level": level, "why": why, "accepted_by": accepted_by, "accepted_on": accepted_on}
 
 
 def validate(entry: dict, seen_names: set[str], seen_ports: set[int]) -> dict:
@@ -88,11 +136,18 @@ def validate(entry: dict, seen_names: set[str], seen_ports: set[int]) -> dict:
     if not isinstance(env, list) or not all(isinstance(e, str) and ENV_RE.match(e) for e in env):
         raise ValidationError(f"[{name}] env must be a list of UPPER_SNAKE variable names")
 
+    risk = validate_risk(name, entry, enabled)
+
+    source = entry.get("source")
+    if source is not None and not isinstance(source, dict):
+        raise ValidationError(f"[{name}] source must be a mapping with url/license")
+
     seen_names.add(name)
     seen_ports.add(port)
     return {
         "name": name, "image": image, "port": port,
         "enabled": enabled, "command": command, "env": env,
+        "risk": risk, "source": source,
     }
 
 
@@ -147,10 +202,20 @@ def main() -> int:
         "# Source of truth: console/registry/mcp-servers.yaml\n"
     )
 
-    enabled = [s["name"] for s in servers if s["enabled"]]
-    disabled = [s["name"] for s in servers if not s["enabled"]]
-    print(f"enabled:  {', '.join(enabled) or '(none)'}")
-    print(f"disabled: {', '.join(disabled) or '(none)'}")
+    enabled = [s for s in servers if s["enabled"]]
+    disabled = [s for s in servers if not s["enabled"]]
+    print(f"enabled:  {', '.join(s['name'] for s in enabled) or '(none)'}")
+    print(f"disabled: {', '.join(s['name'] for s in disabled) or '(none)'}")
+
+    # Surface accepted risk on every run, so a `dangerous` server that was
+    # accepted months ago doesn't quietly fade into the background.
+    for s in enabled:
+        level = s["risk"]["level"]
+        if level != "standard":
+            who, when = s["risk"]["accepted_by"], s["risk"]["accepted_on"]
+            print(f"  ! {s['name']}: {level} — accepted by {who} on {when}")
+            for reason in s["risk"]["why"]:
+                print(f"      {reason}")
 
     if args.dry_run:
         print(f"\n--- would write {OUTPUT} ---\n{header}{rendered}")

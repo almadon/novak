@@ -53,6 +53,8 @@ server and the same MCP tools. Nothing important lives inside any single UI.
 | [prompts/](prompts/novak-chat.md) | Novak's persona — master copy of the chat and voice system prompts |
 | [wakeword/](wakeword/README.md) | "Hey Novak" wake word: training, and the Voice PE caveat |
 | [docs/architecture.md](docs/architecture.md) | Full architecture and rationale |
+| [docs/decisions.md](docs/decisions.md) | Every decision made, why, and what it cost |
+| [docs/credits.md](docs/credits.md) | Upstream projects, licences, what was evaluated |
 | [docs/security.md](docs/security.md) | Secrets handling, least privilege, prompt-injection guardrails |
 | [docs/home-assistant.md](docs/home-assistant.md) | HA + HA Voice wiring (conversation agent, MCP, Wyoming) |
 | [docs/deploy-checklist.md](docs/deploy-checklist.md) | On-host verification checklist |

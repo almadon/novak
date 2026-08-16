@@ -96,6 +96,25 @@ like everything else.
 - **Registry image allowlist** is not implemented. Any admin can point a server at
   any image, which is arbitrary code execution *by an authenticated admin* — the
   same power they'd have with shell access, so it may be acceptable. Add an
-  allowlist if you want defence in depth.
+  allowlist if you want defence in depth. Partly mitigated by risk levels below.
+- **The UI does not yet surface risk levels.** The registry supports them and the
+  reconciler enforces them, but the admin page doesn't show or edit them. When
+  it does, `dangerous` entries should require typing the acceptance rather than
+  clicking a toggle — the friction is the feature.
+
+## Risk levels ("danger zone")
+
+Each registry entry carries a risk level: `standard`, `elevated`, or
+`dangerous`. Anything above `standard` will not start until someone records
+what it can do, who accepted it, and on what date. Turning it back off needs
+nothing.
+
+This is deliberately not a ban. The goal is that powerful integrations get
+enabled on purpose, with a note for whoever reads the repo in six months —
+including you. The reconciler reprints accepted risks on every run so they
+don't fade into the background.
+
+See [registry/mcp-servers.yaml](registry/mcp-servers.yaml) for the levels and
+[../docs/decisions.md](../docs/decisions.md) #10 for the reasoning.
 - Auth.js v5 is still pre-1.0; pin the version and re-check the API on upgrades.
 - The React/UI surfaces are scaffolding. The auth core and reconciler are real.

@@ -1,0 +1,68 @@
+# CI for Forgejo Actions. Same syntax as GitHub Actions.
+#
+# This is the gate that matters: merging is what deploys, so anything broken
+# here is broken on the mini. Keep it fast and keep it honest — it should fail
+# when something is actually wrong, not warn and pass.
+#
+# FIRST RUN WILL FAIL: `npm ci` needs a package-lock.json, and neither
+# console/ nor memory-mcp/ has been installed yet. Run `npm install` in each,
+# commit the resulting lockfiles, then this passes. (Use `npm ci` rather than
+# `npm install` here on purpose — CI should build the exact versions that were
+# committed, not silently pick up newer ones.)
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  registry:
+    name: MCP registry is valid
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PyYAML
+        run: pip3 install --quiet pyyaml
+      - name: Validate registry and risk acceptances
+        # --dry-run validates and renders without touching containers. Fails if
+        # an elevated/dangerous server is enabled without a recorded acceptance.
+        run: python3 console/reconciler/reconcile.py --dry-run
+
+  console:
+    name: Console builds
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+        working-directory: console
+      - run: npm run typecheck
+        working-directory: console
+      - run: npm run build
+        working-directory: console
+        env:
+          # Build-time placeholders. Real values come from Keychain at runtime;
+          # these only need to exist so the build doesn't fail on missing env.
+          OIDC_ISSUER: https://example.invalid
+          OIDC_CLIENT_ID: ci
+          OIDC_CLIENT_SECRET: ci
+          AUTH_SECRET: ci-placeholder-not-a-real-secret
+
+  memory-mcp:
+    name: memory-mcp builds
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+        working-directory: memory-mcp
+      - run: npm run typecheck
+        working-directory: memory-mcp
+      - run: npm run build
+        working-directory: memory-mcp

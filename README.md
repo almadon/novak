@@ -145,6 +145,7 @@ the actual hardware.
 |---|---|
 | [Architecture](docs/architecture.md) | How the pieces fit, and why each is where it is |
 | [Decisions](docs/decisions.md) | Every significant choice, with reasoning and cost |
+| [Commit style](docs/commit-style.md) | Conventional Commits, enforced by a hook |
 | [Security](docs/security.md) | Secrets, permissions, and what the risks actually are |
 | [Home Assistant](docs/home-assistant.md) | Voice setup |
 | [Credits](docs/credits.md) | Whose software this is built from |

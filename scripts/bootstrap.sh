@@ -60,6 +60,17 @@ warn "Manual: System Settings → General → Login Items — add OrbStack and o
 warn "Manual: System Settings → Users & Groups — enable auto-login for this user"
 warn "        (required for services to come back after a power failure)."
 
+step "Git hooks + commit template"
+# Hooks live in .git/hooks, which isn't tracked; pointing core.hooksPath at a
+# tracked directory is what makes the commit convention shareable.
+if [ -d .git ]; then
+  git config core.hooksPath .githooks
+  git config commit.template .gitmessage
+  echo "commit-msg hook active (see docs/commit-style.md)"
+else
+  warn "Not a git checkout — skipping hook setup."
+fi
+
 step "Environment"
 if [ ! -f .env ]; then
   cp .env.example .env

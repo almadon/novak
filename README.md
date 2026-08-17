@@ -94,9 +94,9 @@ real instructions. This is the short version so you know what you're in for.
 **Before you touch the Mac:**
 
 1. **Build the integration images.** The tools live in a separate repo,
-   [novak-integracije](../integracije/README.md), and are used here as
+   [novak-integracje](https://github.com/almadon/novak-integracje), and are used here as
    prebuilt images. They need building once.
-2. **Optional: the web console.** [novak-konzol](../konzol/README.md) is a
+2. **Optional: the web console.** [novak-konzol](https://github.com/almadon/novak-konzol) is a
    separate, optional piece for managing people and memories. Skip it to start —
    everything it does can be done by editing a file.
 
@@ -165,8 +165,8 @@ the actual hardware.
 | | |
 |---|---|
 | **novak** (this one) | The stack: what runs, how it's configured, and why |
-| [novak-integracije](../integracije/README.md) | Tools and integrations — the part that grows |
-| [novak-konzol](../konzol/README.md) | Optional web interface for managing it |
+| [novak-integracje](https://github.com/almadon/novak-integracje) | Tools and integrations — the part that grows |
+| [novak-konzol](https://github.com/almadon/novak-konzol) | Optional web interface for managing it |
 
 ## A note on adding things
 

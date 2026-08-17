@@ -1,0 +1,29 @@
+# This repo holds no application code — MCP servers live in
+# novak-integracije and the console in novak-konzol, each with its own CI.
+# What is validated here is the registry, which is also the risk-acceptance
+# gate: a server enabled at elevated or dangerous without a recorded
+# acceptance fails the build, the same way it fails a deploy.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  registry:
+    name: MCP registry is valid
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PyYAML
+        run: pip install --quiet pyyaml
+
+      - name: Validate registry and risk acceptances
+        # --dry-run validates and renders without touching containers.
+        run: python3 reconciler/reconcile.py --dry-run

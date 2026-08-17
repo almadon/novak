@@ -92,15 +92,15 @@ servers:
       accepted_on: 2026-08-17
 
   # First-party. Source lives in the novak-integracije repo; this references
-  # the image its CI publishes. VERIFY the registry host (see docker-compose.yml).
+  # the image its CI publishes to ghcr.io.
   - name: memory
-    image: git.a64.one/tmeuze/novak-memory-mcp:latest
+    image: ghcr.io/almadon/novak-integracije/memory-mcp:latest
     port: 8003
     env: [MEM0_URL, MEM0_API_KEY, MEMORY_TOKEN_MAP, MEMORY_DEFAULT_USER]
     enabled: true
     clients: [open-webui, home-assistant]
     source:
-      url: https://nex.a64.one/tmeuze/novak-integracije
+      url: https://github.com/almadon/novak-integracije
       license: first-party
     risk:
       level: elevated

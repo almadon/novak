@@ -43,16 +43,11 @@ services:
   # mount; reconciler/reconcile.py (run on the host) is what touches
   # containers. See that repo's README for why.
   #
-  # VERIFY THE REGISTRY HOST. Two different hostnames are in play and it is not
-  # clear which serves the container registry:
-  #   - git remotes use  ssh://git@nex.a64.one/tmeuze/novak-konzol.git
-  #   - the Caddy config routes  git.a64.one -> forgejo
-  # Container registries speak HTTP, so git.a64.one is the likelier one, but
-  # this was not confirmed. Set CONSOLE_IMAGE explicitly rather than trusting
-  # this default. For local development:
-  #   CONSOLE_IMAGE=novak-konzol:dev
+  # Published by the novak-konzol repo's CI. The package must be public, or
+  # this host needs ghcr credentials to pull it.
+  # For local development: CONSOLE_IMAGE=novak-konzol:dev
   console:
-    image: "${CONSOLE_IMAGE:-git.a64.one/tmeuze/novak-konzol:latest}"
+    image: "${CONSOLE_IMAGE:-ghcr.io/almadon/novak-konzol:latest}"
     restart: unless-stopped
     ports:
       - "${CONSOLE_PORT:-3002}:3002"

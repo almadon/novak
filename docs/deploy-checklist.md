@@ -99,6 +99,10 @@ can't be set in advance. First run is two passes:
       Outline `https://et.a64.one/mcp` (native, no wrapper), Vikunja `http://<mini>:8002/mcp`,
       memory `http://<mini>:8003/mcp` **with an `Authorization: Bearer <token>`
       header** matching that user's entry in `MEMORY_TOKEN_MAP`.
+- [ ] Tududi, if enabled: `https://<tududi-host>/api/mcp` with a bearer token
+      generated in Tududi's Profile settings. Needs `FF_ENABLE_MCP=true` on the
+      Tududi side. Note that one token = one account's tasks for everyone using
+      that client — per-person task lists need per-person registrations.
 - [ ] Note: Open WebUI runs on a VPS, so these URLs must be reachable from
       there — Tailscale names, not `mini.local`.
 - [ ] Voice call mode works (local Whisper STT + TTS in Audio settings).

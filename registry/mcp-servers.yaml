@@ -60,6 +60,37 @@ servers:
     risk:
       level: standard
 
+  # Tududi serves MCP itself at /api/mcp — streamable HTTP, no wrapper needed.
+  # Requires FF_ENABLE_MCP=true on the Tududi side and v1.0.0 or later.
+  #
+  # AUTH: bearer token in the Authorization header, generated per user in
+  # Tududi's Profile settings. It is configured on the CLIENT (Open WebUI's
+  # MCP server entry), not here — external entries carry no credentials.
+  #
+  # NOTE: one token means one Tududi account's tasks, for everyone using that
+  # client. Same shape as the memory problem, without a shim to solve it: if
+  # two people need their own task lists, each needs their own client-side
+  # registration with their own token.
+  - name: tududi
+    kind: external
+    url: https://tududi.example.tld/api/mcp # VERIFY your host
+    enabled: false # flip once Tududi is running and the token is issued
+    # Not on the voice pipeline: 59 tools is far too much context for a
+    # 1-2s spoken response. Same reasoning as vikunja.
+    clients: [open-webui]
+    source:
+      url: https://github.com/chrisvel/tududi
+      license: VERIFY
+    risk:
+      level: elevated
+      why:
+        - "59 tools across tasks, projects, notes, goals, habits and people —
+           a very broad surface for one integration."
+        - "Can create, modify and delete across all of them. VERIFY whether
+           Tududi has a trash before trusting deletes to be recoverable."
+      accepted_by: tmeuze
+      accepted_on: 2026-08-17
+
   # First-party. Source lives in the novak-integracije repo; this references
   # the image its CI publishes. VERIFY the registry host (see docker-compose.yml).
   - name: memory

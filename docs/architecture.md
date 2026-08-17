@@ -38,7 +38,7 @@ This layer was rebuilt because **OpenMemory was deprecated and sunset
 upstream**. Its replacement, the unified Mem0 self-hosted server, is
 multi-user (`user_id` per request, per-user API keys) but **REST-only** — and
 MCP is what lets HA and Open WebUI share one store. So a small first-party
-shim, [novak-integracje/memory-mcp/](https://github.com/almadon/novak-integracje/blob/HEAD/memory-mcp/README.md), exposes Mem0 over MCP and
+shim, [novak-integracije/memory-mcp/](https://github.com/almadon/novak-integracije/blob/HEAD/memory-mcp/README.md), exposes Mem0 over MCP and
 injects the caller's `user_id` from a bearer token. The caller cannot name a
 user; that is what keeps one person's memories out of another's context, and
 what stops a prompt-injected document from asking the model to read someone
@@ -49,7 +49,7 @@ Pocket ID and calls Mem0's REST API directly. Do not rely on Open WebUI's
 built-in Memory feature for anything important; it is siloed inside Open WebUI.
 
 Backend choice is deliberately replaceable: the Mem0-specific code is confined
-to [memory-mcp/src/mem0.ts](https://github.com/almadon/novak-integracje/blob/HEAD/memory-mcp/src/mem0.ts). Identity resolution
+to [memory-mcp/src/mem0.ts](https://github.com/almadon/novak-integracije/blob/HEAD/memory-mcp/src/mem0.ts). Identity resolution
 and the MCP surface are backend-agnostic, so swapping memory engines means
 rewriting one file, not the integration.
 

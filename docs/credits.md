@@ -19,6 +19,7 @@ this repo or any image built from it.
 | [Outline](https://github.com/outline/outline) | Knowledge base | BSL 1.1 — **check before any commercial use** |
 | [outline-mcp-server](https://www.npmjs.com/package/outline-mcp-server) | MCP access to Outline | VERIFY |
 | [Vikunja](https://vikunja.io) | Tasks | AGPL-3.0 |
+| [Tududi](https://github.com/chrisvel/tududi) | Tasks — **serves MCP natively**, no adapter needed | VERIFY |
 | [@aimbitgmbh/vikunja-mcp](https://www.npmjs.com/package/@aimbitgmbh/vikunja-mcp) | MCP access to Vikunja | VERIFY |
 | [supergateway](https://github.com/supercorp-ai/supergateway) | Wraps stdio MCP servers as HTTP | VERIFY |
 | [Wyoming / Rhasspy](https://github.com/rhasspy) | Voice protocol; whisper, piper, openWakeWord services | MIT |
@@ -61,6 +62,7 @@ are excellent and simply aim at a different shape of problem.
 | [speaker-recognition](https://github.com/EuleMitKeule/speaker-recognition) | Cleaner integration point than a text tag, but far less mature |
 | [ha-mcp](https://github.com/homeassistant-ai/ha-mcp) | Rich Home Assistant control; classified `dangerous` in the registry (#10) |
 | [mcp-assist](https://github.com/mike-nott/mcp-assist) | Cuts voice token use ~95% by discovering entities instead of listing them; helps the 1–2s voice target |
+| [Tududi AI assistant](https://docs.tududi.com/features/ai-assistant) | Optional, off by default, and `LLM_BASE_URL` can point at oMLX — so it can use Novak's model rather than a cloud one |
 
 ## On adding dependencies
 

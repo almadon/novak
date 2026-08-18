@@ -106,7 +106,9 @@ real instructions. This is the short version so you know what you're in for.
 4. Put your passwords and API keys in the macOS Keychain — see
    [docs/security.md](docs/security.md). The startup script refuses to run with
    placeholder values still in place.
-5. Run `./scripts/bootstrap.sh`. It installs what's missing and starts things.
+5. Run `./scripts/bootstrap-admin.sh --service-user novak` from an admin
+   account (installs OrbStack and oMLX system-wide, sets the power profile),
+   then `./scripts/bootstrap.sh` as the account that will run the stack.
 6. Follow the checklist for the parts that need a human: downloading models,
    connecting Home Assistant, and so on.
 

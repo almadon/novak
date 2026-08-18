@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
-# One-shot host setup for the Mac mini. Idempotent — safe to re-run.
+# Per-user setup for the account that RUNS the stack. Needs no sudo.
+#
+# Anything requiring administrator rights lives in bootstrap-admin.sh and is
+# run once by an admin. This script only does what an unprivileged service
+# account can, and checks that the admin half has happened rather than failing
+# obscurely halfway through.
+#
+# Idempotent — safe to re-run.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -8,64 +15,51 @@ cd "$REPO_DIR"
 step() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m !  %s\033[0m\n' "$*"; }
 
-step "Homebrew"
-if ! command -v brew >/dev/null 2>&1; then
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-  eval "$(/opt/homebrew/bin/brew shellenv)"
-else
-  echo "already installed"
-fi
+step "Checking the admin setup has been done"
+MISSING=()
+[ -d /Applications/OrbStack.app ] || MISSING+=("OrbStack")
+{ [ -d /Applications/oMLX.app ] || command -v omlx >/dev/null 2>&1; } || MISSING+=("oMLX")
+pmset -g | grep -q "autorestart.*1" || warn "autorestart is not set — the Mac won't power back on after an outage"
 
-step "24/7 power settings (needs sudo)"
-# Deliberately early: this depends on nothing, and a failure further down (an
-# app that won't install) previously meant the machine was left sleeping after
-# a minute with no autorestart — the exact settings a headless box needs most.
-sudo "$REPO_DIR/scripts/power.sh"
+if [ ${#MISSING[@]} -gt 0 ]; then
+  cat >&2 <<MSG
 
-step "OrbStack (Docker runtime)"
-if ! brew list --cask orbstack >/dev/null 2>&1 && [ ! -d /Applications/OrbStack.app ]; then
-  brew install --cask orbstack
-else
-  echo "already installed"
-fi
-# `open -a OrbStack` fails when the app isn't registered with Launch Services
-# (fresh install, or installed somewhere other than /Applications), which is
-# what "Unable to find application named 'OrbStack'" means. Try the explicit
-# bundle path first, since that works regardless of registration.
-if [ -d /Applications/OrbStack.app ]; then
-  open /Applications/OrbStack.app
-elif ! open -a OrbStack 2>/dev/null; then
-  warn "OrbStack installed but could not be launched — start it manually once,"
-  warn "then re-run. Docker commands will fail until it has run at least once."
-fi
+✋ Missing: ${MISSING[*]}
 
-step "oMLX"
-# oMLX is not in homebrew-core — it needs its own tap. (An earlier version of
-# this script guessed `brew install --cask omlx`, which does not exist.)
-if [ ! -d /Applications/oMLX.app ] && ! command -v omlx >/dev/null 2>&1; then
-  brew tap jundot/omlx https://github.com/jundot/omlx
-  if ! brew install jundot/omlx/omlx; then
-    warn "brew install failed — download the .dmg from https://github.com/jundot/omlx"
-    warn "and install manually, then re-run this script."
-    exit 1
+   These install system-wide and need administrator rights, which this
+   account deliberately does not have. Ask an admin to run, from their own
+   account:
+
+       ~/novak/scripts/bootstrap-admin.sh --service-user $(whoami)
+
+   Then re-run this script. (If they don't have a checkout, any copy of this
+   repo will do — it only installs system-wide software.)
+
+MSG
+  exit 1
+fi
+echo "OrbStack and oMLX are installed"
+
+step "Starting OrbStack and oMLX"
+# `open -a NAME` fails when Launch Services hasn't registered the app for this
+# account, which is common the first time a new user logs in. The explicit
+# bundle path works regardless.
+for app in OrbStack oMLX; do
+  if [ -d "/Applications/$app.app" ]; then
+    open "/Applications/$app.app" || warn "could not launch $app — start it manually once"
   fi
-else
-  echo "already installed"
-fi
-if [ -d /Applications/oMLX.app ]; then
-  open /Applications/oMLX.app
-elif ! open -a oMLX 2>/dev/null; then
-  warn "oMLX installed but could not be launched — start it manually once."
-fi
+done
 
-step "Login items"
-warn "Manual: System Settings → General → Login Items — add OrbStack and oMLX."
-warn "Manual: System Settings → Users & Groups — enable auto-login for this user"
-warn "        (required for services to come back after a power failure)."
+step "Python dependency for the reconciler"
+if python3 -c 'import yaml' 2>/dev/null; then
+  echo "PyYAML present"
+else
+  # --user keeps this in the account's own site-packages; no sudo, and no
+  # writing to a Homebrew prefix this account doesn't own.
+  python3 -m pip install --user --quiet pyyaml && echo "installed PyYAML (--user)"
+fi
 
 step "Git hooks + commit template"
-# Hooks live in .git/hooks, which isn't tracked; pointing core.hooksPath at a
-# tracked directory is what makes the commit convention shareable.
 if [ -d .git ]; then
   git config core.hooksPath .githooks
   git config commit.template .gitmessage
@@ -74,15 +68,21 @@ else
   warn "Not a git checkout — skipping hook setup."
 fi
 
+step "Login items"
+warn "Manual, and it must be done from THIS account:"
+warn "  System Settings → General → Login Items — add OrbStack and oMLX."
+warn "Then install the LaunchAgent so the stack starts once Docker is ready:"
+warn "  cp scripts/one.a64.novak.stack.plist ~/Library/LaunchAgents/"
+warn "  launchctl load ~/Library/LaunchAgents/one.a64.novak.stack.plist"
+
 step "Environment"
-# Runtime config lives outside the checkout so `git pull` never conflicts with
-# a running deployment. up.sh seeds it; this just reports where it is.
 NOVAK_HOME="${NOVAK_HOME:-$HOME/.novak}"
 if [ -f "$NOVAK_HOME/.env" ]; then
   echo "using existing config at $NOVAK_HOME/.env"
 else
-  warn "Config will be seeded at $NOVAK_HOME/.env on first start —"
-  warn "fill it in (or add Keychain items, see docs/security.md) before the stack will run."
+  warn "Config will be seeded at $NOVAK_HOME/.env on first start."
+  warn "Fill it in, and add Keychain items FROM THIS ACCOUNT — the login"
+  warn "keychain is per-user, so secrets added elsewhere won't be visible here."
 fi
 
 step "Docker stack"
@@ -91,5 +91,4 @@ step "Docker stack"
 step "Done"
 echo "Next: work through docs/deploy-checklist.md (models, oMLX settings, HA wiring)."
 echo "For unattended restarts after a reboot or power cut, see"
-echo "docs/headless-operation.md — note that FileVault and auto-login are"
-echo "mutually exclusive on macOS, so that choice needs making deliberately."
+echo "docs/headless-operation.md."

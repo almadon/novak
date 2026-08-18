@@ -142,43 +142,47 @@ your home.
 
 Do these as your own admin user, in order.
 
-**1. Power profile — do this first.** It is independent of everything else, and
-without it the machine sleeps after a minute:
+Setup is split in two because the service account has no administrator rights
+and shouldn't: `bootstrap-admin.sh` does everything needing sudo or a
+system-wide install, once; `bootstrap.sh` does the rest, as `novak`.
 
-```bash
-sudo ~/novak/scripts/power.sh
-```
-
-Sets: never sleep on AC, disks stay awake, **restart automatically after a
-power failure**, Power Nap off, wake-on-LAN on.
-
-**2. Create the account.** System Settings → Users & Groups → Add User.
+**1. Create the account.** System Settings → Users & Groups → Add User.
 Name it `novak`. Standard is the safer default; Administrator is defensible
 here since no password is being written to disk — but the stack does not need
 it, so Standard unless something later proves otherwise.
 
-**3. Give `novak` a FileVault unlock token.** Without this it cannot unlock at
-the pre-boot screen, and the whole approach collapses:
+**2. Run the admin half**, from your own admin account:
 
 ```bash
-sudo fdesetup add -usertoadd novak
+./scripts/bootstrap-admin.sh --service-user novak
 ```
 
-Confirm afterwards — this is the single point of failure, so check it rather
-than assume:
+Applies the power profile (never sleep, **restart after power failure**),
+installs OrbStack and oMLX into `/Applications` so every account can run them,
+and gives `novak` a FileVault unlock token. Without that token `novak` cannot
+unlock at the pre-boot screen and the whole approach collapses — so confirm it
+took, rather than assuming:
 
 ```bash
 sudo fdesetup list          # novak must appear
 ```
 
-**4. Log in as `novak`** and install the stack there — repos, `bootstrap.sh`,
-Keychain secrets. It is a separate account, so none of your setup carries over.
+**3. Log in as `novak`** and install the stack there — repos, `bootstrap.sh`,
+Keychain secrets. It is a separate account, so none of your setup carries over:
 
-**5. Start on login.** Add OrbStack and oMLX to Login Items (Users & Groups →
+```bash
+git clone https://github.com/almadon/novak.git ~/novak
+cd ~/novak && ./scripts/bootstrap.sh
+```
+
+`bootstrap.sh` needs no sudo. It checks the admin half has been done and tells
+you exactly what to ask for if not, rather than failing halfway through.
+
+**4. Start on login.** Add OrbStack and oMLX to Login Items (Users & Groups →
 Login Items) while logged in as `novak`, then install the LaunchAgent below to
 bring the stack up once Docker is actually ready.
 
-**6. Wire up the JetKVM.** HDMI and USB to the Mac, Tailscale installed on the
+**5. Wire up the JetKVM.** HDMI and USB to the Mac, Tailscale installed on the
 KVM, and both it and the network gear on the UPS. Then test it *before* you
 need it — see below.
 

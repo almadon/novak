@@ -6,8 +6,15 @@ work top to bottom.
 
 ## Bootstrap
 
-- [ ] `./scripts/bootstrap.sh`
-- [ ] If the oMLX brew install fails, install from <https://omlx.ai> and re-run.
+Two scripts: the admin half runs once from an account with sudo, the rest runs
+as the unprivileged service account. See docs/headless-operation.md.
+
+- [ ] As an admin: `./scripts/bootstrap-admin.sh --service-user novak`
+      (power profile, OrbStack + oMLX into /Applications, FileVault token)
+- [ ] `sudo fdesetup list` — the service user appears
+- [ ] As the service user: `./scripts/bootstrap.sh`
+- [ ] If the oMLX brew install fails, install the .dmg from
+      <https://github.com/jundot/omlx> and re-run.
 - [ ] Login items: OrbStack + oMLX added; auto-login enabled.
 - [ ] `pmset -g custom` shows sleep 0, autorestart 1.
 

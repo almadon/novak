@@ -42,8 +42,18 @@ except ImportError:
     sys.exit("PyYAML required:  pip3 install --user pyyaml")
 
 REPO_DIR = Path(__file__).resolve().parent.parent
-REGISTRY = REPO_DIR / "registry" / "mcp-servers.yaml"
-OUTPUT = REPO_DIR / "docker-compose.mcp.yml"
+
+# Runtime state lives outside the git checkout so the repo is never written to
+# and `git pull` never conflicts with a running deployment. NOVAK_HOME holds
+# config (.env), per-deployment config (the registry), user data (wakeword
+# models) and generated files.
+NOVAK_HOME = Path(os.environ.get("NOVAK_HOME", Path.home() / ".novak"))
+
+# Fall back to the repo's copy when there is no deployment — that is how CI
+# validates the checked-in registry, and how --dry-run works before install.
+_deployed = NOVAK_HOME / "registry" / "mcp-servers.yaml"
+REGISTRY = _deployed if _deployed.exists() else REPO_DIR / "registry" / "mcp-servers.yaml"
+OUTPUT = (NOVAK_HOME if _deployed.exists() else REPO_DIR) / "docker-compose.mcp.yml"
 
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$")
 ENV_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
@@ -258,13 +268,17 @@ def main() -> int:
     OUTPUT.write_text(header + rendered)
     print(f"wrote {OUTPUT}")
 
-    subprocess.run(
-        ["docker", "compose",
-         "-f", str(REPO_DIR / "docker-compose.yml"),
-         "-f", str(OUTPUT),
-         "up", "-d", "--remove-orphans"],
-        cwd=REPO_DIR, check=True, env=os.environ,
-    )
+    # --project-directory is what separates runtime from the checkout: every
+    # relative bind in docker-compose.yml (./registry, ./wakeword/models)
+    # resolves against it, so they land in NOVAK_HOME rather than the repo.
+    project_dir = OUTPUT.parent
+    cmd = ["docker", "compose", "--project-directory", str(project_dir)]
+    env_file = project_dir / ".env"
+    if env_file.exists():
+        cmd += ["--env-file", str(env_file)]
+    cmd += ["-f", str(REPO_DIR / "docker-compose.yml"), "-f", str(OUTPUT),
+            "up", "-d", "--remove-orphans"]
+    subprocess.run(cmd, check=True, env=os.environ)
     return 0
 
 

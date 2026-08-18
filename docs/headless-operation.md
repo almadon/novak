@@ -182,6 +182,72 @@ bring the stack up once Docker is actually ready.
 KVM, and both it and the network gear on the UPS. Then test it *before* you
 need it — see below.
 
+## Where things live
+
+Three separate concerns, deliberately not in one place:
+
+| | Path (as `novak`) | Who owns it |
+|---|---|---|
+| **Code** | `/Users/novak/novak` | git — replaceable, never written to at runtime |
+| **Runtime** | `/Users/novak/.novak` | you — config, per-deployment settings, data |
+| **Container data** | Docker volumes | Docker — memories, chat history, Postgres |
+
+Runtime is split out so `git pull` never conflicts with a running stack, and so
+a checkout can be deleted and re-cloned without losing configuration. The
+mechanism is `docker compose --project-directory`, which makes every relative
+bind in `docker-compose.yml` resolve against the runtime directory rather than
+the checkout.
+
+`~/.novak` is the default. Set `NOVAK_HOME` to put it anywhere:
+
+```bash
+export NOVAK_HOME="$HOME/Almadon/Novak"
+```
+
+What ends up there:
+
+```
+~/.novak/
+  .env                        config and non-Keychain settings
+  registry/mcp-servers.yaml   which MCP servers THIS install runs
+  wakeword/models/            wake-word models you trained
+  docker-compose.mcp.yml      generated; never edit
+```
+
+**The registry lives here, not in the repo.** It records what this particular
+machine runs and at what risk level — a per-deployment fact, not catalogue
+content. The copy in the checkout is a starting template, copied across on
+first run and yours from then on. Edit it here; the repo's copy is not read
+once this exists.
+
+### `novak` needs its own checkout
+
+Your home directory is mode `700`, so `novak` cannot read a checkout under
+`/Users/tmeuze`. That is working as intended — do not loosen it. `novak` clones
+from GitHub itself:
+
+```bash
+git clone https://github.com/almadon/novak.git ~/novak
+```
+
+So there are two checkouts: yours for development, `novak`'s for running. They
+meet through GitHub, not the filesystem. Deploying is `git pull` as `novak`.
+
+### Starting over
+
+`scripts/reset.sh` undoes what `bootstrap.sh` did, so it can be re-run:
+
+```bash
+./scripts/reset.sh                 # containers only; config and data kept
+./scripts/reset.sh --purge-data    # also volumes — memories and chats gone
+./scripts/reset.sh --purge-config  # also ~/.novak
+```
+
+The default is conservative on purpose: re-running bootstrap is routine and
+shouldn't be a decision with consequences. Keychain secrets, oMLX models,
+Homebrew and OrbStack are never touched by any flag — the script prints the
+commands to remove those by hand if you actually want them gone.
+
 ## The LaunchAgent
 
 Login Items start OrbStack, but Docker isn't usable the instant the app

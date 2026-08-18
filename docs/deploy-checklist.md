@@ -50,6 +50,9 @@ work top to bottom.
 - [ ] `MEMORY_TOKEN_MAP` — JSON of `{"<token>": "<pocket-id-sub>"}`, tokens
       ≥16 chars (`openssl rand -hex 24`). Only needed once you have real users.
 - [ ] `.env` has no real secrets in it.
+- [ ] Note: config lives at `$NOVAK_HOME` (default `~/.novak`), NOT in the
+      checkout. `up.sh` seeds it on first run; edit it there. Same for
+      `registry/mcp-servers.yaml` — the repo's copy is only a template.
 - [ ] `./scripts/up.sh` no longer refuses to start (it checks for `changeme`).
 
 **Ordering:** `MEM0_API_KEY` is issued by the Mem0 server on first start, so it

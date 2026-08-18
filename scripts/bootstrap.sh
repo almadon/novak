@@ -75,9 +75,14 @@ else
 fi
 
 step "Environment"
-if [ ! -f .env ]; then
-  cp .env.example .env
-  warn "Created .env from template — edit it (or add Keychain items, see docs/security.md)"
+# Runtime config lives outside the checkout so `git pull` never conflicts with
+# a running deployment. up.sh seeds it; this just reports where it is.
+NOVAK_HOME="${NOVAK_HOME:-$HOME/.novak}"
+if [ -f "$NOVAK_HOME/.env" ]; then
+  echo "using existing config at $NOVAK_HOME/.env"
+else
+  warn "Config will be seeded at $NOVAK_HOME/.env on first start —"
+  warn "fill it in (or add Keychain items, see docs/security.md) before the stack will run."
 fi
 
 step "Docker stack"

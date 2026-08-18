@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>one.a64.novak.stack</string>
+
+  <!-- A LaunchAgent, deliberately: agents run inside a login session, which is
+       what oMLX and OrbStack need. A LaunchDaemon starts at boot with no
+       window server and cannot run them. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>exec "$HOME/novak/scripts/launch-stack.sh"</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Retry only on failure. up.sh exits 0 when the stack is up, so this does
+       not loop; it does recover if Docker was still starting. -->
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ThrottleInterval</key>
+  <integer>60</integer>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/novak-stack.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/novak-stack.err</string>
+</dict>
+</plist>

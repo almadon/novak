@@ -138,6 +138,7 @@ the actual hardware.
 | [How memory works](docs/how-memory-works.md) | What "memory" actually means, in plain language |
 | [What sets Novak apart](docs/what-sets-novak-apart.md) | Why build it this way, and what it costs |
 | [Deploy checklist](docs/deploy-checklist.md) | The real setup instructions |
+| [Running headless](docs/headless-operation.md) | Unattended restarts, and the FileVault trade-off |
 
 **Going deeper:**
 

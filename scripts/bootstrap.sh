@@ -16,6 +16,12 @@ else
   echo "already installed"
 fi
 
+step "24/7 power settings (needs sudo)"
+# Deliberately early: this depends on nothing, and a failure further down (an
+# app that won't install) previously meant the machine was left sleeping after
+# a minute with no autorestart — the exact settings a headless box needs most.
+sudo "$REPO_DIR/scripts/power.sh"
+
 step "OrbStack (Docker runtime)"
 if ! brew list --cask orbstack >/dev/null 2>&1 && [ ! -d /Applications/OrbStack.app ]; then
   brew install --cask orbstack
@@ -52,9 +58,6 @@ elif ! open -a oMLX 2>/dev/null; then
   warn "oMLX installed but could not be launched — start it manually once."
 fi
 
-step "24/7 power settings (needs sudo)"
-sudo "$REPO_DIR/scripts/power.sh"
-
 step "Login items"
 warn "Manual: System Settings → General → Login Items — add OrbStack and oMLX."
 warn "Manual: System Settings → Users & Groups — enable auto-login for this user"
@@ -82,3 +85,6 @@ step "Docker stack"
 
 step "Done"
 echo "Next: work through docs/deploy-checklist.md (models, oMLX settings, HA wiring)."
+echo "For unattended restarts after a reboot or power cut, see"
+echo "docs/headless-operation.md — note that FileVault and auto-login are"
+echo "mutually exclusive on macOS, so that choice needs making deliberately."

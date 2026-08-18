@@ -35,9 +35,10 @@ work top to bottom.
       URI `http://<host>:3002/api/auth/callback/pocketid` for every hostname
       you'll use (LAN name *and* Tailscale name if both).
 - [ ] *(Console only)* **`admins.novak` group exists** in Pocket ID with you in it.
-- [ ] *(Console only)* Its CI has published an image, and `CONSOLE_IMAGE` in
-      `.env` points at it. Otherwise remove the `console` service from
-      `docker-compose.yml` — the stack does not need it.
+- [ ] *(Console only)* Its CI has published an image to
+      `ghcr.io/almadon/novak-konzol` — the package is public, so no pull
+      credentials are needed. Otherwise remove the `console` service from
+      `docker-compose.yml`; the stack does not need it.
 
 ## Secrets
 

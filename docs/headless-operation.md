@@ -10,25 +10,79 @@ hunt for — FileVault's pre-boot password prompt *is* the login, so there is
 nothing left to automate. Any guide describing both together is describing two
 machines.
 
-So "unattended after power loss" and "disk encrypted at rest" are, on macOS, a
-straight either/or. Pick deliberately.
+So "unattended after power loss" and "disk encrypted at rest" look like a
+straight either/or. There is a third way, and it is the one this setup uses.
 
-| | Unattended boot | Encrypted at rest | Needs |
-|---|---|---|---|
-| **A. FileVault off + auto-login** | yes | **no** | nothing |
-| **B. FileVault on, manual unlock** | no | yes | someone at the keyboard |
-| **C. FileVault on + network KVM** | effectively | yes | KVM already attached |
-| **D. FileVault on + UPS** | for short cuts | yes | a UPS |
+## The path here: FileVault on, unlocked remotely by the JetKVM
 
-**C is worth a look before you settle for A.** This fleet already runs
-KVM-over-IP devices (`*.kvm.sky.a64.one`). A KVM on the Mac lets you type the
-FileVault password remotely, which turns "drive home after an outage" into
-"open a browser tab" — and keeps the disk encrypted. C and D combine well: the
-UPS absorbs brief cuts, the KVM covers the long ones.
+The trick is that **on macOS, unlocking FileVault _is_ logging in.** Type a
+FileVault-enabled account's password at the pre-boot prompt and macOS carries
+those credentials through and lands you in that account's desktop session — no
+second login, and no auto-login needed.
 
-## The auto-login pitfall
+So if `novak` is FileVault-enabled, one remote password entry after a power cut
+gets you: the disk decrypted, `novak` logged in, a window server running, and
+therefore oMLX and OrbStack able to start. Everything auto-login was wanted for,
+without any of what it costs.
 
-If you go with A, know this:
+Compared with turning FileVault off:
+
+| | FileVault off + auto-login | FileVault on + KVM unlock |
+|---|---|---|
+| Disk encrypted at rest | no | **yes** |
+| Password on disk in `/etc/kcpassword` | yes, recoverable | **no** |
+| Human needed after an outage | no | one remote password entry |
+| Account may be Administrator | never safe | your choice |
+
+The cost is one deliberate action per unexpected outage. The UPS makes those
+rare, and planned reboots skip it entirely (see below).
+
+### What has to be on the UPS
+
+**This is the part that is easy to get wrong.** Remote unlock depends on a
+chain of devices, and the Mac is only the last of them. If the outage takes
+down the network but not the Mac, you cannot reach the thing that unlocks it.
+
+On the UPS, in order of importance:
+
+1. **The JetKVM** — no KVM, no unlock. It draws almost nothing.
+2. **Router and switch** — the KVM needs a network path out.
+3. **The Mac mini.**
+
+If your UPS cannot carry all three, carry the KVM and the network gear and let
+the Mac drop. A Mac that lost power is recoverable remotely; a Mac you cannot
+reach is not.
+
+**Put Tailscale on the JetKVM itself.** It has native support, so the KVM joins
+the tailnet as its own node — meaning the unlock path does not depend on the
+internal reverse proxy, or on any other host at home being up. One less thing
+in the chain that has to survive the outage that broke everything else.
+
+### Graceful shutdown
+
+If the UPS has a USB data cable, connect it to the Mac. macOS reads UPS battery
+state natively (System Settings → Energy Saver → UPS options) and can shut down
+cleanly before the battery dies, instead of the Mac being cut off mid-write.
+Worth the cable — an unclean shutdown of a running Postgres is a much worse
+morning than a cold boot.
+
+### Planned reboots need no KVM at all
+
+For updates and anything else you initiate:
+
+```bash
+sudo fdesetup authrestart
+```
+
+This stores the unlock key in memory for exactly one reboot, so the machine
+comes back to a logged-in session unattended. Verified supported on this
+hardware (`fdesetup supportsauthrestart` → true). Use it instead of `reboot`
+and remote unlock becomes an outage-only chore.
+
+## The auto-login pitfall — why the other path was rejected
+
+Recorded because it is not widely known, and because it is what makes
+the KVM route worth the extra hardware:
 
 **Auto-login writes the account password to `/etc/kcpassword`, obfuscated with
 a fixed XOR key.** It is not encrypted. Anyone who can read that file — or the
@@ -36,13 +90,15 @@ disk, which is now unencrypted — recovers the password in seconds.
 
 Consequences, and they are not theoretical:
 
-- **The `novak` account must be Standard, not Administrator.** A recoverable
-  password on an admin account is a recoverable root password. This single
-  choice is most of what makes option A tolerable.
+- **The account would have to be Standard, not Administrator.** A recoverable
+  password on an admin account is a recoverable root password.
 - **`novak`'s Keychain is reachable** by anyone with that password, and the
   Keychain is where the stack's API keys live. That is the real cost of A: not
   "someone reads my files", but "someone gets the credentials".
-- Physical access already implied a lot. A makes it immediate.
+- Physical access already implied a lot. Auto-login makes it immediate.
+
+None of this applies to the KVM route: nothing is written to disk, because
+nothing is automated — a person types the password each time.
 
 Set a screen lock anyway (System Settings → Lock Screen → require password
 immediately). It does not stop the services — the session stays active — it
@@ -50,7 +106,7 @@ just means a walk-past doesn't get a desktop.
 
 ## Why a dedicated user still helps
 
-Even under A, running as `novak` rather than as yourself is worth it:
+Running as `novak` rather than as yourself is worth it regardless:
 
 - **Your home is already inaccessible.** `/Users/tmeuze` is mode `700`, so
   `novak` cannot read your documents, keys, or browser data. Nothing to
@@ -97,12 +153,23 @@ Sets: never sleep on AC, disks stay awake, **restart automatically after a
 power failure**, Power Nap off, wake-on-LAN on.
 
 **2. Create the account.** System Settings → Users & Groups → Add User.
-Choose **Standard** — not Administrator. Name it `novak`.
+Name it `novak`. Standard is the safer default; Administrator is defensible
+here since no password is being written to disk — but the stack does not need
+it, so Standard unless something later proves otherwise.
 
-**3. If you chose option A**, turn FileVault off (System Settings → Privacy &
-Security → FileVault), then enable auto-login for `novak` (Users & Groups →
-Automatically log in as). The auto-login option is greyed out until FileVault
-is fully decrypted, which takes a while on a large disk.
+**3. Give `novak` a FileVault unlock token.** Without this it cannot unlock at
+the pre-boot screen, and the whole approach collapses:
+
+```bash
+sudo fdesetup add -usertoadd novak
+```
+
+Confirm afterwards — this is the single point of failure, so check it rather
+than assume:
+
+```bash
+sudo fdesetup list          # novak must appear
+```
 
 **4. Log in as `novak`** and install the stack there — repos, `bootstrap.sh`,
 Keychain secrets. It is a separate account, so none of your setup carries over.
@@ -110,6 +177,10 @@ Keychain secrets. It is a separate account, so none of your setup carries over.
 **5. Start on login.** Add OrbStack and oMLX to Login Items (Users & Groups →
 Login Items) while logged in as `novak`, then install the LaunchAgent below to
 bring the stack up once Docker is actually ready.
+
+**6. Wire up the JetKVM.** HDMI and USB to the Mac, Tailscale installed on the
+KVM, and both it and the network gear on the UPS. Then test it *before* you
+need it — see below.
 
 ## The LaunchAgent
 
@@ -134,8 +205,16 @@ required at all, and therefore why auto-login matters.
 The only test that counts is pulling the plug.
 
 - [ ] `pmset -g | grep -E 'autorestart|sleep'` — autorestart 1, sleep 0
-- [ ] Reboot. Does it come back to a logged-in `novak` session unaided?
+- [ ] `sudo fdesetup list` — `novak` is there
+- [ ] **Reach the JetKVM over Tailscale from a phone on cellular**, with home
+      wifi off. This proves the unlock path does not secretly depend on being
+      on the home network.
+- [ ] `sudo fdesetup authrestart` — comes back to a logged-in `novak` session
+      with no intervention
 - [ ] `docker compose ps` as `novak` — everything running
 - [ ] Voice through Home Assistant answers, with nobody having touched the Mac
 - [ ] As `novak`: `ls /Users/tmeuze` → **Permission denied** (this is correct)
-- [ ] Cut the power for real. Same checks.
+- [ ] **Pull the plug.** The Mac should power back on and stop at the FileVault
+      prompt; you unlock it through the KVM and it proceeds to a running stack.
+      Do this once deliberately, when you have time — finding out the KVM has
+      no video at the pre-boot screen during a real outage is the bad version.

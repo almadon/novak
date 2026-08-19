@@ -194,9 +194,17 @@ See [home-assistant.md](home-assistant.md).
 
 ## Phase 9 — The console *(optional; genuinely skippable)*
 
-Lives in [novak-konzol](https://github.com/almadon/novak-konzol). **It has never
-been run.** Everything it does can be done by editing the registry by hand, so
-skip it unless you want it.
+Lives in [novak-konzol](https://github.com/almadon/novak-konzol). Everything it
+does can be done by editing the registry by hand, so skip it unless you want it.
+
+Skipping is now a real option rather than a wish: the console sits behind a
+compose profile, so leaving `OIDC_ISSUER`, `OIDC_CLIENT_ID` or
+`CONSOLE_AUTH_SECRET` unset skips it and starts everything else. `novak up`
+says which values were missing. Set them and re-run to add it later.
+
+**The published image is `linux/amd64`.** On Apple Silicon it runs under
+emulation — it works, and starts in well under a second, but it is the only
+non-native image in the stack and worth building for `arm64`.
 
 - [ ] `novak logs console` — started rather than crash-looping.
 - [ ] Sign-in via Pocket ID redirects and comes back.

@@ -120,13 +120,22 @@ novak logs open-webui    # follow
 is the intended way to pick up any change, and it recreates only what changed.
 
 It refuses to start if a required setting or secret is missing, rather than
-starting something half-configured. An unconfigured *integration* is not a
-reason to refuse: the reconciler skips any MCP server whose variables are unset
-and logs which ones, so one unconfigured tool never keeps the rest down.
+starting something half-configured. **Optional pieces are not a reason to
+refuse.** Anything that only it needs is skipped, with a line saying which
+values were missing, and everything else starts:
 
 ```
 skipped:  vikunja — not configured: VIKUNJA_URL, VIKUNJA_API_TOKEN
+skipped:  console — not configured: OIDC_ISSUER, OIDC_CLIENT_SECRET
 ```
+
+That covers MCP servers (skipped by the reconciler) and the console (gated
+behind a compose profile). Set the values and re-run `novak up` to add one
+later — nothing else is disturbed.
+
+Only genuinely shared values refuse: `HOST_NAME`, which every service builds
+its URLs from, and `HINDSIGHT_API_KEY`, without which the memory endpoint would
+be open to anything that can reach the port.
 
 ---
 

@@ -321,7 +321,12 @@ cmd_status() {
 }
 
 compose() {
-  local args=(docker compose --project-directory "$NOVAK_HOME" -f "$REPO_DIR/docker-compose.yml")
+  # The console sits behind a compose profile so a missing OIDC secret cannot
+  # stop the rest of the stack. Enable it here so `logs`, `restart`, `down` and
+  # `ps` can still see a console that is already running — none of these create
+  # containers, so this cannot start an unconfigured one. Only up.sh decides
+  # that, and only when its config is complete.
+  local args=(env COMPOSE_PROFILES=console docker compose --project-directory "$NOVAK_HOME" -f "$REPO_DIR/docker-compose.yml")
   [ -f "$ENV_FILE" ] && args+=(--env-file "$ENV_FILE")
   [ -f "$NOVAK_HOME/docker-compose.mcp.yml" ] && args+=(-f "$NOVAK_HOME/docker-compose.mcp.yml")
   "${args[@]}" "$@"

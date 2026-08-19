@@ -107,7 +107,7 @@ checkouts carry over, and that is the point.
 
 ## Phase 4 — The model
 
-See [../omlx/SETTINGS.md](../omlx/SETTINGS.md) for the reasoning.
+See [../omlx/settings.md](../omlx/settings.md) for the reasoning.
 
 - [ ] Note oMLX's port → `novak config set OMLX_PORT <port>`.
 - [ ] Enable API-key auth in oMLX → `novak secret set OMLX_API_KEY`.
@@ -194,9 +194,17 @@ See [home-assistant.md](home-assistant.md).
 
 ## Phase 9 — The console *(optional; genuinely skippable)*
 
-Lives in [novak-konzol](https://github.com/almadon/novak-konzol). **It has never
-been run.** Everything it does can be done by editing the registry by hand, so
-skip it unless you want it.
+Lives in [novak-konzol](https://github.com/almadon/novak-konzol). Everything it
+does can be done by editing the registry by hand, so skip it unless you want it.
+
+Skipping is now a real option rather than a wish: the console sits behind a
+compose profile, so leaving `OIDC_ISSUER`, `OIDC_CLIENT_ID` or
+`CONSOLE_AUTH_SECRET` unset skips it and starts everything else. `novak up`
+says which values were missing. Set them and re-run to add it later.
+
+**The published image is `linux/amd64`.** On Apple Silicon it runs under
+emulation — it works, and starts in well under a second, but it is the only
+non-native image in the stack and worth building for `arm64`.
 
 - [ ] `novak logs console` — started rather than crash-looping.
 - [ ] Sign-in via Pocket ID redirects and comes back.
@@ -214,12 +222,20 @@ The point of the whole exercise: it comes back without you.
 
 - [ ] Login Items **as `novak`**: OrbStack and oMLX. They are per-account —
       setting them as yourself does nothing here.
-- [ ] Install the LaunchAgent:
+- [ ] Install the LaunchAgent. **`mkdir -p` is not optional** — a fresh macOS
+      account has no `~/Library/LaunchAgents`, and `cp` into a missing
+      directory fails:
 
+      mkdir -p ~/Library/LaunchAgents
       cp scripts/one.a64.novak.stack.plist ~/Library/LaunchAgents/
       launchctl load ~/Library/LaunchAgents/one.a64.novak.stack.plist
 
       Edit the path inside if your checkout is not at `~/Workspaces/Novak/novak`.
+
+      **Set your secrets before loading it.** `up.sh` exits non-zero when a
+      required secret is missing, and `KeepAlive` retries every 60s — so
+      loading it early gets you a failure loop in `/tmp/novak-stack.err`
+      rather than a stack.
 
 - [ ] **Tailscale runs as a system daemon and the node is tagged.** Per-user
       Tailscale is invisible to other accounts, and user-owned keys expire

@@ -45,10 +45,20 @@ done
 # "the Keychain lookup above found nothing".
 envval() { grep -E "^${1}=" "$NOVAK_HOME/.env" 2>/dev/null | head -1 | cut -d= -f2- ; }
 
-# Console vars matter only when the console service is present.
-if grep -qE '^\s*console:' "$REPO_DIR/docker-compose.yml"; then
-  REQUIRED_EDITS+=("${CONSOLE_EDITS[@]}")
-fi
+# The console is optional (docs/deploy-checklist.md phase 9 calls it genuinely
+# skippable), so its configuration must not gate anything else. Rather than
+# demand its values, decide here whether it is configured; if not, it is left
+# out and everything else starts. Same rule the reconciler applies to an
+# unconfigured MCP server.
+console_missing=()
+for var in "${CONSOLE_EDITS[@]}"; do
+  v="$(envval "$var")"
+  case "$v" in ""|EDIT-ME|changeme) console_missing+=("$var") ;; esac
+done
+for var in "${CONSOLE_SECRETS[@]}"; do
+  v="${!var:-$(envval "$var")}"
+  case "$v" in ""|set-in-keychain|changeme) console_missing+=("$var") ;; esac
+done
 
 unedited=()
 for var in "${REQUIRED_EDITS[@]}"; do
@@ -71,7 +81,6 @@ fi
 # set-in-keychain means the lookup found nothing — usually because it was added
 # under a different account, since the login keychain is per-user.
 REQUIRED_SECRETS=("${CORE_SECRETS[@]}")
-grep -qE '^\s*console:' "$REPO_DIR/docker-compose.yml" && REQUIRED_SECRETS+=("${CONSOLE_SECRETS[@]}")
 
 missing=()
 for var in "${REQUIRED_SECRETS[@]}"; do
@@ -120,6 +129,16 @@ if [ ! -x "$PY" ] || ! "$PY" -c 'import yaml' 2>/dev/null; then
   fi
   echo "🐍 PyYAML ready"
 fi
+# Compose reads COMPOSE_PROFILES from the environment, and the reconciler is
+# what runs `docker compose up`, so this is all it takes to include or omit the
+# console — no reconciler change, and nothing here needs to know about it.
+if [ ${#console_missing[@]} -eq 0 ]; then
+  export COMPOSE_PROFILES=console
+else
+  echo "skipped:  console — not configured: ${console_missing[*]}" >&2
+  echo "          everything else starts; set those and re-run to add it." >&2
+fi
+
 NOVAK_HOME="$NOVAK_HOME" "$PY" "$REPO_DIR/reconciler/reconcile.py"
 
 docker compose \

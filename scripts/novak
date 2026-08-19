@@ -11,6 +11,10 @@
 #   novak config get KEY
 #   novak config set KEY VAL  edit .env in place, preserving comments
 #   novak secret set KEY      store a secret in the Keychain (prompts, no echo)
+#   novak secret set KEY --generate
+#                             generate one and store it, never displaying it.
+#                             Refused for secrets another system owns.
+#   novak secret show KEY     print one, when a client needs it pasted in
 #   novak secret list         which secrets are present (never their values)
 #   novak up                  apply config and start
 #   novak down                stop, keep data
@@ -63,7 +67,15 @@ usage() { awk 'NR>1 && /^#/ {sub(/^# ?/,""); print; next} NR>1 {exit}' "$0"; }
 need_env() {
   [ -f "$ENV_FILE" ] || { red "No config at $ENV_FILE — run 'novak up' once to seed it."; exit 1; }
 }
-is_secret() { local v; for v in "${SECRET_VARS[@]}"; do [ "$v" = "$1" ] && return 0; done; return 1; }
+is_secret()   { local v; for v in "${SECRET_VARS[@]}";     do [ "$v" = "$1" ] && return 0; done; return 1; }
+is_external() { local v; for v in "${EXTERNAL_SECRETS[@]}"; do [ "$v" = "$1" ] && return 0; done; return 1; }
+is_shared()   { local v; for v in "${SHARED_SECRETS[@]}";   do [ "$v" = "$1" ] && return 0; done; return 1; }
+# Where a secret has to be repeated by hand, so rotating one says what it breaks.
+secret_kind() {
+  if is_external "$1"; then echo "external"
+  elif is_shared "$1"; then echo "shared"
+  else echo "internal"; fi
+}
 envval()    { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true ; }
 keychain()  { security find-generic-password -s "novak/${1}" -w 2>/dev/null || true; }
 
@@ -126,13 +138,85 @@ cmd_secret() {
       dim "  The login keychain is per-user — these are $(whoami)'s."
       ;;
     set)
-      [ $# -ge 2 ] || { red "usage: novak secret set KEY"; exit 1; }
-      is_secret "$2" || { ylw "'$2' isn't a known secret. Known:"; printf '  %s\n' "${SECRET_VARS[@]}"; exit 1; }
-      security delete-generic-password -s "novak/$2" >/dev/null 2>&1 || true
-      # -w with no argument prompts without echoing.
-      security add-generic-password -s "novak/$2" -a "$(whoami)" -w
-      grn "$2 stored in the Keychain."
+      [ $# -ge 2 ] || { red "usage: novak secret set KEY [--generate]"; exit 1; }
+      local key="$2"; shift 2
+      is_secret "$key" || { ylw "'$key' isn't a known secret. Known:"; printf '  %s\n' "${SECRET_VARS[@]}"; exit 1; }
+
+      local generate=0
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --generate) generate=1 ;;
+          *) red "unknown option: $1"; exit 1 ;;
+        esac
+        shift
+      done
+
+      if [ "$generate" -eq 1 ]; then
+        # Refuse, never warn. These must equal a value another system already
+        # holds; a fresh random one here is not a shortcut, it is an outage
+        # that looks like a permissions problem.
+        if is_external "$key"; then
+          red "$key belongs to another system — it cannot be generated."
+          dim "  Its value must match what that system already has. Copy it from"
+          dim "  there, then:  novak secret set $key"
+          exit 1
+        fi
+        command -v openssl >/dev/null 2>&1 || { red "openssl not found — cannot generate."; exit 1; }
+        security delete-generic-password -s "novak/$key" >/dev/null 2>&1 || true
+        # Fed on stdin twice: `security -w` with no value prompts for the
+        # password AND a confirmation, so a single line stores an empty item
+        # and reports success. Verified — one line gives "passwords don't
+        # match" and a zero-length secret.
+        #
+        # stdin rather than -w "$value" so the secret never appears in the
+        # process list.
+        local gen; gen="$(openssl rand -hex 32)"
+        if ! printf '%s\n%s\n' "$gen" "$gen" |
+             security add-generic-password -s "novak/$key" -a "$(whoami)" -w >/dev/null 2>&1; then
+          red "Could not store the generated value in the Keychain."; exit 1
+        fi
+        # Trust nothing: confirm what came back is what went in, because the
+        # failure mode above stored an empty value and still looked fine.
+        if [ "$(keychain "$key")" != "$gen" ]; then
+          red "$key did not store correctly — the Keychain returned a different value."
+          exit 1
+        fi
+        unset gen
+        grn "$key generated and stored. The value was not displayed."
+      else
+        security delete-generic-password -s "novak/$key" >/dev/null 2>&1 || true
+        # -w with no argument prompts without echoing.
+        security add-generic-password -s "novak/$key" -a "$(whoami)" -w
+        grn "$key stored in the Keychain."
+      fi
+
+      if is_shared "$key"; then
+        echo
+        ylw "  $key is registered in clients as a bearer token."
+        dim "  Open WebUI and Home Assistant each hold a copy of the OLD value and"
+        dim "  will fail until re-registered. Read it back with:"
+        dim "      novak secret show $key"
+      fi
       dim "Run 'novak up' to apply."
+      ;;
+    show)
+      [ $# -ge 2 ] || { red "usage: novak secret show KEY"; exit 1; }
+      is_secret "$2" || { red "'$2' isn't a known secret."; exit 1; }
+      local val; val="$(keychain "$2")"
+      if [ -z "$val" ]; then
+        red "$2 is not in the Keychain."
+        # Suggesting --generate for an externally-owned secret would send the
+        # reader straight into a refusal.
+        if is_external "$2"; then dim "  Copy it from the system that owns it, then:  novak secret set $2"
+        else dim "  novak secret set $2 --generate"; fi
+        exit 1
+      fi
+      # Deliberately explicit: `list` and `config` never print values, so this
+      # is the one place a secret reaches the terminal, and only when asked for
+      # by name. Needed because a shared secret has to be pasted into a client.
+      ylw "This prints a secret to your terminal."
+      echo
+      printf '%s\n' "$val"
       ;;
     *) red "unknown: novak secret $1"; exit 1 ;;
   esac
@@ -237,7 +321,12 @@ cmd_status() {
 }
 
 compose() {
-  local args=(docker compose --project-directory "$NOVAK_HOME" -f "$REPO_DIR/docker-compose.yml")
+  # The console sits behind a compose profile so a missing OIDC secret cannot
+  # stop the rest of the stack. Enable it here so `logs`, `restart`, `down` and
+  # `ps` can still see a console that is already running — none of these create
+  # containers, so this cannot start an unconfigured one. Only up.sh decides
+  # that, and only when its config is complete.
+  local args=(env COMPOSE_PROFILES=console docker compose --project-directory "$NOVAK_HOME" -f "$REPO_DIR/docker-compose.yml")
   [ -f "$ENV_FILE" ] && args+=(--env-file "$ENV_FILE")
   [ -f "$NOVAK_HOME/docker-compose.mcp.yml" ] && args+=(-f "$NOVAK_HOME/docker-compose.mcp.yml")
   "${args[@]}" "$@"

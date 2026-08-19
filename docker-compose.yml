@@ -47,6 +47,10 @@ services:
   # this host needs ghcr credentials to pull it.
   # For local development: CONSOLE_IMAGE=novak-konzol:dev
   console:
+    # Optional, and gated behind a compose profile so a missing OIDC secret
+    # skips the console instead of refusing to start the whole stack. up.sh
+    # sets COMPOSE_PROFILES=console once its config is complete.
+    profiles: ["console"]
     image: "${CONSOLE_IMAGE:-ghcr.io/almadon/novak-konzol:latest}"
     restart: unless-stopped
     ports:

@@ -157,13 +157,14 @@ the actual hardware.
 | [Security](docs/security.md) | Secrets, permissions, and what the risks actually are |
 | [Home Assistant](docs/home-assistant.md) | Voice setup |
 | [Credits](docs/credits.md) | Whose software this is built from |
-| [oMLX settings](omlx/SETTINGS.md) | Which models, and how to tune them |
+| [oMLX settings](omlx/settings.md) | Which models, and how to tune them |
 
 **Reference:**
 
 | | |
 |---|---|
-| [scripts/novak](scripts/novak) | CLI: `status`, `config set`, `secret set`, `up`, `logs` |
+| [CLI reference](docs/cli.md) | Every `novak` command, and how secrets are classified |
+| [scripts/novak](scripts/novak) | The CLI itself |
 | [registry/mcp-servers.yaml](registry/mcp-servers.yaml) | Which tools are installed, and how risky each is |
 | [registry/omlx.yaml](registry/omlx.yaml) | Which models exist, and the profiles they expose |
 | [reconciler/](reconciler/reconcile.py) | Applies that list. The only thing here that controls containers |

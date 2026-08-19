@@ -72,9 +72,17 @@ fi
 step "Login items"
 warn "Manual, and it must be done from THIS account:"
 warn "  System Settings → General → Login Items — add OrbStack and oMLX."
+# A fresh macOS account has no ~/Library/LaunchAgents, so the documented `cp`
+# fails on a new service account — exactly where this script is meant to run.
+# Creating it is idempotent and costs nothing; macOS would create it itself the
+# first time anything registers an agent.
+mkdir -p "$HOME/Library/LaunchAgents"
+
 warn "Then install the LaunchAgent so the stack starts once Docker is ready:"
 warn "  cp scripts/one.a64.novak.stack.plist ~/Library/LaunchAgents/"
 warn "  launchctl load ~/Library/LaunchAgents/one.a64.novak.stack.plist"
+warn "Load it AFTER your secrets are set — up.sh exits non-zero while one is"
+warn "missing, and KeepAlive retries every 60s into /tmp/novak-stack.err."
 
 step "Environment"
 NOVAK_HOME="${NOVAK_HOME:-$HOME/.novak}"

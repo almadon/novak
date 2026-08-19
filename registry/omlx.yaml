@@ -7,10 +7,10 @@
 # deliberately absent, because that route was not taken.
 #
 # WHY THIS FILE EXISTS
-#   omlx/SETTINGS.md is the reasoning: how much RAM the 24GB mini has to play
+#   omlx/settings.md is the reasoning: how much RAM the 24GB mini has to play
 #   with, why the 4B is always resident and the 14B is not. This file is that
 #   reasoning reduced to values a machine can apply and re-check. Neither
-#   replaces the other — read SETTINGS.md to change a number, edit here to
+#   replaces the other — read settings.md to change a number, edit here to
 #   apply it.
 #
 # WHAT A PROFILE IS

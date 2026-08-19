@@ -243,6 +243,67 @@ git clone https://github.com/almadon/novak.git ~/novak
 So there are two checkouts: yours for development, `novak`'s for running. They
 meet through GitHub, not the filesystem. Deploying is `git pull` as `novak`.
 
+### Tailscale must be a system daemon, and the node should be tagged
+
+Two separate problems, both of which bite a headless install.
+
+**Per-user by default.** The macOS Tailscale app normally runs as a LaunchAgent
+in whichever account is logged in. Set up from your admin account, it is
+invisible to `novak` — no `tailscale` status, and nothing this stack does can
+reach the tailnet.
+
+**User-owned keys expire.** A node authenticated as a person carries a key
+expiry (180 days by default). When it lapses the machine silently leaves the
+tailnet and needs a human to re-authenticate — on the box you specifically
+chose because you did not want to visit it.
+
+**Tagged nodes fix both.** They belong to the tailnet rather than to a person,
+and key expiry is disabled by default.
+
+Check which you have — the bundle id matters:
+
+```bash
+launchctl list | grep -i tailscale
+```
+
+`io.tailscale.ipn.macsys` is the **standalone** build and can run system-wide.
+`io.tailscale.ipn.macos` is the **App Store** build, which is sandboxed and
+cannot — replace it with the standalone package from tailscale.com first.
+
+Then, once:
+
+1. **Allow the tag in your tailnet ACL** (admin console → Access controls):
+
+   ```json
+   "tagOwners": { "tag:server": ["autogroup:admin"] }
+   ```
+
+2. **Generate an auth key** carrying that tag (Settings → Keys). Make it
+   reusable only if you will re-run this; ephemeral is wrong here.
+
+3. **On the Mac**, install the daemon and authenticate as a tagged node:
+
+   ```bash
+   sudo /Applications/Tailscale.app/Contents/MacOS/Tailscaled install-system-daemon
+   sudo tailscale up --authkey=tskey-auth-... --advertise-tags=tag:server
+   ```
+
+   **VERIFY the daemon path and command against Tailscale's current docs** —
+   this was not tested here, and the standalone build has moved things before.
+
+4. **Confirm it took:**
+
+   ```bash
+   tailscale status --json | grep -A2 '"Tags"'
+   ```
+
+   Tags present and no key expiry. Then check it from `novak`'s session, which
+   is the account that actually needs it.
+
+Re-authenticating an existing node with tags may make it appear as a new device
+needing approval — expected, not a failure. Its Tailscale IP can change, so
+re-check anything pinned to the old address, including `HOST_NAME`.
+
 ### Docker is per-account
 
 Each macOS user runs **their own OrbStack VM with its own socket**. Containers

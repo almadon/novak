@@ -220,6 +220,11 @@ The point of the whole exercise: it comes back without you.
 
       Edit the path inside if your checkout is not at `~/Workspaces/Novak/novak`.
 
+- [ ] **Tailscale runs as a system daemon and the node is tagged.** Per-user
+      Tailscale is invisible to other accounts, and user-owned keys expire
+      (180 days) — the machine would silently leave the tailnet with nobody
+      there to re-auth it. See headless-operation.md.
+- [ ] `tailscale status --json` shows tags and no key expiry.
 - [ ] KVM: HDMI and USB to the Mac, Tailscale installed **on the KVM itself**.
 - [ ] **UPS priority: KVM first, network gear second, Mac last.** A Mac that
       lost power is recoverable remotely; a Mac you cannot reach is not.

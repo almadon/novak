@@ -21,6 +21,14 @@
 # Add to PATH:  ln -s "$PWD/scripts/novak" /usr/local/bin/novak
 set -euo pipefail
 
+# Same defensive PATH as scripts/launch-stack.sh. This is reached through a
+# symlink in /usr/local/bin, so it runs under whatever environment the caller
+# had — cron, a LaunchAgent, or a login shell that never sourced Homebrew.
+# `tailscale` in particular lives only in /opt/homebrew/bin, and when it is
+# absent `novak ports` reports no Tailscale address on a machine that is
+# perfectly online — indistinguishable from the real thing.
+export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.orbstack/bin:$PATH"
+
 # Resolve symlinks before locating the repo. This script is meant to be linked
 # into PATH, and BASH_SOURCE is then the LINK's path — computing the repo from
 # it directly lands in /usr/local and nothing is found. `readlink -f` is not

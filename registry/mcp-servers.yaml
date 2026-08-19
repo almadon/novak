@@ -134,7 +134,10 @@ servers:
   #     endpoint is open and every bank is readable by anything on the network.
   - name: hindsight-household
     kind: external
-    url: http://mini.local:8888/mcp/household/ # VERIFY host
+    # EDIT THIS HOST. Open WebUI runs on the VPS, so a .local name it cannot
+    # resolve is the one thing that is guaranteed not to work — use the Mac's
+    # Tailscale name or 100.x address, matching HOST_NAME.
+    url: http://EDIT-ME:8888/mcp/household/
     auth: HINDSIGHT_API_KEY
     enabled: true
     # Home Assistant CAN use this: the bank is in the path, so it needs no
@@ -158,7 +161,10 @@ servers:
   # distinct and keep them out of the voice pipeline.
   - name: hindsight-tmeuze
     kind: external
-    url: http://mini.local:8888/mcp/tmeuze/ # VERIFY host
+    # EDIT THIS HOST. Open WebUI runs on the VPS, so a .local name it cannot
+    # resolve is the one thing that is guaranteed not to work — use the Mac's
+    # Tailscale name or 100.x address, matching HOST_NAME.
+    url: http://EDIT-ME:8888/mcp/tmeuze/
     auth: HINDSIGHT_API_KEY
     enabled: true
     # Deliberately NOT home-assistant: a voice satellite cannot tell who is

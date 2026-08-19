@@ -56,20 +56,21 @@ Current setup. Add to the internal instance:
 	}
 }
 
-# Replace <mac-ts-ip> with the Mac's Tailscale address (100.x.y.z).
+# Replace <mac-ts-ip> with the Mac's Tailscale address (100.x.y.z), or its
+# MagicDNS name.
 omlx.novak.example.tld {
 	import novak-internal
-	reverse_proxy <mac-ts-ip>:8080          # VERIFY against OMLX_PORT
+	reverse_proxy <mac-ts-ip>:8000          # OMLX_PORT — see the note below
 }
 
 memory.novak.example.tld {
 	import novak-internal
-	reverse_proxy <mac-ts-ip>:8003          # the MCP endpoint clients register
+	reverse_proxy <mac-ts-ip>:8888          # Hindsight: API + MCP at /mcp/<bank>/
 }
 
-mem0.novak.example.tld {
+memory-ui.novak.example.tld {
 	import novak-internal
-	reverse_proxy <mac-ts-ip>:8765          # REST API; Konzol only, never models
+	reverse_proxy <mac-ts-ip>:9999          # Hindsight's web UI
 }
 
 konzol.novak.example.tld {
@@ -77,6 +78,15 @@ konzol.novak.example.tld {
 	reverse_proxy <mac-ts-ip>:3002          # omit if not running the console
 }
 ```
+
+**oMLX ships bound to `127.0.0.1`.** On that default nothing off the machine can
+reach it, proxy included — containers only manage it because OrbStack forwards
+loopback. Change `server.host` in oMLX's own settings before adding the route
+above, and check with `novak ports`: the Tailscale column must read `yes`.
+
+**Open WebUI (3000) is deliberately absent.** It runs on the VPS, where public
+ingress already terminates TLS for it — see decisions #15. Only add a route
+here if you are running it on the Mac for local testing.
 
 Your existing `tlsAutostrap` snippet already handles DNS-01, so these inherit
 it from the zone block.
@@ -97,7 +107,7 @@ http:
     novak-memory:
       loadBalancer:
         servers:
-          - url: "http://<mac-ts-ip>:8003"
+          - url: "http://<mac-ts-ip>:8888"
 ```
 
 Repeat per service. Novak publishes no Docker labels, because the containers

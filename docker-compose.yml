@@ -4,8 +4,9 @@
 # `docker compose up`.
 #
 # PLACEMENT: this file is written for the mini, which runs oMLX and everything
-# that wants to be near it — Mem0, memory-mcp, the console, and the Wyoming
-# voice services. Open WebUI already runs on a separate VPS and reaches oMLX
+# that wants to be near it — Hindsight, the console, and the Wyoming voice
+# services. (Mem0 and its first-party shim were replaced by Hindsight; see
+# decisions #3.) Open WebUI already runs on a separate VPS and reaches oMLX
 # over Tailscale; its service block here is for reference/local testing, not
 # the deployed instance. See docs/architecture.md § Placement.
 

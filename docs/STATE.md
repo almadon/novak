@@ -66,10 +66,30 @@ the wrong guesses are plausible and someone will make them again.
   it relaunches at login, and it shadows the CLI. `novak ports` works around
   it; nothing else does. Needs a human to drag it out of /Applications and
   clear the login item.
-- **Configure the memory MCP.** `MEM0_URL`, `MEM0_API_KEY`,
-  `MEMORY_TOKEN_MAP`, `MEMORY_DEFAULT_USER` are declared by the `memory` entry
-  in the registry but **absent from `.env.example` entirely** — so that server
-  could never have started. Add them to `.env.example` and fill them in.
+- **The deployed registry has been brought up to date.** It had been seeded
+  from a pre-Hindsight checkout and `up.sh` never overwrites it, so it still
+  listed the Mem0-era `memory` and `outline` entries and had *no* Hindsight
+  endpoints — nothing advertised memory to any client. Replaced with the repo's
+  copy (old one kept as `mcp-servers.yaml.bak-*`), hosts set to the tailnet
+  address, vikunja re-disabled.
+
+  Both banks verified live over Tailscale — `401` unauthenticated, `200` with
+  the key:
+
+      http://100.120.1.110:8888/mcp/household/
+      http://100.120.1.110:8888/mcp/tmeuze/
+
+  They are `kind: external`, so nothing is started for them; they are
+  advertised for clients to register. **That registration has not been done** —
+  see phase 7. Note the two banks are separate on purpose: `tmeuze` is personal
+  and registering it in a shared client would expose it to everyone using that
+  client.
+
+  Worth remembering that this drift was invisible: the stack was healthy and
+  the registry file was valid, it just described an older system. `up.sh`
+  seeding once and never overwriting is deliberate — your registry is yours —
+  but it means a repo-side change to the default registry never reaches an
+  existing deployment.
 - **`VIKUNJA_URL` is commented out** in `~/.novak/.env` (line 25). Uncomment
   and set it, plus the `VIKUNJA_API_TOKEN` keychain item, to enable that MCP.
 - Missing keychain items: `OMLX_API_KEY`, `TUDUDI_API_TOKEN`,

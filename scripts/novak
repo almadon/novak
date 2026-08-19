@@ -132,49 +132,60 @@ cmd_secret() {
 
 cmd_ports() {
   need_env
-  bold "Listening sockets"
+  bold "Reachability"
   echo
-  dim "  A service bound to 127.0.0.1 is reachable only from this Mac, no"
-  dim "  matter what HOST_NAME says — that setting builds URLs, it does not"
-  dim "  change what anything binds to."
+  dim "  Probes each port by connecting, rather than inspecting sockets:"
+  dim "  \`lsof\` only shows THIS user's processes without sudo, so a service"
+  dim "  run by another account looks absent when it is merely invisible."
   echo
-  printf '  %-22s %-7s %-24s %s\n' "SERVICE" "PORT" "BOUND TO" "REACHABLE FROM"
-  local ts; ts="$(tailscale ip -4 2>/dev/null | head -1)"
 
-  check_port() {
-    local label="$1" port="$2" bind reach
+  local ts; ts="$(tailscale ip -4 2>/dev/null | head -1 || true)"
+  printf '  %-22s %-7s %-12s %s\n' "SERVICE" "PORT" "LOCALHOST" "${ts:-TAILSCALE}"
+
+  probe() { nc -z -w 2 "$1" "$2" >/dev/null 2>&1; }
+
+  row() {
+    local label="$1" port="$2" l t
     [ -n "$port" ] || return 0
-    bind="$(lsof -iTCP:"$port" -sTCP:LISTEN -n -P 2>/dev/null | awk 'NR==2{print $9}' || true)"
-    if [ -z "$bind" ]; then
-      printf '  %-22s %-7s %-24s %s\n' "$label" "$port" "-" "$(red 'not listening')"
-      return
-    fi
-    case "$bind" in
-      127.0.0.1:*|\[::1\]:*) reach="$(red 'this Mac only')" ;;
-      \*:*|0.0.0.0:*|\[::\]:*) reach="$(grn 'any interface')" ;;
-      *) reach="$(ylw 'one interface')" ;;
-    esac
-    printf '  %-22s %-7s %-24s %s\n' "$label" "$port" "$bind" "$reach"
+    # Pad first, colour second — ANSI codes count toward printf's width.
+    if probe 127.0.0.1 "$port"; then l="$(printf '\033[32m%-12s\033[0m' yes)"
+    else l="$(printf '\033[31m%-12s\033[0m' no)"; fi
+    if [ -z "$ts" ]; then t="?"
+    elif probe "$ts" "$port"; then t="$(printf '\033[32m%s\033[0m' yes)"
+    else t="$(printf '\033[31m%s\033[0m' no)"; fi
+    printf '  %-22s %-7s %s %s\n' "$label" "$port" "$l" "$t"
   }
 
-  check_port "oMLX (host app)"  "$(envval OMLX_PORT)"
-  check_port "Console"          "$(envval CONSOLE_PORT)"
-  check_port "Hindsight API"    "$(envval HINDSIGHT_PORT)"
-  check_port "Hindsight UI"     "$(envval HINDSIGHT_UI_PORT)"
-  check_port "Open WebUI"       "$(envval OPENWEBUI_PORT)"
-  check_port "Whisper (STT)"    "$(envval WHISPER_PORT)"
-  check_port "Piper (TTS)"      "$(envval PIPER_PORT)"
+  row "oMLX (host app)"  "$(envval OMLX_PORT)"
+  row "Console"          "$(envval CONSOLE_PORT)"
+  row "Hindsight API"    "$(envval HINDSIGHT_PORT)"
+  row "Hindsight UI"     "$(envval HINDSIGHT_UI_PORT)"
+  row "Open WebUI"       "$(envval OPENWEBUI_PORT)"
+  row "Whisper (STT)"    "$(envval WHISPER_PORT)"
+  row "Piper (TTS)"      "$(envval PIPER_PORT)"
 
   echo
-  if [ -n "$ts" ]; then
-    echo "  Tailscale address: $ts"
-    dim "  Anything above bound to 127.0.0.1 will NOT answer on that address."
-  else
-    ylw "  Tailscale is not reporting an address — is it running and logged in?"
-  fi
+  dim "  localhost yes / tailscale no  -> bound to 127.0.0.1 only. For oMLX that"
+  dim "     is its own admin-UI setting; HOST_NAME does not affect any binding."
+  dim "  both no                       -> not running. Try: novak status, novak logs"
   echo
-  dim "  oMLX binds per its own setting (its admin UI), not via this repo."
-  dim "  Docker services publish on all interfaces unless told otherwise."
+  if [ -z "$ts" ]; then ylw "  No Tailscale address — is it running and logged in?"; fi
+
+  # Containers are per-user on macOS: each account runs its own OrbStack VM.
+  # Seeing none here while services respond means they belong to another user.
+  if docker info >/dev/null 2>&1; then
+    local n; n="$(docker ps -q 2>/dev/null | wc -l | tr -d ' ')"
+    local owner; owner="$(ps -axo user,comm 2>/dev/null | awk '/OrbStack/ && !/awk/ {print $1; exit}')"
+    echo "  Containers visible to $(whoami): $n"
+    if [ "$n" = "0" ] && [ -n "$owner" ] && [ "$owner" != "$(whoami)" ]; then
+      red "  OrbStack is running as '$owner', not $(whoami)."
+      dim "  Each macOS account has its own OrbStack VM and socket, so the"
+      dim "  containers started by that account are invisible here. Run the stack"
+      dim "  from one account consistently — for a service install, that is $(whoami)."
+    fi
+  else
+    ylw "  Docker is not responding — start OrbStack in THIS account."
+  fi
 }
 
 cmd_status() {

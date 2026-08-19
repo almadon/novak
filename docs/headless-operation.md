@@ -243,6 +243,20 @@ git clone https://github.com/almadon/novak.git ~/novak
 So there are two checkouts: yours for development, `novak`'s for running. They
 meet through GitHub, not the filesystem. Deploying is `git pull` as `novak`.
 
+### Docker is per-account
+
+Each macOS user runs **their own OrbStack VM with its own socket**. Containers
+started by one account are invisible to another — `docker ps` shows nothing,
+even while the services are up and answering.
+
+So run the stack from **one account, consistently**: `novak`. If you started it
+from your admin account while testing, those containers live over there and
+`novak` cannot see, stop or restart them. Stop them from the account that owns
+them, then start again as `novak`.
+
+`novak ports` detects this and says so, because "docker ps is empty but the
+service responds" is otherwise a genuinely confusing five minutes.
+
 ### Starting over
 
 `scripts/reset.sh` undoes what `bootstrap.sh` did, so it can be re-run:

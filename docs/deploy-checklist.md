@@ -68,6 +68,11 @@ checkouts carry over, and that is the point.
 
       ln -s "$PWD/scripts/novak" /usr/local/bin/novak
 
+- [ ] **Everything from here runs as `novak`, including Docker.** Each macOS
+      account has its own OrbStack VM: containers started from another account
+      are invisible here, and `docker ps` will show nothing while the services
+      are plainly running. If you tested from your admin account, stop those
+      containers there first.
 - [ ] **Launch OrbStack once by hand and click through any first-run dialog.**
       A new account usually gets one. Until it's dismissed the Docker socket
       never starts listening, and the error you get instead is an unhelpful

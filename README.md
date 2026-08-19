@@ -89,7 +89,11 @@ them is friendly.
 ## Setting it up
 
 Work through **[docs/deploy-checklist.md](docs/deploy-checklist.md)** — it's the
-real instructions. This is the short version so you know what you're in for.
+real instructions, in eleven phases, in the order you actually do them. This is
+the shape of it so you know what you're in for.
+
+Most of it is driven by one command: `novak status` tells you what is
+unconfigured and the exact command to fix each thing.
 
 **Before you touch the Mac:**
 

@@ -40,7 +40,21 @@ settings — no extra RAM. Create:
 - **`deep`** → Qwen3-14B: thinking ON, higher max tokens, for harder
   questions. Same chat persona.
 
-Clients then select `ha-voice` / `chat` / `deep` as the model name.
+Clients select these by their **exposed** id, which is the base model and the
+profile joined by a colon — not the bare profile name:
+
+```
+Qwen3-4B-Instruct-2507-4bit:ha-voice
+Qwen3-14B-4bit:chat
+Qwen3-14B-4bit:deep
+```
+
+Confirmed against a running server. A profile also has to be marked
+`expose_as_model`, or it exists and no client can select it —
+[`novak omlx apply`](../docs/cli.md) sets that for every profile it writes.
+
+Apply these from [`registry/omlx.yaml`](../registry/omlx.yaml) rather than by
+hand: `novak omlx apply`.
 
 **Novak does not choose models for you.** There is no automatic routing by task
 difficulty — the client picks a profile and that's what answers. HA is pinned to

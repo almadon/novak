@@ -13,7 +13,9 @@
   <array>
     <string>/bin/bash</string>
     <string>-lc</string>
-    <string>exec "$HOME/novak/scripts/launch-stack.sh"</string>
+    <!-- NOVAK_REPO must match wherever the checkout actually lives; edit this
+         one line rather than moving the repo. -->
+    <string>exec "${NOVAK_REPO:-$HOME/Workspaces/Novak/novak}/scripts/launch-stack.sh"</string>
   </array>
 
   <key>RunAtLoad</key>

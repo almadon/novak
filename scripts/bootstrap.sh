@@ -86,7 +86,10 @@ else
 fi
 
 step "Docker stack"
-./scripts/up.sh
+# launch-stack.sh, not up.sh: `open` returns as soon as OrbStack launches, but
+# its VM takes tens of seconds to start listening on the docker socket. Going
+# straight to up.sh raced that and failed with an EOF from the socket.
+./scripts/launch-stack.sh
 
 step "Done"
 echo "Next: work through docs/deploy-checklist.md (models, oMLX settings, HA wiring)."

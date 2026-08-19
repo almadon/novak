@@ -278,7 +278,25 @@ def main() -> int:
         cmd += ["--env-file", str(env_file)]
     cmd += ["-f", str(REPO_DIR / "docker-compose.yml"), "-f", str(OUTPUT),
             "up", "-d", "--remove-orphans"]
-    subprocess.run(cmd, check=True, env=os.environ)
+    try:
+        subprocess.run(cmd, check=True, env=os.environ)
+    except FileNotFoundError:
+        sys.exit(
+            "docker not found on PATH.\n"
+            "  If OrbStack is installed, its shim may not be on this shell's PATH:\n"
+            "    export PATH=\"$HOME/.orbstack/bin:$PATH\""
+        )
+    except subprocess.CalledProcessError as e:
+        # A traceback here is noise — the failure is almost always the daemon,
+        # not this script.
+        sys.exit(
+            f"\ndocker compose failed (exit {e.returncode}).\n"
+            "  Most often this means the Docker daemon isn't ready. Check:\n"
+            "    docker info\n"
+            "  If that errors with EOF or 'connect', OrbStack is still starting or\n"
+            "  is waiting on a first-run dialog. Start it, wait for it to settle,\n"
+            "  then use scripts/launch-stack.sh, which waits for the socket."
+        )
     return 0
 
 

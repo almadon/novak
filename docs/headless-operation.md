@@ -259,9 +259,12 @@ launches — `docker compose` run too early fails against a socket that isn't
 listening yet. `scripts/launch-stack.sh` waits for it.
 
 ```bash
-cp ~/novak/scripts/one.a64.novak.stack.plist ~/Library/LaunchAgents/
+cp scripts/one.a64.novak.stack.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/one.a64.novak.stack.plist
 ```
+
+The plist defaults to `~/Workspaces/Novak/novak`. If your checkout is
+elsewhere, edit that one line in the copy under `~/Library/LaunchAgents/`.
 
 Logs to `/tmp/novak-stack.log` and `/tmp/novak-stack.err`.
 

@@ -213,3 +213,11 @@ Two consequences worth being explicit about:
 | Wyoming openWakeWord | 10400 |
 
 All LAN-only. For remote access use Tailscale; never port-forward.
+
+The container ports above bind `0.0.0.0` and are reachable over the tailnet.
+**oMLX is the exception:** it ships bound to `127.0.0.1`, so nothing off this
+machine reaches it until `server.host` is changed in its own settings.
+Containers still can, because OrbStack forwards loopback through
+`host.docker.internal` — which is why the stack can work while the oMLX row in
+`novak ports` shows no Tailscale reachability. See
+[../proxy/README.md](../proxy/README.md) before putting a proxy in front of it.

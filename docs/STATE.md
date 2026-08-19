@@ -66,10 +66,20 @@ the wrong guesses are plausible and someone will make them again.
   it relaunches at login, and it shadows the CLI. `novak ports` works around
   it; nothing else does. Needs a human to drag it out of /Applications and
   clear the login item.
-- **Configure the memory MCP.** `MEM0_URL`, `MEM0_API_KEY`,
-  `MEMORY_TOKEN_MAP`, `MEMORY_DEFAULT_USER` are declared by the `memory` entry
-  in the registry but **absent from `.env.example` entirely** — so that server
-  could never have started. Add them to `.env.example` and fill them in.
+- **The deployed registry predates the Hindsight migration.** `up.sh` seeds
+  `$NOVAK_HOME/registry/mcp-servers.yaml` once and never overwrites it, and
+  this deployment's copy was seeded from an older checkout. It still lists the
+  Mem0-era `memory` and `outline` entries; the repo now has
+  `outline-everything`, `hindsight-household` and `hindsight-tmeuze`.
+
+  Two consequences: the `memory` entry asks for `MEM0_*` variables that no
+  longer exist anywhere (which is why it is skipped, not a missing
+  `.env.example`), and **the Hindsight MCP entries are not deployed at all** —
+  so nothing advertises the memory endpoints to clients.
+
+  Fix by replacing the deployed file with the repo's, then re-applying any
+  local choices (vikunja is disabled here). There is no merge tooling for this,
+  which is the drift problem decision 18 describes, in a different place.
 - **`VIKUNJA_URL` is commented out** in `~/.novak/.env` (line 25). Uncomment
   and set it, plus the `VIKUNJA_API_TOKEN` keychain item, to enable that MCP.
 - Missing keychain items: `OMLX_API_KEY`, `TUDUDI_API_TOKEN`,

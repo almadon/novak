@@ -141,6 +141,7 @@ the actual hardware.
 | [What sets Novak apart](docs/what-sets-novak-apart.md) | Why build it this way, and what it costs |
 | [Deploy checklist](docs/deploy-checklist.md) | The real setup instructions |
 | [Running headless](docs/headless-operation.md) | Unattended restarts, and the FileVault trade-off |
+| [Memory setup](docs/memory-setup.md) | Standing up the memory backend (not run by our compose) |
 
 **Going deeper:**
 

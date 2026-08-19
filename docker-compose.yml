@@ -80,42 +80,26 @@ services:
   #   kind: external   it already speaks MCP (Outline at https://et.a64.one/mcp)
   # Prefer external whenever a service has its own MCP endpoint.
 
-  # ── Shared long-term memory (Mem0 self-hosted) ────────────────────────
-  # OpenMemory (the original choice) was deprecated and sunset upstream. Its
-  # replacement is the unified Mem0 self-hosted server, which is REST-only —
-  # memory-mcp (below) provides the MCP interface HA and Open WebUI need, and
-  # is where per-user scoping is enforced.
-  mem0-db:
-    # VERIFY image tag against the pgvector version Mem0 expects.
-    image: pgvector/pgvector:pg16
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: "${MEM0_POSTGRES_USER:-mem0}"
-      POSTGRES_PASSWORD: "${MEM0_POSTGRES_PASSWORD}"
-      POSTGRES_DB: "${MEM0_POSTGRES_DB:-mem0}"
-    volumes:
-      - mem0-db:/var/lib/postgresql/data
-
-  mem0:
-    # VERIFY: image name/tag for the Mem0 self-hosted server was not confirmed
-    # off-host. Check upstream's compose before first run.
-    image: mem0/mem0-server:latest
-    restart: unless-stopped
-    depends_on:
-      - mem0-db
-    ports:
-      - "${MEM0_PORT:-8765}:8000"
-    environment:
-      DATABASE_URL: "postgresql://${MEM0_POSTGRES_USER:-mem0}:${MEM0_POSTGRES_PASSWORD}@mem0-db:5432/${MEM0_POSTGRES_DB:-mem0}"
-      JWT_SECRET: "${MEM0_JWT_SECRET}"
-      # LLM + embedder must point at oMLX, not OpenAI. Confirm the exact var
-      # names against upstream — see docs/deploy-checklist.md.
-      OPENAI_BASE_URL: "http://host.docker.internal:${OMLX_PORT:-8080}/v1"
-      OPENAI_API_KEY: "${OMLX_API_KEY:-none}"
-      # Never set AUTH_DISABLED here. It bypasses auth entirely and this
-      # service holds every user's memories.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+  # ── Shared long-term memory ───────────────────────────────────────────
+  # Mem0 is NOT run from this compose file. Upstream ships no image for the
+  # current server — their compose builds from server/Dockerfile — and
+  # standing it up involves an init-db script, Alembic migrations, and a
+  # `make bootstrap` that creates the first admin and prints the first API key
+  # exactly once. Reimplementing that here would mean owning the fragile parts
+  # of someone else's deployment.
+  #
+  # So run it from its own checkout, as upstream intends:
+  #
+  #   git clone https://github.com/mem0ai/mem0.git
+  #   cd mem0/server && cp .env.example .env
+  #   # set POSTGRES_PASSWORD; point OPENAI_API_BASE at oMLX, not OpenAI
+  #   make bootstrap        # prints the admin password and API key ONCE
+  #
+  # Then put that API key in Keychain as novak/MEM0_API_KEY and set MEM0_URL
+  # to wherever it listens (upstream publishes 8888). See docs/memory-setup.md.
+  #
+  # This also removes the chicken-and-egg that was in this file before: the
+  # key exists before anything here needs it.
 
   # memory-mcp is not defined here — it is a registry entry (`memory`), built
   # from the novak-integracije repo. See registry/mcp-servers.yaml.
@@ -155,6 +139,5 @@ services:
 
 volumes:
   open-webui:
-  mem0-db:
   whisper:
   piper:

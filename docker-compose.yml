@@ -96,12 +96,16 @@ services:
       - "${HINDSIGHT_PORT:-8888}:8888"   # API + MCP
       - "${HINDSIGHT_UI_PORT:-9999}:9999" # web UI
     environment:
-      # Inference goes to oMLX, not a cloud provider. VERIFY the base-URL
-      # variable name against upstream's docs — the provider list includes
-      # ollama and lmstudio, so an OpenAI-compatible local endpoint is
-      # supported; the exact env var was not confirmed off-host.
+      # Inference goes to oMLX, not a cloud provider. The base-URL variable
+      # name is confirmed: Hindsight logs
+      #   OpenAI-compatible client initialized: base_url=http://host.docker.internal:8000/v1
+      # on startup, so extraction really does stay on this machine.
+      #
+      # Note the default below is 8080 but oMLX serves 8000 — set OMLX_PORT.
+      # Hindsight still asks for its own default model (gpt-4o-mini) because
+      # no model name is set here; see docs/STATE.md.
       HINDSIGHT_API_LLM_PROVIDER: "${HINDSIGHT_LLM_PROVIDER:-openai}"
-      HINDSIGHT_API_LLM_BASE_URL: "http://host.docker.internal:${OMLX_PORT:-8080}/v1" # VERIFY
+      HINDSIGHT_API_LLM_BASE_URL: "http://host.docker.internal:${OMLX_PORT:-8080}/v1"
       HINDSIGHT_API_LLM_API_KEY: "${OMLX_API_KEY:-none}"
       # WITHOUT THESE THE MCP ENDPOINT IS OPEN — no authentication at all.
       # Anything that can reach the port reads and writes every bank.

@@ -13,8 +13,23 @@ unattended.
   piper 10200, openwakeword 10400.
 - Tailscale: node `mitochon`, `100.120.1.110`, tagged `tag:infra`, **no key
   expiry**. `HOST_NAME` already matches, so nothing was re-pinned.
-- oMLX (8080) is a host app, not a container. Still not running — start it
-  separately.
+- oMLX is a host app, not a container, and is running. It serves
+  **port 8000**, not 8080 — `OMLX_PORT` said 8080, so Open WebUI and Hindsight
+  were both pointed at a dead port and failed silently. Fixed in `.env`.
+  It binds `127.0.0.1` only, which is fine: OrbStack forwards loopback, so
+  containers reach it through `host.docker.internal` regardless. Only change
+  that if something off this machine needs it — see [decisions.md](decisions.md),
+  which wants oMLX on Tailscale/LAN only, as it has no rate limiting.
+- **No models are loaded.** `/v1/models` returns an empty list and
+  `~/.omlx/models/` is empty, so chat will connect and offer nothing until a
+  model is added.
+- **Hindsight asks oMLX for `gpt-4o-mini`** — its own built-in default, since
+  `docker-compose.yml` sets no model name. Startup verification therefore fails
+  with `Model 'gpt-4o-mini' not found. Available models: (none)`, and it logs
+  that LLM-dependent operations may fail. Loading a model into oMLX is not
+  enough on its own; the model name has to be set too. The variable is likely
+  `HINDSIGHT_API_LLM_MODEL`, following the pattern of the three already set —
+  **VERIFY** before relying on it.
 - No MCP servers are running. Both enabled ones are unconfigured; see below.
 - The design decisions are in [decisions.md](decisions.md). Read that before
   changing anything structural.
@@ -90,8 +105,6 @@ This is why `novak up` now succeeds with both MCP servers unconfigured.
 
 ## Open VERIFY items
 
-- Hindsight's LLM base-URL variable name (`docker-compose.yml`) — the setting
-  that decides whether memory extraction stays local. Failure is silent.
 - Whether Hindsight has a trash, before trusting `delete` to be recoverable.
 - openwakeword's model extension: `.tflite` or `.onnx`.
 - Whether oMLX profiles carry a system prompt.

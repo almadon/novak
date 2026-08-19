@@ -112,6 +112,17 @@ services:
       HINDSIGHT_API_LLM_PROVIDER: "${HINDSIGHT_LLM_PROVIDER:-openai}"
       HINDSIGHT_API_LLM_BASE_URL: "http://host.docker.internal:${OMLX_PORT:-8080}/v1"
       HINDSIGHT_API_LLM_API_KEY: "${OMLX_API_KEY:-none}"
+      # Without this Hindsight asks for its own default, gpt-4o-mini, which a
+      # local server will never have — startup verification fails with "Model
+      # not found. Available models: (none)" and extraction is dead. The name
+      # must match what oMLX serves (`novak registry` does not list these;
+      # check GET /v1/models).
+      #
+      # The small model on purpose: extraction runs on every memory write, and
+      # settings.md keeps the 4B always resident while the 14B unloads after
+      # 20 min idle. Pointing this at the 14B means memory writes can pay a
+      # model load. Override if extraction quality matters more than latency.
+      HINDSIGHT_API_LLM_MODEL: "${HINDSIGHT_LLM_MODEL:-Qwen3-4B-Instruct-2507-4bit}"
       # WITHOUT THESE THE MCP ENDPOINT IS OPEN — no authentication at all.
       # Anything that can reach the port reads and writes every bank.
       HINDSIGHT_API_TENANT_EXTENSION: "hindsight_api.extensions.builtin.tenant:ApiKeyTenantExtension"

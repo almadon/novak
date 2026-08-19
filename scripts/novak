@@ -21,6 +21,14 @@
 # Add to PATH:  ln -s "$PWD/scripts/novak" /usr/local/bin/novak
 set -euo pipefail
 
+# Same defensive PATH as scripts/launch-stack.sh. This is reached through a
+# symlink in /usr/local/bin, so it runs under whatever environment the caller
+# had — cron, a LaunchAgent, or a login shell that never sourced Homebrew.
+# `tailscale` in particular lives only in /opt/homebrew/bin, and when it is
+# absent `novak ports` reports no Tailscale address on a machine that is
+# perfectly online — indistinguishable from the real thing.
+export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.orbstack/bin:$PATH"
+
 # Resolve symlinks before locating the repo. This script is meant to be linked
 # into PATH, and BASH_SOURCE is then the LINK's path — computing the repo from
 # it directly lands in /usr/local and nothing is found. `readlink -f` is not
@@ -139,7 +147,18 @@ cmd_ports() {
   dim "  run by another account looks absent when it is merely invisible."
   echo
 
-  local ts; ts="$(tailscale ip -4 2>/dev/null | head -1 || true)"
+  # Ask the system daemon by its socket rather than letting the CLI choose.
+  # On macOS the CLI prefers a per-user GUI app's local API when one is
+  # running, and the sandboxed App Store build answers "NeedsLogin" even while
+  # the system daemon underneath is up and holding the tailnet address. On a
+  # headless install the daemon is always the one that matters.
+  local ts_sock=/var/run/tailscaled.socket
+  local ts
+  if [ -S "$ts_sock" ]; then
+    ts="$(tailscale --socket="$ts_sock" ip -4 2>/dev/null | head -1 || true)"
+  else
+    ts="$(tailscale ip -4 2>/dev/null | head -1 || true)"
+  fi
   printf '  %-22s %-7s %-12s %s\n' "SERVICE" "PORT" "LOCALHOST" "${ts:-TAILSCALE}"
 
   probe() { nc -z -w 2 "$1" "$2" >/dev/null 2>&1; }

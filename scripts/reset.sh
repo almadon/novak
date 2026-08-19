@@ -62,6 +62,9 @@ fi
 
 step "Generated files"
 rm -f "$NOVAK_HOME/docker-compose.mcp.yml" && echo "removed generated compose override"
+# The venv is disposable — up.sh rebuilds it. Clearing it also fixes the case
+# where a system python upgrade left it broken.
+rm -rf "$NOVAK_HOME/.venv" && echo "removed reconciler virtualenv (rebuilt on next start)"
 
 if [ "$PURGE_CONFIG" -eq 1 ]; then
   step "Configuration"

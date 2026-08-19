@@ -83,14 +83,34 @@ fi
 #
 # It is a hard gate on purpose: a failed risk acceptance should stop the whole
 # start, not quietly skip one service.
-PY=$(command -v python3 || true)
-if [ -z "$PY" ]; then
-  echo "✋ python3 not found — needed by reconciler/reconcile.py" >&2
-  exit 1
-fi
-if ! "$PY" -c 'import yaml' 2>/dev/null; then
-  echo "✋ PyYAML missing — run: pip3 install --user pyyaml" >&2
-  exit 1
+# The reconciler needs PyYAML. Rather than depend on whichever python3 and
+# pip3 happen to be first on PATH — they are often different interpreters, and
+# `pip --user` is per-account and blocked outright on Homebrew python (PEP 668)
+# — keep a small virtualenv in NOVAK_HOME. Self-healing, and immune to the
+# system Python being upgraded or replaced underneath it.
+VENV="$NOVAK_HOME/.venv"
+PY="$VENV/bin/python3"
+
+if [ ! -x "$PY" ] || ! "$PY" -c 'import yaml' 2>/dev/null; then
+  SYS_PY=$(command -v python3 || true)
+  if [ -z "$SYS_PY" ]; then
+    echo "✋ python3 not found. Install Xcode command line tools:" >&2
+    echo "     xcode-select --install" >&2
+    exit 1
+  fi
+  echo "🐍 preparing $VENV (one-off)"
+  if ! "$SYS_PY" -m venv "$VENV" 2>/dev/null; then
+    echo "✋ could not create a virtualenv with $SYS_PY" >&2
+    echo "   Try: $SYS_PY -m ensurepip --upgrade" >&2
+    exit 1
+  fi
+  if ! "$PY" -m pip install --quiet --upgrade pyyaml; then
+    echo "✋ could not install PyYAML into $VENV" >&2
+    echo "   If this machine is offline, install it manually:" >&2
+    echo "     $PY -m pip install pyyaml" >&2
+    exit 1
+  fi
+  echo "🐍 PyYAML ready"
 fi
 NOVAK_HOME="$NOVAK_HOME" "$PY" "$REPO_DIR/reconciler/reconcile.py"
 

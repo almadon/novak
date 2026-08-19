@@ -216,7 +216,13 @@ What ends up there:
   registry/mcp-servers.yaml   which MCP servers THIS install runs
   wakeword/models/            wake-word models you trained
   docker-compose.mcp.yml      generated; never edit
+  .venv/                      generated; PyYAML for the reconciler
 ```
+
+The virtualenv is deliberate. `pip install --user` is per-account and Homebrew's
+python refuses it outright (PEP 668), so "I installed PyYAML" and "the script
+can't find it" are easily both true at once. `up.sh` builds this on first run
+and reuses it after — delete it and it rebuilds.
 
 **The registry lives here, not in the repo.** It records what this particular
 machine runs and at what risk level — a per-deployment fact, not catalogue

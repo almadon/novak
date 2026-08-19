@@ -51,12 +51,13 @@ for app in OrbStack oMLX; do
 done
 
 step "Python dependency for the reconciler"
-if python3 -c 'import yaml' 2>/dev/null; then
-  echo "PyYAML present"
+# Handled by up.sh, which builds a virtualenv under NOVAK_HOME. Not a --user
+# install: those are per-account and Homebrew python refuses them outright, so
+# "I installed it already" and "the script cannot see it" were both true.
+if command -v python3 >/dev/null 2>&1; then
+  echo "python3 present — up.sh will create its own virtualenv for PyYAML"
 else
-  # --user keeps this in the account's own site-packages; no sudo, and no
-  # writing to a Homebrew prefix this account doesn't own.
-  python3 -m pip install --user --quiet pyyaml && echo "installed PyYAML (--user)"
+  warn "python3 not found. Install Xcode command line tools: xcode-select --install"
 fi
 
 step "Git hooks + commit template"

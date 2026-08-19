@@ -158,6 +158,7 @@ the actual hardware.
 
 | | |
 |---|---|
+| [scripts/novak](scripts/novak) | CLI: `status`, `config set`, `secret set`, `up`, `logs` |
 | [registry/](registry/mcp-servers.yaml) | Which tools are installed, and how risky each is |
 | [reconciler/](reconciler/reconcile.py) | Applies that list. The only thing here that controls containers |
 | [prompts/](prompts/novak-chat.md) | The assistant's personality |

@@ -30,18 +30,8 @@ cd "$NOVAK_HOME"
 # Keychain and .env will fall back to the .env.example placeholder, which is
 # why the check below exists — a console running with AUTH_SECRET=changeme is
 # worse than one that refuses to start.
-# Per-instance where a service can have several: OUTLINE_<INSTANCE>_API_KEY
-# rather than one OUTLINE_API_KEY, so a second Outline is an added line, not a
-# collision. Add new ones here AND as a `auth:` field on the registry entry.
-SECRET_VARS=(
-  OMLX_API_KEY
-  OUTLINE_EVERYTHING_API_KEY
-  TUDUDI_API_TOKEN
-  VIKUNJA_API_TOKEN
-  CONSOLE_AUTH_SECRET
-  OIDC_CLIENT_SECRET
-  HINDSIGHT_API_KEY
-)
+# shellcheck source=lib/vars.sh
+source "$REPO_DIR/scripts/lib/vars.sh"
 
 for var in "${SECRET_VARS[@]}"; do
   if val=$(security find-generic-password -s "novak/${var}" -w 2>/dev/null); then
@@ -55,10 +45,9 @@ done
 # "the Keychain lookup above found nothing".
 envval() { grep -E "^${1}=" "$NOVAK_HOME/.env" 2>/dev/null | head -1 | cut -d= -f2- ; }
 
-REQUIRED_EDITS=(HOST_NAME VIKUNJA_URL)
-# Console-only: skipped unless the console service is actually in use.
-if [ -n "${CONSOLE_IMAGE:-}" ] || grep -qE '^\s*console:' "$REPO_DIR/docker-compose.yml"; then
-  REQUIRED_EDITS+=(OIDC_ISSUER OIDC_CLIENT_ID)
+# Console vars matter only when the console service is present.
+if grep -qE '^\s*console:' "$REPO_DIR/docker-compose.yml"; then
+  REQUIRED_EDITS+=("${CONSOLE_EDITS[@]}")
 fi
 
 unedited=()
@@ -81,8 +70,8 @@ fi
 # Secrets: these must have resolved from the Keychain. A value still reading
 # set-in-keychain means the lookup found nothing — usually because it was added
 # under a different account, since the login keychain is per-user.
-REQUIRED_SECRETS=(HINDSIGHT_API_KEY)
-grep -qE '^\s*console:' "$REPO_DIR/docker-compose.yml" && REQUIRED_SECRETS+=(CONSOLE_AUTH_SECRET OIDC_CLIENT_SECRET)
+REQUIRED_SECRETS=("${CORE_SECRETS[@]}")
+grep -qE '^\s*console:' "$REPO_DIR/docker-compose.yml" && REQUIRED_SECRETS+=("${CONSOLE_SECRETS[@]}")
 
 missing=()
 for var in "${REQUIRED_SECRETS[@]}"; do

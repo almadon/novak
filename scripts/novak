@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+# novak — a small CLI for running and configuring the stack.
+#
+# Exists because "edit a file, remember which lines are placeholders, re-run a
+# script" is a bad interface for something you touch every few weeks.
+#
+#   novak status              what's configured, what's running
+#   novak doctor              check config without starting anything
+#   novak config              list settings and where each value comes from
+#   novak config get KEY
+#   novak config set KEY VAL  edit .env in place, preserving comments
+#   novak secret set KEY      store a secret in the Keychain (prompts, no echo)
+#   novak secret list         which secrets are present (never their values)
+#   novak up                  apply config and start
+#   novak down                stop, keep data
+#   novak restart [SERVICE]
+#   novak logs [SERVICE]
+#   novak registry            show the MCP registry as the reconciler sees it
+#
+# Add to PATH:  ln -s "$PWD/scripts/novak" /usr/local/bin/novak
+set -euo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+NOVAK_HOME="${NOVAK_HOME:-$HOME/.novak}"
+ENV_FILE="$NOVAK_HOME/.env"
+source "$REPO_DIR/scripts/lib/vars.sh"
+
+bold() { printf '\033[1m%s\033[0m\n' "$*"; }
+dim()  { printf '\033[2m%s\033[0m\n' "$*"; }
+red()  { printf '\033[31m%s\033[0m\n' "$*"; }
+grn()  { printf '\033[32m%s\033[0m\n' "$*"; }
+ylw()  { printf '\033[33m%s\033[0m\n' "$*"; }
+
+usage() { awk 'NR>1 && /^#/ {sub(/^# ?/,""); print; next} NR>1 {exit}' "$0"; }
+
+need_env() {
+  [ -f "$ENV_FILE" ] || { red "No config at $ENV_FILE — run 'novak up' once to seed it."; exit 1; }
+}
+is_secret() { local v; for v in "${SECRET_VARS[@]}"; do [ "$v" = "$1" ] && return 0; done; return 1; }
+envval()    { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- ; }
+keychain()  { security find-generic-password -s "novak/${1}" -w 2>/dev/null || true; }
+
+cmd_config() {
+  need_env
+  case "${1:-list}" in
+    list)
+      bold "Settings   ($ENV_FILE)"
+      echo
+      printf '  %-30s %-10s %s\n' "SETTING" "SOURCE" "STATUS"
+      local key val
+      while IFS='=' read -r key val; do
+        [[ "$key" =~ ^[A-Z] ]] || continue
+        if is_secret "$key"; then
+          if [ -n "$(keychain "$key")" ]; then
+            printf '  %-30s %-10s %s\n' "$key" "keychain" "$(grn set)"
+          else
+            printf '  %-30s %-10s %s\n' "$key" "keychain" "$(red MISSING)"
+          fi
+        elif [[ "$val" =~ $PLACEHOLDERS ]]; then
+          printf '  %-30s %-10s %s\n' "$key" ".env" "$(red 'NEEDS EDITING')"
+        else
+          printf '  %-30s %-10s %s\n' "$key" ".env" "$val"
+        fi
+      done < <(grep -E '^[A-Z_]+=' "$ENV_FILE")
+      echo
+      dim "  Secret values are never printed. 'novak secret set KEY' to change one."
+      ;;
+    get) [ $# -ge 2 ] || { red "usage: novak config get KEY"; exit 1; }
+         is_secret "$2" && { red "$2 is a secret — values are not printed. Try 'novak secret list'."; exit 1; }
+         envval "$2" ;;
+    set)
+      [ $# -ge 3 ] || { red "usage: novak config set KEY VALUE"; exit 1; }
+      local key="$2"; shift 2; local val="$*"
+      is_secret "$key" && { red "$key is a secret. Use: novak secret set $key"; exit 1; }
+      grep -qE "^${key}=" "$ENV_FILE" || { red "Unknown setting '$key'. 'novak config' lists them."; exit 1; }
+      # In-place, comment-preserving. The delimiter avoids clashing with URLs.
+      local tmp; tmp="$(mktemp)"
+      awk -v k="$key" -v v="$val" '
+        $0 ~ "^" k "=" && !done { print k "=" v; done=1; next } { print }
+      ' "$ENV_FILE" > "$tmp" && mv "$tmp" "$ENV_FILE"
+      grn "$key = $val"
+      dim "Run 'novak up' to apply."
+      ;;
+    *) red "unknown: novak config $1"; exit 1 ;;
+  esac
+}
+
+cmd_secret() {
+  case "${1:-list}" in
+    list)
+      bold "Secrets   (macOS Keychain, account $(whoami))"
+      echo
+      local v
+      for v in "${SECRET_VARS[@]}"; do
+        if [ -n "$(keychain "$v")" ]; then printf '  %-30s %s\n' "$v" "$(grn present)"
+        else printf '  %-30s %s\n' "$v" "$(red missing)"; fi
+      done
+      echo
+      dim "  The login keychain is per-user — these are $(whoami)'s."
+      ;;
+    set)
+      [ $# -ge 2 ] || { red "usage: novak secret set KEY"; exit 1; }
+      is_secret "$2" || { ylw "'$2' isn't a known secret. Known:"; printf '  %s\n' "${SECRET_VARS[@]}"; exit 1; }
+      security delete-generic-password -s "novak/$2" >/dev/null 2>&1 || true
+      # -w with no argument prompts without echoing.
+      security add-generic-password -s "novak/$2" -a "$(whoami)" -w
+      grn "$2 stored in the Keychain."
+      dim "Run 'novak up' to apply."
+      ;;
+    *) red "unknown: novak secret $1"; exit 1 ;;
+  esac
+}
+
+cmd_status() {
+  bold "Novak"
+  echo "  repo    $REPO_DIR"
+  echo "  config  $NOVAK_HOME"
+  echo
+  if [ ! -f "$ENV_FILE" ]; then ylw "  Not configured yet — run 'novak up' to seed config."; return; fi
+
+  local unedited=() missing=()
+  local edits=("${REQUIRED_EDITS[@]}")
+  grep -qE '^\s*console:' "$REPO_DIR/docker-compose.yml" && edits+=("${CONSOLE_EDITS[@]}")
+  local v val
+  for v in "${edits[@]}"; do val="$(envval "$v")"; { [ -z "$val" ] || [[ "$val" =~ $PLACEHOLDERS ]]; } && unedited+=("$v"); done
+  for v in "${CORE_SECRETS[@]}"; do [ -z "$(keychain "$v")" ] && missing+=("$v"); done
+
+  if [ ${#unedited[@]} -eq 0 ] && [ ${#missing[@]} -eq 0 ]; then
+    grn "  Config: ready"
+  else
+    [ ${#unedited[@]} -gt 0 ] && { red "  Needs editing:"; printf '    novak config set %s ...\n' "${unedited[@]}"; }
+    [ ${#missing[@]} -gt 0 ] && { red "  Missing secrets:"; printf '    novak secret set %s\n' "${missing[@]}"; }
+  fi
+  echo
+  if docker info >/dev/null 2>&1; then
+    bold "Containers"
+    compose ps --format '  {{.Name}}\t{{.State}}\t{{.Status}}' 2>/dev/null | sed 's/\t/  /g' || dim "  none running"
+  else
+    ylw "  Docker isn't responding — is OrbStack running?"
+  fi
+}
+
+compose() {
+  local args=(docker compose --project-directory "$NOVAK_HOME" -f "$REPO_DIR/docker-compose.yml")
+  [ -f "$ENV_FILE" ] && args+=(--env-file "$ENV_FILE")
+  [ -f "$NOVAK_HOME/docker-compose.mcp.yml" ] && args+=(-f "$NOVAK_HOME/docker-compose.mcp.yml")
+  "${args[@]}" "$@"
+}
+
+case "${1:-status}" in
+  status)   cmd_status ;;
+  doctor)   cmd_status ;;   # same checks up.sh runs, without starting anything
+  config)   shift; cmd_config "$@" ;;
+  secret)   shift; cmd_secret "$@" ;;
+  up)       exec "$REPO_DIR/scripts/up.sh" ;;
+  down)     compose down ;;
+  restart)  shift; compose restart "$@" ;;
+  logs)     shift; compose logs -f --tail=100 "$@" ;;
+  registry) exec "$NOVAK_HOME/.venv/bin/python" "$REPO_DIR/reconciler/reconcile.py" --dry-run ;;
+  -h|--help|help) usage ;;
+  *) red "unknown command: $1"; echo; usage; exit 1 ;;
+esac

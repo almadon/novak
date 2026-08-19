@@ -56,6 +56,8 @@ as the unprivileged service account. See docs/headless-operation.md.
       `OIDC_CLIENT_SECRET`, and `HINDSIGHT_API_KEY` (`openssl rand -hex 32`).
 - [ ] `MEMORY_TOKEN_MAP` — JSON of `{"<token>": "<pocket-id-sub>"}`, tokens
       ≥16 chars (`openssl rand -hex 24`). Only needed once you have real users.
+- [ ] `ln -s "$PWD/scripts/novak" /usr/local/bin/novak`, then `novak status` —
+      it lists exactly what still needs setting, and the command to set each.
 - [ ] `.env` has no real secrets in it — every secret line should still read
       `set-in-keychain`. That literal text is never used; the Keychain value
       overrides it.

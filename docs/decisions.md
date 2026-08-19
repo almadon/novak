@@ -416,3 +416,83 @@ discovers models placed there rather than requiring its own downloader.
 None of this is built yet. The shape to copy is the registry and its
 reconciler: a declarative file in the repo, validated strictly, applied
 idempotently by something dumb.
+
+## 18. Prompts are pushed to clients, because no client will pull them
+
+Decision 17 established that the persona cannot live in oMLX. The obvious next
+hope is that it lives in one place anyway and the clients read it — a file, or
+better, this repo. They will not.
+
+**Open WebUI** keeps system prompts in its own database, set through Workspace
+→ Models or per-model parameters. **Home Assistant** keeps the conversation
+agent's prompt in its config entry, set through the integration's options UI.
+Neither has a "read this from a path" or "sync from git" option. There is no
+version of this where the clients pull.
+
+So the direction is fixed: **something has to push.** The only real question is
+whether that something is a person or a program, and the whole point of
+[`registry/`](../registry/mcp-servers.yaml) is that it should be a program.
+
+### The shape
+
+`prompts/` in git is the source. An apply step reads it and writes each client
+through its own API — Open WebUI's model preset, Home Assistant's agent config.
+Same shape as decision 17: declarative input, dumb applier, fail loudly.
+
+Running it on change is what makes it continuous rather than a chore. A commit
+that touches `prompts/` triggers the apply, and `novak status` reports drift
+between what the repo says and what each client currently holds — so a persona
+edited by hand in a web UI shows up as a difference rather than a mystery.
+
+That drift check is the more valuable half. Pushing on commit keeps the copies
+current; the status check is what catches someone editing the copy instead of
+the master, which is the failure that actually happens.
+
+### The cost, stated plainly
+
+**This is weaker than the registry.** MCP servers end up in exactly one place —
+compose — so the file *is* the state and drift is not possible. Prompts end up
+as copies in databases that can be edited in place. Convention plus a drift
+check is a real guarantee, but it is not the same guarantee, and it should not
+be described as if it were.
+
+**It matters more than it looks.** [security.md](security.md) leans on the
+persona to enforce behaviour: never ask for credentials, treat retrieved
+content as data rather than instruction, confirm before acting. With per-client
+copies, that enforcement is only as strong as the least-well-configured client.
+A client whose persona silently reverted is a client with weaker safety
+behaviour, and nothing about it will look broken.
+
+### Why not a proxy in front of oMLX
+
+The alternative is middleware that injects the persona into every request, so
+there is exactly one copy and clients need no persona config at all. It is a
+real option and it solves the drift problem properly.
+
+It is rejected for now, on three grounds:
+
+**It rebuilds what was just deleted.** The Mem0 shim (see the memory section in
+[architecture.md](architecture.md)) was ~400 lines of first-party code in the
+request path, removed when Hindsight made it unnecessary. Putting a new
+first-party service back into that path for prompt templating is a worse trade
+than the one just unwound.
+
+**It lands in the latency budget.** A voice turn is ~1-2s end to end across
+Whisper, inference and Piper. A proxy in front of oMLX taxes every turn,
+including the ones that need no persona work at all.
+
+**It widens the blast radius.** Open WebUI reaches oMLX from the VPS over
+Tailscale. A component in that path fails *all* inference everywhere, rather
+than one client having a stale persona.
+
+Provisioning-time consistency is strictly cheaper and does not foreclose this.
+If per-user context or request-time policy ever needs to be injected — things
+static config genuinely cannot express — that is the moment to revisit, as its
+own decision, with the shim's deletion as the argument to beat.
+
+### VERIFY before building
+
+Neither client's API was exercised. Open WebUI 0.11.0 here still has
+`onboarding: true`, so no admin account and no API token exists yet, and Home
+Assistant does not run on this machine at all. Confirm the actual endpoint for
+setting a model's system prompt in each before writing an applier against it.

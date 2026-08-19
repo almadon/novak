@@ -164,9 +164,10 @@ the actual hardware.
 | | |
 |---|---|
 | [scripts/novak](scripts/novak) | CLI: `status`, `config set`, `secret set`, `up`, `logs` |
-| [registry/](registry/mcp-servers.yaml) | Which tools are installed, and how risky each is |
+| [registry/mcp-servers.yaml](registry/mcp-servers.yaml) | Which tools are installed, and how risky each is |
+| [registry/omlx.yaml](registry/omlx.yaml) | Which models exist, and the profiles they expose |
 | [reconciler/](reconciler/reconcile.py) | Applies that list. The only thing here that controls containers |
-| [prompts/](prompts/novak-chat.md) | The assistant's personality |
+| [prompts/](prompts/novak-chat.md) | The assistant's personality — the master copy each client is given |
 | [wakeword/](wakeword/README.md) | Teaching it to answer to "Hey Novak" |
 
 ## The three repositories

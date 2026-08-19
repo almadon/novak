@@ -83,6 +83,46 @@ data rather than instruction, and confirm before acting. See
   official MCP client integration for the shared memory/knowledge tools.
   See [home-assistant.md](home-assistant.md).
 
+## Configuration as data
+
+Three declarative inputs live in this repo, and each is applied by something
+dumb rather than typed into a web UI. The pattern is the same every time: a
+file in git, validated strictly, applied idempotently, with git as the audit
+log.
+
+| File | Declares | Applied by |
+|---|---|---|
+| [`registry/mcp-servers.yaml`](../registry/mcp-servers.yaml) | which MCP servers exist, and how risky each is | [`reconciler/reconcile.py`](../reconciler/reconcile.py) → compose |
+| [`registry/omlx.yaml`](../registry/omlx.yaml) | which models exist, and what profiles they expose | *not built* → oMLX's JSON files |
+| [`prompts/`](../prompts/novak-chat.md) | the assistant's personas | *not built* → each client's own config |
+
+**`registry/omlx.yaml`** is [`omlx/SETTINGS.md`](../omlx/SETTINGS.md) reduced to
+values a machine can apply and re-check. SETTINGS.md holds the reasoning — why
+the 4B is always resident, why nothing 30B-class fits in 24GB; the YAML holds
+the numbers. Read one to decide, edit the other to apply. Idle TTL sits per
+model rather than per profile because oMLX stores it that way.
+
+It is applied by writing oMLX's own JSON files, not through its admin API,
+because that API needs a second credential the reconciler would have to hold —
+see decision 17.
+
+**Neither of the last two is built.** They are recorded so the shape is agreed
+before anything writes to disk.
+
+### The gap this leaves
+
+The registry ends up in one place — compose — so drift is impossible; the file
+*is* the state. Prompts do not have that property. **No client reads a prompt
+from a file or from git.** Open WebUI keeps system prompts in its database and
+Home Assistant keeps them in its config entry, so each persona exists as a copy
+that was pushed there, and any of them can be edited in place without the repo
+knowing.
+
+That makes `prompts/` the master copy by convention rather than by mechanism,
+which is a weaker guarantee than anything else here — and it matters, because
+the persona carries part of the security posture (see decision 18 and
+[security.md](security.md)).
+
 ## Data flow examples
 
 **Text chat**: browser → Open WebUI → oMLX (`chat`); tool calls go Open

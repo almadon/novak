@@ -20,7 +20,25 @@
 # Add to PATH:  ln -s "$PWD/scripts/novak" /usr/local/bin/novak
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Resolve symlinks before locating the repo. This script is meant to be linked
+# into PATH, and BASH_SOURCE is then the LINK's path — computing the repo from
+# it directly lands in /usr/local and nothing is found. `readlink -f` is not
+# portable to older macOS, hence the loop.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  LINKDIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$LINKDIR/$SOURCE"
+done
+REPO_DIR="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
+
+if [ ! -f "$REPO_DIR/scripts/lib/vars.sh" ]; then
+  echo "✋ Could not locate the Novak checkout from $0" >&2
+  echo "   Resolved to: $REPO_DIR" >&2
+  echo "   If this is a symlink, re-create it pointing at scripts/novak in the" >&2
+  echo "   checkout:  ln -sf /path/to/novak/scripts/novak /usr/local/bin/novak" >&2
+  exit 1
+fi
 NOVAK_HOME="${NOVAK_HOME:-$HOME/.novak}"
 ENV_FILE="$NOVAK_HOME/.env"
 source "$REPO_DIR/scripts/lib/vars.sh"

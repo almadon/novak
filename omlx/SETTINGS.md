@@ -48,12 +48,15 @@ difficulty — the client picks a profile and that's what answers. HA is pinned 
 the dropdown. Automatic tier-switching (easy questions → 4B, hard → 14B) would be
 a real feature to build, not something that exists today.
 
-**On where the persona lives**: set it in the oMLX profile if profiles
-support a system prompt — then every client gets a Novak that behaves
-consistently, including ones added later, and there's one place to edit.
-If they don't, fall back to setting it per client (Open WebUI model preset,
-HA agent's prompt field) and treat `prompts/` as the master copy so the
-copies don't drift. Verify which on the host.
+**On where the persona lives**: **profiles cannot hold it.** Checked against
+oMLX itself — a profile's fields are sampling, thinking and cache tuning
+(`temperature`, `top_p`, `enable_thinking`, the DFlash/TurboQuant knobs) and
+there is no system-prompt field.
+
+So the persona is set per client: Open WebUI's model preset, Home Assistant's
+agent prompt field. [`../prompts/`](../prompts/) is the master copy and the
+copies **will** drift — that is a maintenance cost, not an oversight. See
+decision 17 in [../docs/decisions.md](../docs/decisions.md).
 
 ## If desktop contention is ever still noticeable
 

@@ -1,0 +1,78 @@
+# Declarative oMLX inventory: which models exist, and what profiles they expose.
+# Applied by writing oMLX's own JSON files, not by calling its admin API — see
+# decision 17 in docs/decisions.md for why. Git is the audit log.
+#
+# NOTHING HERE IS A SECRET. Model names are public identifiers; profile values
+# are tuning. The admin password that would be needed for the HTTP API route is
+# deliberately absent, because that route was not taken.
+#
+# WHY THIS FILE EXISTS
+#   omlx/SETTINGS.md is the reasoning: how much RAM the 24GB mini has to play
+#   with, why the 4B is always resident and the 14B is not. This file is that
+#   reasoning reduced to values a machine can apply and re-check. Neither
+#   replaces the other — read SETTINGS.md to change a number, edit here to
+#   apply it.
+#
+# WHAT A PROFILE IS
+#   One loaded model presented as several virtual models at zero extra RAM.
+#   Clients pick `ha-voice` / `chat` / `deep` as the model name.
+#
+#   A PROFILE CANNOT HOLD A SYSTEM PROMPT. oMLX profiles carry sampling,
+#   thinking and cache settings only — there is no persona field. Personas live
+#   in prompts/ and are set per client. Do not add a system_prompt key here
+#   expecting it to work.
+#
+# Schema per model:
+#   repo        required  HuggingFace repo id, exactly as published
+#   role        required  what it is for, in words — informational
+#   ttl_seconds required  idle unload timeout; null means never unload.
+#                         NOT a profile field — oMLX stores it per model.
+#   profiles    optional  virtual models this one exposes
+#
+# Schema per profile:
+#   name        required  the model name clients ask for
+#   fields      required  oMLX profile fields; validated against the running
+#                         server's field list before anything is written, so a
+#                         key renamed by an oMLX upgrade fails loudly instead
+#                         of being silently dropped.
+
+models:
+  - repo: mlx-community/Qwen3-4B-Instruct-2507-4bit
+    role: voice and quick tool calls
+    # Never unloaded. A voice turn has a ~1-2s budget end to end and cannot
+    # absorb a model load; this is the one model that must always be resident.
+    ttl_seconds: null
+    profiles:
+      - name: ha-voice
+        fields:
+          temperature: 0.3
+          max_tokens: 256          # voice answers are one or two sentences
+          enable_thinking: false   # latency — nothing to gain before speech
+          # Stops a client passing enable_thinking=true per request and
+          # quietly blowing the voice latency budget.
+          forced_ct_kwargs: [enable_thinking]
+
+  - repo: mlx-community/Qwen3-14B-4bit
+    role: main chat
+    # Unloads after 20 min idle. The SSD KV cache makes the reload warm, and
+    # text chat can absorb it where voice cannot.
+    ttl_seconds: 1200
+    profiles:
+      - name: chat
+        fields:
+          temperature: 0.7
+          top_p: 0.95
+          max_tokens: 4096
+          enable_thinking: false
+
+      - name: deep
+        # Same weights and same persona as `chat`; thinking on and more room
+        # to use it. Picked explicitly in the client — there is no automatic
+        # routing by difficulty, and adding one would be a real feature.
+        fields:
+          temperature: 0.7
+          top_p: 0.95
+          max_tokens: 16384
+          enable_thinking: true
+          thinking_budget_enabled: true
+          thinking_budget_tokens: 8192

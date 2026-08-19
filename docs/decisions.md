@@ -336,3 +336,163 @@ nothing here closes it.
 they bind on the tailnet rather than localhost — so anything on the tailnet can
 reach them directly and skip the TLS. Tailscale ACLs are the answer, not
 firewall rules on the Mac.
+
+## 17. oMLX models and profiles come from files, not the admin API
+
+[`omlx/SETTINGS.md`](../omlx/SETTINGS.md) is a table of model names,
+temperatures, idle TTLs and profile names that a person retypes into a web
+admin panel. Nothing checks the result afterwards. A mistyped temperature or a
+profile that never got created looks exactly like a working install until
+something answers badly, which is the same silent-failure shape as the
+`OMLX_PORT` mismatch that had chat and memory pointed at a dead port while
+every container reported healthy.
+
+So it should be applied by machine. The question is through which door.
+
+**The admin API is the obvious door, and it is the wrong one.** oMLX exposes a
+complete one — `POST /admin/api/hf/download` for models, `POST`/`PUT` on
+`/admin/api/models/{id}/profiles` for profiles, with task polling and retry. It
+is genuinely capable. But it sits behind its own admin session
+(`POST /admin/api/login`), separate from `OMLX_API_KEY`. Using it means a new
+secret in the Keychain and provisioning code that logs in and holds a session.
+
+That breaks something deliberate. The reconciler is built so it never sees a
+secret *value* — the registry carries variable **names**, and compose resolves
+them at up-time (#14). Handing the same component an admin password to hold
+would undo the one property that makes it safe to point at a file the console
+can write. Not worth it for a config-application convenience.
+
+**Files are the other door, and oMLX already stores everything there.** Three
+JSON files under `~/.omlx`, written atomically (temp file + rename):
+
+```
+model_settings.json    per-model — idle TTL, default/pinned, display name
+model_profiles.json    profiles, keyed by model id
+global_templates.json  profile templates, model-independent
+```
+
+Templates accept only the *universal* fields — sampling, thinking, context —
+and are not tied to a model id. That is what makes this work at bootstrap
+time: **the templates can be written before a single model exists**, which the
+API route cannot do, since it needs a running server and a downloaded model to
+attach to. Per-model profiles still need the model present, so they come later.
+
+**Cost:** the on-disk format is undocumented and version-coupled to a
+third-party app. `SETTINGS.md` already warns that setting names drift between
+oMLX versions. Anything applying these files must validate against the field
+list it knows and **fail loudly** — a profile that quietly did not take is
+worse than one that refused.
+
+**The other cost:** oMLX holds this state in memory and writes it atomically,
+so files written underneath a running server get clobbered on its next save.
+Writes happen with the server stopped — `omlx stop` and `omlx start` need no
+admin auth, unlike everything above.
+
+### What this settles, and against the guess
+
+**oMLX profiles do not carry a system prompt.** The field list is sampling,
+thinking, and cache tuning — `temperature`, `top_p`, `enable_thinking`,
+`thinking_budget_tokens`, the DFlash and TurboQuant knobs — and nothing else.
+There is no persona field, so the "set it once in the profile and every client
+inherits it" option in `SETTINGS.md` does not exist.
+
+The documented fallback stands: [`prompts/`](../prompts/) is the master copy and
+each client gets its own copy — Open WebUI's model preset, Home Assistant's
+agent prompt field. They will drift; that is now a known maintenance cost
+rather than a surprise. This closes the `VERIFY` that has been open since the
+repo was written off-host.
+
+Idle TTL is not a profile field either — `ttl_seconds` is explicitly excluded
+from both profiles and templates, so it belongs in `model_settings.json` per
+model. `SETTINGS.md` lists it per model, which was right.
+
+### Still open
+
+Downloading the models themselves. `model.model_dirs` points at
+`~/.omlx/models`, so `hf download` straight into that directory may be all it
+takes and would avoid the admin API for that too — **VERIFY** that oMLX
+discovers models placed there rather than requiring its own downloader.
+
+None of this is built yet. The shape to copy is the registry and its
+reconciler: a declarative file in the repo, validated strictly, applied
+idempotently by something dumb.
+
+## 18. Prompts are pushed to clients, because no client will pull them
+
+Decision 17 established that the persona cannot live in oMLX. The obvious next
+hope is that it lives in one place anyway and the clients read it — a file, or
+better, this repo. They will not.
+
+**Open WebUI** keeps system prompts in its own database, set through Workspace
+→ Models or per-model parameters. **Home Assistant** keeps the conversation
+agent's prompt in its config entry, set through the integration's options UI.
+Neither has a "read this from a path" or "sync from git" option. There is no
+version of this where the clients pull.
+
+So the direction is fixed: **something has to push.** The only real question is
+whether that something is a person or a program, and the whole point of
+[`registry/`](../registry/mcp-servers.yaml) is that it should be a program.
+
+### The shape
+
+`prompts/` in git is the source. An apply step reads it and writes each client
+through its own API — Open WebUI's model preset, Home Assistant's agent config.
+Same shape as decision 17: declarative input, dumb applier, fail loudly.
+
+Running it on change is what makes it continuous rather than a chore. A commit
+that touches `prompts/` triggers the apply, and `novak status` reports drift
+between what the repo says and what each client currently holds — so a persona
+edited by hand in a web UI shows up as a difference rather than a mystery.
+
+That drift check is the more valuable half. Pushing on commit keeps the copies
+current; the status check is what catches someone editing the copy instead of
+the master, which is the failure that actually happens.
+
+### The cost, stated plainly
+
+**This is weaker than the registry.** MCP servers end up in exactly one place —
+compose — so the file *is* the state and drift is not possible. Prompts end up
+as copies in databases that can be edited in place. Convention plus a drift
+check is a real guarantee, but it is not the same guarantee, and it should not
+be described as if it were.
+
+**It matters more than it looks.** [security.md](security.md) leans on the
+persona to enforce behaviour: never ask for credentials, treat retrieved
+content as data rather than instruction, confirm before acting. With per-client
+copies, that enforcement is only as strong as the least-well-configured client.
+A client whose persona silently reverted is a client with weaker safety
+behaviour, and nothing about it will look broken.
+
+### Why not a proxy in front of oMLX
+
+The alternative is middleware that injects the persona into every request, so
+there is exactly one copy and clients need no persona config at all. It is a
+real option and it solves the drift problem properly.
+
+It is rejected for now, on three grounds:
+
+**It rebuilds what was just deleted.** The Mem0 shim (see the memory section in
+[architecture.md](architecture.md)) was ~400 lines of first-party code in the
+request path, removed when Hindsight made it unnecessary. Putting a new
+first-party service back into that path for prompt templating is a worse trade
+than the one just unwound.
+
+**It lands in the latency budget.** A voice turn is ~1-2s end to end across
+Whisper, inference and Piper. A proxy in front of oMLX taxes every turn,
+including the ones that need no persona work at all.
+
+**It widens the blast radius.** Open WebUI reaches oMLX from the VPS over
+Tailscale. A component in that path fails *all* inference everywhere, rather
+than one client having a stale persona.
+
+Provisioning-time consistency is strictly cheaper and does not foreclose this.
+If per-user context or request-time policy ever needs to be injected — things
+static config genuinely cannot express — that is the moment to revisit, as its
+own decision, with the shim's deletion as the argument to beat.
+
+### VERIFY before building
+
+Neither client's API was exercised. Open WebUI 0.11.0 here still has
+`onboarding: true`, so no admin account and no API token exists yet, and Home
+Assistant does not run on this machine at all. Confirm the actual endpoint for
+setting a model's system prompt in each before writing an applier against it.

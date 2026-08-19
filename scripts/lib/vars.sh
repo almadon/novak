@@ -32,4 +32,30 @@ CONSOLE_SECRETS=(CONSOLE_AUTH_SECRET OIDC_CLIENT_SECRET)
 # Secrets without which the stack must not start at all.
 CORE_SECRETS=(HINDSIGHT_API_KEY)
 
+# Who else needs to know a secret's value decides how it can be set.
+#
+# EXTERNAL_SECRETS  owned by another system — oMLX's own config, Pocket ID,
+#                   Outline, Vikunja, Tududi. The value must MATCH what that
+#                   system already has, so generating one is not a shortcut,
+#                   it is a silent outage: the service simply starts refusing
+#                   us. `novak secret set --generate` refuses these outright.
+#
+# SHARED_SECRETS    we generate them, but a human has to paste them somewhere
+#                   else afterwards — HINDSIGHT_API_KEY is the bearer token
+#                   Open WebUI and Home Assistant register the MCP endpoint
+#                   with. Generating is fine; never being able to read it back
+#                   is not, hence `novak secret show`.
+#
+# Anything in SECRET_VARS that is in neither list is internal: we generate it,
+# one container reads it, and nobody ever needs to see it. CONSOLE_AUTH_SECRET
+# signs the console's JWTs and is exactly that.
+EXTERNAL_SECRETS=(
+  OMLX_API_KEY
+  OIDC_CLIENT_SECRET
+  OUTLINE_EVERYTHING_API_KEY
+  TUDUDI_API_TOKEN
+  VIKUNJA_API_TOKEN
+)
+SHARED_SECRETS=(HINDSIGHT_API_KEY)
+
 PLACEHOLDERS='^(EDIT-ME|set-in-keychain|changeme)$'

@@ -107,7 +107,7 @@ checkouts carry over, and that is the point.
 
 ## Phase 4 — The model
 
-See [../omlx/SETTINGS.md](../omlx/SETTINGS.md) for the reasoning.
+See [../omlx/settings.md](../omlx/settings.md) for the reasoning.
 
 - [ ] Note oMLX's port → `novak config set OMLX_PORT <port>`.
 - [ ] Enable API-key auth in oMLX → `novak secret set OMLX_API_KEY`.
@@ -214,12 +214,20 @@ The point of the whole exercise: it comes back without you.
 
 - [ ] Login Items **as `novak`**: OrbStack and oMLX. They are per-account —
       setting them as yourself does nothing here.
-- [ ] Install the LaunchAgent:
+- [ ] Install the LaunchAgent. **`mkdir -p` is not optional** — a fresh macOS
+      account has no `~/Library/LaunchAgents`, and `cp` into a missing
+      directory fails:
 
+      mkdir -p ~/Library/LaunchAgents
       cp scripts/one.a64.novak.stack.plist ~/Library/LaunchAgents/
       launchctl load ~/Library/LaunchAgents/one.a64.novak.stack.plist
 
       Edit the path inside if your checkout is not at `~/Workspaces/Novak/novak`.
+
+      **Set your secrets before loading it.** `up.sh` exits non-zero when a
+      required secret is missing, and `KeepAlive` retries every 60s — so
+      loading it early gets you a failure loop in `/tmp/novak-stack.err`
+      rather than a stack.
 
 - [ ] **Tailscale runs as a system daemon and the node is tagged.** Per-user
       Tailscale is invisible to other accounts, and user-owned keys expire

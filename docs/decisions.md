@@ -339,7 +339,7 @@ firewall rules on the Mac.
 
 ## 17. oMLX models and profiles come from files, not the admin API
 
-[`omlx/SETTINGS.md`](../omlx/SETTINGS.md) is a table of model names,
+[`omlx/settings.md`](../omlx/settings.md) is a table of model names,
 temperatures, idle TTLs and profile names that a person retypes into a web
 admin panel. Nothing checks the result afterwards. A mistyped temperature or a
 profile that never got created looks exactly like a working install until
@@ -378,7 +378,7 @@ API route cannot do, since it needs a running server and a downloaded model to
 attach to. Per-model profiles still need the model present, so they come later.
 
 **Cost:** the on-disk format is undocumented and version-coupled to a
-third-party app. `SETTINGS.md` already warns that setting names drift between
+third-party app. `settings.md` already warns that setting names drift between
 oMLX versions. Anything applying these files must validate against the field
 list it knows and **fail loudly** — a profile that quietly did not take is
 worse than one that refused.
@@ -394,7 +394,7 @@ admin auth, unlike everything above.
 thinking, and cache tuning — `temperature`, `top_p`, `enable_thinking`,
 `thinking_budget_tokens`, the DFlash and TurboQuant knobs — and nothing else.
 There is no persona field, so the "set it once in the profile and every client
-inherits it" option in `SETTINGS.md` does not exist.
+inherits it" option in `settings.md` does not exist.
 
 The documented fallback stands: [`prompts/`](../prompts/) is the master copy and
 each client gets its own copy — Open WebUI's model preset, Home Assistant's
@@ -404,7 +404,7 @@ repo was written off-host.
 
 Idle TTL is not a profile field either — `ttl_seconds` is explicitly excluded
 from both profiles and templates, so it belongs in `model_settings.json` per
-model. `SETTINGS.md` lists it per model, which was right.
+model. `settings.md` lists it per model, which was right.
 
 ### Still open
 

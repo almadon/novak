@@ -30,6 +30,12 @@
 #
 #   external only:
 #     url      required  the MCP endpoint clients should use
+#     auth     optional  the env var / Keychain item holding this endpoint's
+#                        token. INFORMATIONAL — nothing here injects it. The
+#                        token goes in the CLIENT's registration (Open WebUI's
+#                        MCP entry, as an Authorization header). Recorded so
+#                        the registry answers "what do I need to wire this up",
+#                        which matters once there are several of one service.
 #
 # ── Risk levels ("danger zone") ─────────────────────────────────────────
 # The point is not to stop you installing something powerful. It is to make
@@ -49,9 +55,16 @@
 servers:
   # Outline serves MCP itself — no wrapper container, no supergateway, no
   # npx-at-runtime. Clients point straight at it.
-  - name: outline
+  #
+  # MULTIPLE INSTANCES: one entry each, named for the instance rather than the
+  # product, with its own token. Entry names must be unique (the reconciler
+  # enforces it), and each is registered separately in the client — there is no
+  # merging, so a model sees them as distinct tool sets and can be pointed at
+  # one knowledge base rather than all of them.
+  - name: outline-everything
     kind: external
     url: https://et.a64.one/mcp
+    auth: OUTLINE_EVERYTHING_API_KEY
     enabled: true
     clients: [open-webui, home-assistant]
     source:
@@ -59,6 +72,20 @@ servers:
       license: BSL 1.1 — check before any commercial use
     risk:
       level: standard
+
+  # Template for a second instance. Copy, rename, give it its own Keychain
+  # item, enable.
+  # - name: outline-<instance>
+  #   kind: external
+  #   url: https://<host>/mcp
+  #   auth: OUTLINE_<INSTANCE>_API_KEY
+  #   enabled: false
+  #   clients: [open-webui]
+  #   source:
+  #     url: https://github.com/outline/outline
+  #     license: BSL 1.1 — check before any commercial use
+  #   risk:
+  #     level: standard
 
   # Tududi serves MCP itself at /api/mcp — streamable HTTP, no wrapper needed.
   # Requires FF_ENABLE_MCP=true on the Tududi side and v1.0.0 or later.
@@ -74,6 +101,7 @@ servers:
   - name: tududi
     kind: external
     url: https://tududi.example.tld/api/mcp # VERIFY your host
+    auth: TUDUDI_API_TOKEN
     enabled: false # flip once Tududi is running and the token is issued
     # Not on the voice pipeline: 59 tools is far too much context for a
     # 1-2s spoken response. Same reasoning as vikunja.

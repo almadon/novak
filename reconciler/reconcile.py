@@ -143,9 +143,16 @@ def validate(entry: dict, seen_names: set[str], seen_ports: set[int]) -> dict:
                 raise ValidationError(
                     f"[{name}] kind is 'external' so {forbidden!r} makes no sense here"
                 )
+        auth = entry.get("auth")
+        if auth is not None and (not isinstance(auth, str) or not ENV_RE.match(auth)):
+            raise ValidationError(
+                f"[{name}] auth must be an UPPER_SNAKE variable name, got {auth!r}"
+            )
+
         seen_names.add(name)
         return {
             "name": name, "kind": kind, "url": url, "enabled": enabled_raw,
+            "auth": auth,
             "risk": validate_risk(name, entry, enabled_raw),
             "source": entry.get("source"),
         }
@@ -249,7 +256,8 @@ def main() -> int:
     print(f"running:  {', '.join(s['name'] for s in running) or '(none)'}")
     print(f"disabled: {', '.join(s['name'] for s in disabled) or '(none)'}")
     for s in external:
-        print(f"external: {s['name']} -> {s['url']} (not started; point clients here)")
+        auth = f"  [token: {s['auth']}]" if s.get("auth") else ""
+        print(f"external: {s['name']} -> {s['url']}{auth}")
 
     # Surface accepted risk on every run, so a `dangerous` server that was
     # accepted months ago doesn't quietly fade into the background.

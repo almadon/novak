@@ -50,8 +50,10 @@ as the unprivileged service account. See docs/headless-operation.md.
 ## Secrets
 
 - [ ] `security add-generic-password -s "novak/OMLX_API_KEY" -a novak -w`
-- [ ] Same for `VIKUNJA_API_TOKEN`. (`OUTLINE_API_KEY` only if something
-      still needs it — Outline's own MCP endpoint handles its own auth.)
+- [ ] Same for `VIKUNJA_API_TOKEN`, and one token per external MCP endpoint:
+      `OUTLINE_EVERYTHING_API_KEY`, `TUDUDI_API_TOKEN`, and so on. Each
+      registry entry names its own via `auth:` — check there rather than
+      guessing which key belongs to which instance.
 - [ ] Same for `CONSOLE_AUTH_SECRET` (`openssl rand -base64 32`),
       `OIDC_CLIENT_SECRET`, `MEM0_POSTGRES_PASSWORD`, `MEM0_JWT_SECRET`.
 - [ ] `MEMORY_TOKEN_MAP` — JSON of `{"<token>": "<pocket-id-sub>"}`, tokens
@@ -75,7 +77,7 @@ can't be set in advance. First run is two passes:
       usage — check `npx supergateway --help` if a container crash-loops.
 - [ ] **Outline needs no wrapper.** It serves MCP natively at
       `https://et.a64.one/mcp`. Confirm that endpoint answers and what auth it
-      wants; `OUTLINE_API_KEY` may now only be needed by other tooling.
+      wants. Multiple Outlines get one registry entry and one key each.
 - [ ] **Mem0 image/tag**: `docker-compose.yml` marks the image `VERIFY` — the
       self-hosted server's image path was not confirmed off-host. Check
       upstream's own compose file.

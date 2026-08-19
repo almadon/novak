@@ -2,7 +2,7 @@
 # Start (or update) the stack. Secrets are read from macOS Keychain items
 # named "novak/<VAR>" when present; otherwise values from .env apply.
 # Add a secret with:
-#   security add-generic-password -s "novak/OUTLINE_API_KEY" -a novak -w
+#   security add-generic-password -s "novak/OUTLINE_EVERYTHING_API_KEY" -a novak -w
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -30,9 +30,13 @@ cd "$NOVAK_HOME"
 # Keychain and .env will fall back to the .env.example placeholder, which is
 # why the check below exists — a console running with AUTH_SECRET=changeme is
 # worse than one that refuses to start.
+# Per-instance where a service can have several: OUTLINE_<INSTANCE>_API_KEY
+# rather than one OUTLINE_API_KEY, so a second Outline is an added line, not a
+# collision. Add new ones here AND as a `auth:` field on the registry entry.
 SECRET_VARS=(
   OMLX_API_KEY
-  OUTLINE_API_KEY
+  OUTLINE_EVERYTHING_API_KEY
+  TUDUDI_API_TOKEN
   VIKUNJA_API_TOKEN
   CONSOLE_AUTH_SECRET
   OIDC_CLIENT_SECRET

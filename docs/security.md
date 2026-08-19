@@ -20,7 +20,7 @@ server (or env var on an existing one) instead.
 Add a secret:
 
 ```bash
-security add-generic-password -s "novak/OUTLINE_API_KEY" -a novak -w
+security add-generic-password -s "novak/OUTLINE_EVERYTHING_API_KEY" -a novak -w
 ```
 
 `up.sh` loads any `novak/*` Keychain item over the `.env` value.

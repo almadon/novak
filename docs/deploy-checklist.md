@@ -56,7 +56,12 @@ as the unprivileged service account. See docs/headless-operation.md.
       `OIDC_CLIENT_SECRET`, and `HINDSIGHT_API_KEY` (`openssl rand -hex 32`).
 - [ ] `MEMORY_TOKEN_MAP` — JSON of `{"<token>": "<pocket-id-sub>"}`, tokens
       ≥16 chars (`openssl rand -hex 24`). Only needed once you have real users.
-- [ ] `.env` has no real secrets in it.
+- [ ] `.env` has no real secrets in it — every secret line should still read
+      `set-in-keychain`. That literal text is never used; the Keychain value
+      overrides it.
+- [ ] The only lines you edit by hand are the ones marked `EDIT-ME`. `up.sh`
+      lists any that remain, and names the exact `security add-generic-password`
+      command for any secret it could not find.
 - [ ] Note: config lives at `$NOVAK_HOME` (default `~/.novak`), NOT in the
       checkout. `up.sh` seeds it on first run; edit it there. Same for
       `registry/mcp-servers.yaml` — the repo's copy is only a template.

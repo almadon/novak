@@ -50,35 +50,58 @@ for var in "${SECRET_VARS[@]}"; do
   fi
 done
 
-# Refuse to start with placeholder secrets. These are the ones where a
-# default value is actively dangerous rather than merely broken.
-MUST_NOT_BE_PLACEHOLDER=(
-  CONSOLE_AUTH_SECRET
-  HINDSIGHT_API_KEY
-)
-placeholders=()
-for var in "${MUST_NOT_BE_PLACEHOLDER[@]}"; do
-  # Value comes from Keychain (exported above) or .env, which compose reads.
-  val="${!var:-$(grep -E "^${var}=" "$NOVAK_HOME/.env" 2>/dev/null | cut -d= -f2- || true)}"
-  if [ -z "${val}" ] || [ "${val}" = "changeme" ]; then
-    placeholders+=("${var}")
-  fi
+# Two different kinds of unconfigured value, reported separately because the
+# fix differs: EDIT-ME means "put a real value in .env", set-in-keychain means
+# "the Keychain lookup above found nothing".
+envval() { grep -E "^${1}=" "$NOVAK_HOME/.env" 2>/dev/null | head -1 | cut -d= -f2- ; }
+
+REQUIRED_EDITS=(HOST_NAME VIKUNJA_URL)
+# Console-only: skipped unless the console service is actually in use.
+if [ -n "${CONSOLE_IMAGE:-}" ] || grep -qE '^\s*console:' "$REPO_DIR/docker-compose.yml"; then
+  REQUIRED_EDITS+=(OIDC_ISSUER OIDC_CLIENT_ID)
+fi
+
+unedited=()
+for var in "${REQUIRED_EDITS[@]}"; do
+  v="$(envval "$var")"
+  case "$v" in ""|EDIT-ME|changeme) unedited+=("$var") ;; esac
 done
-if [ ${#placeholders[@]} -gt 0 ]; then
-  echo "✋ Refusing to start — these are unset or still 'changeme':" >&2
-  printf '   %s\n' "${placeholders[@]}" >&2
-  echo "   Add them to Keychain (see docs/security.md) or $NOVAK_HOME/.env," >&2
-  echo "   then re-run." >&2
+if [ ${#unedited[@]} -gt 0 ]; then
+  echo "" >&2
+  echo "✋ These need real values in $NOVAK_HOME/.env:" >&2
+  printf '     %s\n' "${unedited[@]}" >&2
+  echo "" >&2
+  echo "   HOST_NAME is how other machines reach this one (a Tailscale name works" >&2
+  echo "   well). See the comments in that file — it says which lines to edit and" >&2
+  echo "   which to leave alone." >&2
+  echo "" >&2
   exit 1
 fi
 
-# MCP servers live in registry/mcp-servers.yaml, not in docker-compose.yml.
-# The reconciler validates that registry, refuses to proceed if an elevated or
-# dangerous entry is enabled without a recorded acceptance, renders
-# docker-compose.mcp.yml, and brings everything up together.
-#
-# It is a hard gate on purpose: a failed risk acceptance should stop the whole
-# start, not quietly skip one service.
+# Secrets: these must have resolved from the Keychain. A value still reading
+# set-in-keychain means the lookup found nothing — usually because it was added
+# under a different account, since the login keychain is per-user.
+REQUIRED_SECRETS=(HINDSIGHT_API_KEY)
+grep -qE '^\s*console:' "$REPO_DIR/docker-compose.yml" && REQUIRED_SECRETS+=(CONSOLE_AUTH_SECRET OIDC_CLIENT_SECRET)
+
+missing=()
+for var in "${REQUIRED_SECRETS[@]}"; do
+  v="${!var:-$(envval "$var")}"
+  case "$v" in ""|set-in-keychain|changeme) missing+=("$var") ;; esac
+done
+if [ ${#missing[@]} -gt 0 ]; then
+  echo "" >&2
+  echo "✋ These secrets were not found in the Keychain:" >&2
+  for var in "${missing[@]}"; do
+    echo "     security add-generic-password -s \"novak/${var}\" -a $(whoami) -w" >&2
+  done
+  echo "" >&2
+  echo "   Run those as $(whoami) — the login keychain is per-user, so items" >&2
+  echo "   added under another account are invisible here." >&2
+  echo "" >&2
+  exit 1
+fi
+
 # The reconciler needs PyYAML. Rather than depend on whichever python3 and
 # pip3 happen to be first on PATH — they are often different interpreters, and
 # `pip --user` is per-account and blocked outright on Homebrew python (PEP 668)

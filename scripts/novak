@@ -5,6 +5,7 @@
 # script" is a bad interface for something you touch every few weeks.
 #
 #   novak status              what's configured, what's running
+#   novak ports               what's listening, and whether it's reachable
 #   novak doctor              check config without starting anything
 #   novak config              list settings and where each value comes from
 #   novak config get KEY
@@ -55,7 +56,7 @@ need_env() {
   [ -f "$ENV_FILE" ] || { red "No config at $ENV_FILE — run 'novak up' once to seed it."; exit 1; }
 }
 is_secret() { local v; for v in "${SECRET_VARS[@]}"; do [ "$v" = "$1" ] && return 0; done; return 1; }
-envval()    { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- ; }
+envval()    { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true ; }
 keychain()  { security find-generic-password -s "novak/${1}" -w 2>/dev/null || true; }
 
 cmd_config() {
@@ -129,6 +130,53 @@ cmd_secret() {
   esac
 }
 
+cmd_ports() {
+  need_env
+  bold "Listening sockets"
+  echo
+  dim "  A service bound to 127.0.0.1 is reachable only from this Mac, no"
+  dim "  matter what HOST_NAME says — that setting builds URLs, it does not"
+  dim "  change what anything binds to."
+  echo
+  printf '  %-22s %-7s %-24s %s\n' "SERVICE" "PORT" "BOUND TO" "REACHABLE FROM"
+  local ts; ts="$(tailscale ip -4 2>/dev/null | head -1)"
+
+  check_port() {
+    local label="$1" port="$2" bind reach
+    [ -n "$port" ] || return 0
+    bind="$(lsof -iTCP:"$port" -sTCP:LISTEN -n -P 2>/dev/null | awk 'NR==2{print $9}' || true)"
+    if [ -z "$bind" ]; then
+      printf '  %-22s %-7s %-24s %s\n' "$label" "$port" "-" "$(red 'not listening')"
+      return
+    fi
+    case "$bind" in
+      127.0.0.1:*|\[::1\]:*) reach="$(red 'this Mac only')" ;;
+      \*:*|0.0.0.0:*|\[::\]:*) reach="$(grn 'any interface')" ;;
+      *) reach="$(ylw 'one interface')" ;;
+    esac
+    printf '  %-22s %-7s %-24s %s\n' "$label" "$port" "$bind" "$reach"
+  }
+
+  check_port "oMLX (host app)"  "$(envval OMLX_PORT)"
+  check_port "Console"          "$(envval CONSOLE_PORT)"
+  check_port "Hindsight API"    "$(envval HINDSIGHT_PORT)"
+  check_port "Hindsight UI"     "$(envval HINDSIGHT_UI_PORT)"
+  check_port "Open WebUI"       "$(envval OPENWEBUI_PORT)"
+  check_port "Whisper (STT)"    "$(envval WHISPER_PORT)"
+  check_port "Piper (TTS)"      "$(envval PIPER_PORT)"
+
+  echo
+  if [ -n "$ts" ]; then
+    echo "  Tailscale address: $ts"
+    dim "  Anything above bound to 127.0.0.1 will NOT answer on that address."
+  else
+    ylw "  Tailscale is not reporting an address — is it running and logged in?"
+  fi
+  echo
+  dim "  oMLX binds per its own setting (its admin UI), not via this repo."
+  dim "  Docker services publish on all interfaces unless told otherwise."
+}
+
 cmd_status() {
   bold "Novak"
   echo "  repo    $REPO_DIR"
@@ -167,6 +215,7 @@ compose() {
 
 case "${1:-status}" in
   status)   cmd_status ;;
+  ports)    cmd_ports ;;
   doctor)   cmd_status ;;   # same checks up.sh runs, without starting anything
   config)   shift; cmd_config "$@" ;;
   secret)   shift; cmd_secret "$@" ;;

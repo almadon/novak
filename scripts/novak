@@ -139,7 +139,18 @@ cmd_ports() {
   dim "  run by another account looks absent when it is merely invisible."
   echo
 
-  local ts; ts="$(tailscale ip -4 2>/dev/null | head -1 || true)"
+  # Ask the system daemon by its socket rather than letting the CLI choose.
+  # On macOS the CLI prefers a per-user GUI app's local API when one is
+  # running, and the sandboxed App Store build answers "NeedsLogin" even while
+  # the system daemon underneath is up and holding the tailnet address. On a
+  # headless install the daemon is always the one that matters.
+  local ts_sock=/var/run/tailscaled.socket
+  local ts
+  if [ -S "$ts_sock" ]; then
+    ts="$(tailscale --socket="$ts_sock" ip -4 2>/dev/null | head -1 || true)"
+  else
+    ts="$(tailscale ip -4 2>/dev/null | head -1 || true)"
+  fi
   printf '  %-22s %-7s %-12s %s\n' "SERVICE" "PORT" "LOCALHOST" "${ts:-TAILSCALE}"
 
   probe() { nc -z -w 2 "$1" "$2" >/dev/null 2>&1; }

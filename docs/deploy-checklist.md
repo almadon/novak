@@ -117,9 +117,10 @@ See [../omlx/SETTINGS.md](../omlx/SETTINGS.md) for the reasoning.
 - [ ] Idle TTL: 15–30 min on the 14B, **none on the 4B** — voice cannot absorb
       a model load.
 - [ ] Create profiles `ha-voice`, `chat`, `deep`.
-- [ ] **VERIFY** whether profiles carry a system prompt. If they do, paste the
-      personas from `prompts/` there once. If not, set them per client and
-      treat `prompts/` as the master copy.
+- [ ] Set the personas **per client** — profiles cannot hold a system prompt
+      (confirmed; see decision 17). Open WebUI's model preset and HA's agent
+      prompt field each get their own copy from `prompts/`, which stays the
+      master.
 - [ ] Confirm oMLX restarts on its own after a reboot.
 
 ---

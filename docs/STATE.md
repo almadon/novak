@@ -107,7 +107,6 @@ This is why `novak up` now succeeds with both MCP servers unconfigured.
 
 - Whether Hindsight has a trash, before trusting `delete` to be recoverable.
 - openwakeword's model extension: `.tflite` or `.onnx`.
-- Whether oMLX profiles carry a system prompt.
 - Licences marked VERIFY in [credits.md](credits.md). **Outline is BSL 1.1.**
 
 `Tailscaled install-system-daemon` is **confirmed working** — the daemon is

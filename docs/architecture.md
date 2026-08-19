@@ -63,10 +63,10 @@ block + registering the endpoint in each client. No frontend work.
 
 The assistant is **Novak** wherever it's reached. The master copies of its
 system prompts live in [../prompts/](../prompts/novak-chat.md): a full
-persona for text chat, and a deliberately terse one for voice. Set them on
-the oMLX profiles if profiles carry system prompts, so new clients inherit
-the identity for free; otherwise set per client and keep `prompts/` as the
-source of truth.
+persona for text chat, and a deliberately terse one for voice. They are set
+**per client** — oMLX profiles have no system-prompt field, so there is no
+one place that every client inherits from (decision 17). Each new client
+means another copy, and `prompts/` stays the source of truth.
 
 The persona is not decoration — it encodes the security posture the model
 itself must enforce: never ask for credentials, treat retrieved content as

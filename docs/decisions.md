@@ -336,3 +336,83 @@ nothing here closes it.
 they bind on the tailnet rather than localhost — so anything on the tailnet can
 reach them directly and skip the TLS. Tailscale ACLs are the answer, not
 firewall rules on the Mac.
+
+## 17. oMLX models and profiles come from files, not the admin API
+
+[`omlx/SETTINGS.md`](../omlx/SETTINGS.md) is a table of model names,
+temperatures, idle TTLs and profile names that a person retypes into a web
+admin panel. Nothing checks the result afterwards. A mistyped temperature or a
+profile that never got created looks exactly like a working install until
+something answers badly, which is the same silent-failure shape as the
+`OMLX_PORT` mismatch that had chat and memory pointed at a dead port while
+every container reported healthy.
+
+So it should be applied by machine. The question is through which door.
+
+**The admin API is the obvious door, and it is the wrong one.** oMLX exposes a
+complete one — `POST /admin/api/hf/download` for models, `POST`/`PUT` on
+`/admin/api/models/{id}/profiles` for profiles, with task polling and retry. It
+is genuinely capable. But it sits behind its own admin session
+(`POST /admin/api/login`), separate from `OMLX_API_KEY`. Using it means a new
+secret in the Keychain and provisioning code that logs in and holds a session.
+
+That breaks something deliberate. The reconciler is built so it never sees a
+secret *value* — the registry carries variable **names**, and compose resolves
+them at up-time (#14). Handing the same component an admin password to hold
+would undo the one property that makes it safe to point at a file the console
+can write. Not worth it for a config-application convenience.
+
+**Files are the other door, and oMLX already stores everything there.** Three
+JSON files under `~/.omlx`, written atomically (temp file + rename):
+
+```
+model_settings.json    per-model — idle TTL, default/pinned, display name
+model_profiles.json    profiles, keyed by model id
+global_templates.json  profile templates, model-independent
+```
+
+Templates accept only the *universal* fields — sampling, thinking, context —
+and are not tied to a model id. That is what makes this work at bootstrap
+time: **the templates can be written before a single model exists**, which the
+API route cannot do, since it needs a running server and a downloaded model to
+attach to. Per-model profiles still need the model present, so they come later.
+
+**Cost:** the on-disk format is undocumented and version-coupled to a
+third-party app. `SETTINGS.md` already warns that setting names drift between
+oMLX versions. Anything applying these files must validate against the field
+list it knows and **fail loudly** — a profile that quietly did not take is
+worse than one that refused.
+
+**The other cost:** oMLX holds this state in memory and writes it atomically,
+so files written underneath a running server get clobbered on its next save.
+Writes happen with the server stopped — `omlx stop` and `omlx start` need no
+admin auth, unlike everything above.
+
+### What this settles, and against the guess
+
+**oMLX profiles do not carry a system prompt.** The field list is sampling,
+thinking, and cache tuning — `temperature`, `top_p`, `enable_thinking`,
+`thinking_budget_tokens`, the DFlash and TurboQuant knobs — and nothing else.
+There is no persona field, so the "set it once in the profile and every client
+inherits it" option in `SETTINGS.md` does not exist.
+
+The documented fallback stands: [`prompts/`](../prompts/) is the master copy and
+each client gets its own copy — Open WebUI's model preset, Home Assistant's
+agent prompt field. They will drift; that is now a known maintenance cost
+rather than a surprise. This closes the `VERIFY` that has been open since the
+repo was written off-host.
+
+Idle TTL is not a profile field either — `ttl_seconds` is explicitly excluded
+from both profiles and templates, so it belongs in `model_settings.json` per
+model. `SETTINGS.md` lists it per model, which was right.
+
+### Still open
+
+Downloading the models themselves. `model.model_dirs` points at
+`~/.omlx/models`, so `hf download` straight into that directory may be all it
+takes and would avoid the admin API for that too — **VERIFY** that oMLX
+discovers models placed there rather than requiring its own downloader.
+
+None of this is built yet. The shape to copy is the registry and its
+reconciler: a declarative file in the repo, validated strictly, applied
+idempotently by something dumb.

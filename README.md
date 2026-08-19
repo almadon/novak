@@ -143,6 +143,7 @@ the actual hardware.
 | [How memory works](docs/how-memory-works.md) | What "memory" actually means, in plain language |
 | [What sets Novak apart](docs/what-sets-novak-apart.md) | Why build it this way, and what it costs |
 | [Deploy checklist](docs/deploy-checklist.md) | The real setup instructions |
+| [Where this got to](docs/STATE.md) | **Read first if picking this up** — current state and open problems |
 | [Running headless](docs/headless-operation.md) | Unattended restarts, and the FileVault trade-off |
 | [Memory setup](docs/memory-setup.md) | Standing up the memory backend (not run by our compose) |
 

@@ -6,6 +6,7 @@
 #
 #   novak status              what's configured, what's running
 #   novak ports               what's listening, and whether it's reachable
+#   novak drift               where this deployment differs from the repo
 #   novak doctor              check config without starting anything
 #   novak config              list settings and where each value comes from
 #   novak config get KEY
@@ -222,6 +223,95 @@ cmd_secret() {
   esac
 }
 
+# Compares this deployment against the repo. Deliberately read-only and
+# credential-free: it opens two files and prints the difference, so it is safe
+# to run anywhere and cannot itself cause the drift it reports.
+#
+# The problem it exists for: up.sh seeds $NOVAK_HOME once and never overwrites
+# it, because your config and your registry belong to you. The cost is that a
+# repo-side change never reaches an existing install, and nothing says so. A
+# deployment can run happily for months describing a system two migrations old
+# — which is exactly what happened here with a registry that still listed
+# Mem0-era entries and no Hindsight endpoints at all.
+cmd_drift() {
+  need_env
+  bold "Drift   (this deployment vs the repo)"
+  echo
+  dim "  Read-only. Compares files only — client-side config (Open WebUI"
+  dim "  presets, HA agent prompts) needs credentials and is not checked here."
+  echo
+
+  local found=0
+
+  # ── settings ──────────────────────────────────────────────────────────
+  local ex="$REPO_DIR/.env.example"
+  if [ -f "$ex" ]; then
+    local newkeys=() gonekeys=()
+    local k
+    while IFS= read -r k; do
+      grep -qE "^${k}=" "$ENV_FILE" 2>/dev/null || newkeys+=("$k")
+    done < <(grep -oE '^[A-Z_][A-Z0-9_]*=' "$ex" | tr -d '=')
+    while IFS= read -r k; do
+      grep -qE "^${k}=" "$ex" 2>/dev/null || gonekeys+=("$k")
+    done < <(grep -oE '^[A-Z_][A-Z0-9_]*=' "$ENV_FILE" | tr -d '=')
+
+    if [ ${#newkeys[@]} -gt 0 ]; then
+      found=1
+      ylw "  Settings the repo added since this was seeded:"
+      printf '    %s\n' "${newkeys[@]}"
+      dim  "    Defaults apply until set; add them to $ENV_FILE to change one."
+      echo
+    fi
+    if [ ${#gonekeys[@]} -gt 0 ]; then
+      found=1
+      ylw "  Settings here that the repo no longer defines:"
+      printf '    %s\n' "${gonekeys[@]}"
+      dim  "    Usually harmless leftovers. Nothing reads them."
+      echo
+    fi
+  fi
+
+  # ── registry ──────────────────────────────────────────────────────────
+  local dep="$NOVAK_HOME/registry/mcp-servers.yaml"
+  local src="$REPO_DIR/registry/mcp-servers.yaml"
+  if [ -f "$dep" ] && [ -f "$src" ]; then
+    local added=() removed=()
+    while IFS= read -r k; do
+      grep -qE "^  - name: ${k}\$" "$dep" || added+=("$k")
+    done < <(grep -oE '^  - name: [a-z0-9-]+' "$src" | awk '{print $3}')
+    while IFS= read -r k; do
+      grep -qE "^  - name: ${k}\$" "$src" || removed+=("$k")
+    done < <(grep -oE '^  - name: [a-z0-9-]+' "$dep" | awk '{print $3}')
+
+    if [ ${#added[@]} -gt 0 ]; then
+      found=1
+      ylw "  MCP servers the repo defines that this deployment does not have:"
+      printf '    %s\n' "${added[@]}"
+      dim  "    Nothing advertises these to clients until they are added."
+      echo
+    fi
+    if [ ${#removed[@]} -gt 0 ]; then
+      found=1
+      ylw "  MCP servers here that the repo no longer defines:"
+      printf '    %s\n' "${removed[@]}"
+      dim  "    Often a superseded backend. Check before keeping."
+      echo
+    fi
+    if [ ${#added[@]} -gt 0 ] || [ ${#removed[@]} -gt 0 ]; then
+      dim "    To adopt the repo's list (your edits are overwritten, so back up):"
+      dim "      cp $dep $dep.bak"
+      dim "      cp $src $dep"
+      echo
+    fi
+  elif [ ! -f "$dep" ]; then
+    dim "  No deployed registry yet — 'novak up' seeds one."
+    echo
+  fi
+
+  [ "$found" -eq 0 ] && grn "  No drift. Deployment matches the repo."
+  return 0
+}
+
 cmd_ports() {
   need_env
   bold "Reachability"
@@ -311,6 +401,23 @@ cmd_status() {
     [ ${#unedited[@]} -gt 0 ] && { red "  Needs editing:"; printf '    novak config set %s ...\n' "${unedited[@]}"; }
     [ ${#missing[@]} -gt 0 ] && { red "  Missing secrets:"; printf '    novak secret set %s\n' "${missing[@]}"; }
   fi
+
+  # A one-line pointer, not the report. Drift is silent by nature — the stack
+  # stays healthy while describing an older system — so status has to mention
+  # it or nobody thinks to look.
+  local drift_n=0 dep="$NOVAK_HOME/registry/mcp-servers.yaml" src="$REPO_DIR/registry/mcp-servers.yaml"
+  if [ -f "$dep" ] && [ -f "$src" ]; then
+    local k
+    while IFS= read -r k; do
+      grep -qE "^  - name: ${k}\$" "$dep" || drift_n=$((drift_n+1))
+    done < <(grep -oE '^  - name: [a-z0-9-]+' "$src" | awk '{print $3}')
+    while IFS= read -r k; do
+      grep -qE "^  - name: ${k}\$" "$src" || drift_n=$((drift_n+1))
+    done < <(grep -oE '^  - name: [a-z0-9-]+' "$dep" | awk '{print $3}')
+  fi
+  if [ "$drift_n" -gt 0 ]; then
+    ylw "  Registry differs from the repo in $drift_n entr$([ "$drift_n" = 1 ] && echo y || echo ies) — novak drift"
+  fi
   echo
   if docker info >/dev/null 2>&1; then
     bold "Containers"
@@ -335,6 +442,7 @@ compose() {
 case "${1:-status}" in
   status)   cmd_status ;;
   ports)    cmd_ports ;;
+  drift)    cmd_drift ;;
   doctor)   cmd_status ;;   # same checks up.sh runs, without starting anything
   config)   shift; cmd_config "$@" ;;
   secret)   shift; cmd_secret "$@" ;;

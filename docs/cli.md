@@ -30,6 +30,7 @@ Run with no arguments, it prints `status`.
 | `novak restart [SERVICE]` | restart everything, or one service |
 | `novak logs [SERVICE]` | follow logs |
 | `novak registry` | what the reconciler thinks it should start |
+| `novak drift` | where this deployment differs from the repo |
 
 ---
 
@@ -168,6 +169,36 @@ The Tailscale column asks the system daemon by its socket. On macOS a bare
 `NeedsLogin` while the daemon underneath is perfectly online.
 
 ---
+
+## Drift
+
+`up.sh` seeds `$NOVAK_HOME` once and never overwrites it, because your config
+and your registry belong to you. The cost is that a repo-side change never
+reaches an existing install, and nothing says so.
+
+That failure is silent by construction: the stack stays healthy, every file
+stays valid, and the deployment simply describes an older system. This one ran
+for a while on a registry that still listed a memory backend replaced two
+migrations earlier — and carried no Hindsight endpoints at all, so nothing
+advertised memory to any client. Nothing looked wrong.
+
+```bash
+novak drift
+```
+
+Compares settings against `.env.example` and the deployed registry against the
+repo's, and prints what differs. `novak status` shows a one-line pointer when
+the registry differs, since nobody thinks to look for a silent problem.
+
+It is **read-only and credential-free** — it opens two files and prints the
+difference, so it is safe to run anywhere and cannot cause the drift it
+reports. Adopting the repo's registry is left to you, with the commands
+printed, because your local choices get overwritten.
+
+**What it does not check:** client-side configuration. Whether Open WebUI's
+model preset or Home Assistant's agent prompt still matches `prompts/` needs
+each client's API credentials, which core deliberately does not hold — see
+decision 18.
 
 ## When something breaks
 

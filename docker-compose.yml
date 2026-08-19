@@ -58,10 +58,11 @@ services:
       OIDC_ISSUER: "${OIDC_ISSUER}"
       OIDC_CLIENT_ID: "${OIDC_CLIENT_ID}"
       OIDC_CLIENT_SECRET: "${OIDC_CLIENT_SECRET}"
-      # Console talks to Mem0's REST API directly (server-side, admin key),
-      # not through memory-mcp — it authenticates users itself via Pocket ID.
-      MEM0_URL: "http://mem0:8000"
-      MEM0_API_KEY: "${MEM0_API_KEY}"
+      # Console talks to Hindsight's REST API directly (server-side), not
+      # through MCP — it authenticates users itself via Pocket ID and maps
+      # each to their own bank.
+      HINDSIGHT_URL: "http://hindsight:8888"
+      HINDSIGHT_API_KEY: "${HINDSIGHT_API_KEY}"
     volumes:
       # The one writable path, and the entire interface between the console
       # and this stack. Keep this repo under git — it is the audit log for
@@ -80,29 +81,36 @@ services:
   #   kind: external   it already speaks MCP (Outline at https://et.a64.one/mcp)
   # Prefer external whenever a service has its own MCP endpoint.
 
-  # ── Shared long-term memory ───────────────────────────────────────────
-  # Mem0 is NOT run from this compose file. Upstream ships no image for the
-  # current server — their compose builds from server/Dockerfile — and
-  # standing it up involves an init-db script, Alembic migrations, and a
-  # `make bootstrap` that creates the first admin and prints the first API key
-  # exactly once. Reimplementing that here would mean owning the fragile parts
-  # of someone else's deployment.
+  # ── Shared long-term memory (Hindsight) ───────────────────────────────
+  # Speaks MCP natively at /mcp/<bank>/ — no wrapper, no shim. Postgres is
+  # embedded (pg0) in the image, so this is genuinely one container.
   #
-  # So run it from its own checkout, as upstream intends:
-  #
-  #   git clone https://github.com/mem0ai/mem0.git
-  #   cd mem0/server && cp .env.example .env
-  #   # set POSTGRES_PASSWORD; point OPENAI_API_BASE at oMLX, not OpenAI
-  #   make bootstrap        # prints the admin password and API key ONCE
-  #
-  # Then put that API key in Keychain as novak/MEM0_API_KEY and set MEM0_URL
-  # to wherever it listens (upstream publishes 8888). See docs/memory-setup.md.
-  #
-  # This also removes the chicken-and-egg that was in this file before: the
-  # key exists before anything here needs it.
-
-  # memory-mcp is not defined here — it is a registry entry (`memory`), built
-  # from the novak-integracije repo. See registry/mcp-servers.yaml.
+  # Identity comes from the URL path: each MCP connection is scoped to one
+  # "bank", and the tools have no bank parameter to override it. That is the
+  # property that keeps one person's memories out of another's context, and
+  # out of reach of anything a model reads. See docs/how-memory-works.md.
+  hindsight:
+    image: ghcr.io/vectorize-io/hindsight:latest
+    restart: unless-stopped
+    ports:
+      - "${HINDSIGHT_PORT:-8888}:8888"   # API + MCP
+      - "${HINDSIGHT_UI_PORT:-9999}:9999" # web UI
+    environment:
+      # Inference goes to oMLX, not a cloud provider. VERIFY the base-URL
+      # variable name against upstream's docs — the provider list includes
+      # ollama and lmstudio, so an OpenAI-compatible local endpoint is
+      # supported; the exact env var was not confirmed off-host.
+      HINDSIGHT_API_LLM_PROVIDER: "${HINDSIGHT_LLM_PROVIDER:-openai}"
+      HINDSIGHT_API_LLM_BASE_URL: "http://host.docker.internal:${OMLX_PORT:-8080}/v1" # VERIFY
+      HINDSIGHT_API_LLM_API_KEY: "${OMLX_API_KEY:-none}"
+      # WITHOUT THESE THE MCP ENDPOINT IS OPEN — no authentication at all.
+      # Anything that can reach the port reads and writes every bank.
+      HINDSIGHT_API_TENANT_EXTENSION: "hindsight_api.extensions.builtin.tenant:ApiKeyTenantExtension"
+      HINDSIGHT_API_TENANT_API_KEY: "${HINDSIGHT_API_KEY}"
+    volumes:
+      - hindsight:/home/hindsight/.pg0
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # ── Wyoming voice services for HA Voice ───────────────────────────────
   whisper:
@@ -139,5 +147,6 @@ services:
 
 volumes:
   open-webui:
+  hindsight:
   whisper:
   piper:

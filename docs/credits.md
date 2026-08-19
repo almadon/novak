@@ -14,8 +14,8 @@ this repo or any image built from it.
 | [oMLX](https://omlx.ai) | Inference on Apple Silicon | VERIFY |
 | [MLX](https://github.com/ml-explore/mlx) | Apple's array framework under oMLX | MIT |
 | [Open WebUI](https://github.com/open-webui/open-webui) | Chat frontend | VERIFY (has had licence changes) |
-| [Mem0](https://github.com/mem0ai/mem0) | Long-term memory | Apache-2.0 (VERIFY server) |
-| [pgvector](https://github.com/pgvector/pgvector) | Vector storage in Postgres | PostgreSQL Licence |
+| [Hindsight](https://github.com/vectorize-io/hindsight) | Long-term memory — serves MCP natively | MIT |
+
 | [Outline](https://github.com/outline/outline) | Knowledge base | BSL 1.1 — **check before any commercial use** |
 | [outline-mcp-server](https://www.npmjs.com/package/outline-mcp-server) | MCP access to Outline | VERIFY |
 | [Vikunja](https://vikunja.io) | Tasks | AGPL-3.0 |
@@ -35,9 +35,6 @@ this repo or any image built from it.
 |---|---|---|
 | [Next.js](https://github.com/vercel/next.js) | Console web framework | MIT |
 | [Auth.js / NextAuth](https://github.com/nextauthjs/next-auth) | OIDC login — **v5 is pre-1.0** | ISC |
-| [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk) | MCP protocol in memory-mcp | MIT |
-| [Zod](https://github.com/colinhacks/zod) | Input validation | MIT |
-| [Express](https://github.com/expressjs/express) | HTTP server in memory-mcp | MIT |
 | [PyYAML](https://github.com/yaml/pyyaml) | Registry parsing in the reconciler | MIT |
 
 ## Evaluated and not adopted
@@ -53,6 +50,8 @@ are excellent and simply aim at a different shape of problem.
 | [Graphiti](https://github.com/getzep/graphiti) | Better at facts changing over time; too resource-hungry here (#4) |
 | [Letta](https://github.com/letta-ai/letta) | Agent framework, wants to run the conversation (#4) |
 | [Apple container](https://github.com/apple/container) | No compose support, memory reclamation issues (#7) |
+| [Mem0](https://github.com/mem0ai/mem0) | No image for the current server, no MCP; needed a first-party shim (#3) |
+| [supermemory](https://github.com/supermemoryai/supermemory) | Namespace is a caller-supplied parameter, not connection-bound (#4) |
 
 ## Under consideration
 

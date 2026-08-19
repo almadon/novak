@@ -35,20 +35,28 @@ can't simply be borrowed.
 **Revisit if:** you want the satellite hardware more than you want the
 architecture, or Tater's pace of change settles down.
 
-## 3. Memory: OpenMemory → Mem0 self-hosted
+## 3. Memory: Hindsight, after two false starts
 
-The stack was originally built on OpenMemory. Upstream deprecated and shut it
-down. Its replacement, the Mem0 self-hosted server, supports multiple users
-properly — but only speaks REST, and we need MCP so Home Assistant and Open
-WebUI can share one memory store.
+The stack was originally built on **OpenMemory**. Upstream deprecated and shut
+it down.
 
-So we added `memory-mcp/`, a small piece of our own code that puts an MCP
-front door on Mem0 and decides which user a request belongs to.
+Its replacement, **Mem0**, got as far as being written into the compose file
+before two problems surfaced. It publishes no image for the current server —
+their own compose builds from source and needs an init script, migrations and a
+bootstrap that prints an unrecoverable API key. And it has no MCP interface, so
+it needed ~400 lines of first-party shim to expose it and to stop the model
+choosing whose memories to read.
 
-**Cost:** a component to maintain, and Mem0's documentation is thin.
-**Why anyway:** all the thin-documentation pain is trapped in one file
-(`memory-mcp/src/mem0.ts`). Swapping memory engines later means rewriting that
-file, not redoing the integration.
+**Hindsight** does both natively. It ships an image with Postgres embedded, and
+its MCP server scopes each connection to one bank *by URL*, with no bank
+parameter on the tools. The shim was deleted.
+
+**Cost:** a third backend change before anything ran. Some churn was
+self-inflicted — an image name was invented rather than verified, and a README
+search was mistaken for evidence of no MCP support.
+**Why anyway:** it is less code, less deployment, and the security property is
+upstream's rather than ours to maintain. See
+[how-memory-works.md](how-memory-works.md).
 
 ## 4. Memory engines we looked at and passed on
 
@@ -65,8 +73,18 @@ file, not redoing the integration.
   users at all, and its multi-user option is a hosted cloud service. It's a
   good tool for *agent* memory; it just can't separate people.
 
+- **supermemory** — MIT and popular, but its namespace is a `containerTag`
+  **passed as a parameter**, which is the caller-supplies-identity pattern this
+  design rejects. No published image either, and the hosted platform runs on
+  Cloudflare, ruled out elsewhere in this fleet on privacy grounds.
+- **Mem0** — see #3. Fine software; the deployment story and the missing MCP
+  interface were the problem, not the memory model.
+
 Note: most "best memory framework" comparison articles are marketing from
-companies selling one of the options. Their benchmark numbers were not used.
+companies selling one of the options — including at least one published by the
+company behind the backend eventually chosen. Their benchmark numbers were not
+used; the decision rested on the identity model, the deployment shape, and the
+licence.
 
 ## 5. There is a web console, and that's allowed
 
@@ -110,22 +128,22 @@ little.
 **Revisit if:** Apple's tool gains compose support and the memory behaviour
 improves.
 
-## 8. Voice shares one memory; it does not try to tell people apart
+## 8. Voice shares one memory — now for only one reason
 
-Per-person memory works in Open WebUI and the console, because those know who
-you are. Voice doesn't get it.
+Originally this had two causes. One has gone away.
 
-Two separate reasons:
-1. Home Assistant's MCP client can only authenticate with OAuth — no tokens, no
-   custom headers — and the connection belongs to the integration, not to a
-   person.
-2. More fundamentally, a voice satellite doesn't know who is talking.
+**Gone:** Home Assistant's MCP client can only authenticate with OAuth — no
+tokens, no custom headers — which made per-person scoping impossible when the
+backend needed a bearer token. Hindsight puts the bank in the URL path, so HA
+is correctly scoped with no header at all.
 
-So Home Assistant connects without logging in and gets a shared "household"
-identity. Personal memories still require a token and stay private.
+**Remains:** a voice satellite cannot tell who is speaking.
 
-**Cost:** the port that serves household memory answers anyone who can reach
-it. Keep it on Tailscale, never on the open home network.
+So voice points at a shared `household` bank, and personal banks are never
+registered in Home Assistant. That is now a statement about microphones rather
+than about software.
+
+**Cost:** none that is fixable in this layer.
 **Revisit if:** speaker identification becomes trustworthy — but see #9, which
 is not as simple as it sounds.
 
@@ -212,7 +230,7 @@ Extending #12. The split is now:
 | Repo | Holds | Why there |
 |---|---|---|
 | `novak` (srz) | compose, docs, registry, reconciler | The orchestration and the decisions |
-| `novak-integracije` | MCP servers and adapters, incl. `memory-mcp` | Capabilities, replaceable individually |
+| `novak-integracije` | MCP servers and adapters | Capabilities, replaceable individually |
 | `novak-konzol` | the web console | A client, and optional |
 
 The dividing line is **what a given install runs** versus **what exists to be
@@ -255,7 +273,7 @@ was *built* to withstand.
 |---|---|---|---|
 | Reverse proxy, Open WebUI | VPS (Constant) | the internet | Designed to face it: accounts, sessions, TLS at the proxy |
 | oMLX | Mac | Tailscale/LAN only | An inference API with no rate limiting; assumes friendly callers |
-| Mem0, memory-mcp | Mac | Tailscale/LAN only | Holds everyone's memories, and answers unauthenticated when the household identity is enabled |
+| Hindsight | Mac | Tailscale/LAN only | Holds everyone's memories; open unless the tenant API key is set |
 | Konzol | Mac | Tailscale/LAN only | Can reconfigure the stack |
 | Wyoming voice | Mac | LAN only | Talks to satellites on the local network |
 

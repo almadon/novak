@@ -102,19 +102,19 @@ real instructions. This is the short version so you know what you're in for.
 
 **On the Mac:**
 
-3. Copy this repo over.
-4. Put your passwords and API keys in the macOS Keychain — see
+2. Copy this repo over.
+3. Put your passwords and API keys in the macOS Keychain — see
    [docs/security.md](docs/security.md). The startup script refuses to run with
    placeholder values still in place.
-5. Run `./scripts/bootstrap-admin.sh --service-user novak` from an admin
+4. Run `./scripts/bootstrap-admin.sh --service-user novak` from an admin
    account (installs OrbStack and oMLX system-wide, sets the power profile),
    then `./scripts/bootstrap.sh` as the account that will run the stack.
-6. Follow the checklist for the parts that need a human: downloading models,
+5. Follow the checklist for the parts that need a human: downloading models,
    connecting Home Assistant, and so on.
 
-**One awkward bit:** the memory service generates its own API key the first time
-it starts, but other services need that key to start. So the first run happens
-in two passes. The checklist walks through it.
+**Memory** runs in the same stack and ships its own database, so there is
+nothing separate to stand up — but two settings decide whether it is private
+and whether it is safe. See [docs/memory-setup.md](docs/memory-setup.md).
 
 ## What state is this in?
 
@@ -124,7 +124,6 @@ Honest inventory:
 |---|---|
 | The design and the reasoning | Settled, written down |
 | Configuration and docs | Written, unverified against a real machine |
-| The memory tool | Written, **never run** |
 | The web console | Scaffolding, **never run** |
 | Everything else | Other people's software, configured but untested here |
 

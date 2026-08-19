@@ -29,29 +29,28 @@ client the same search/read (and optionally write) tools. Prefer this over an
 opaque vector store for anything you'd want to audit, and prefer a service's
 native MCP endpoint over wrapping it whenever one exists.
 
-### Memory — Mem0 self-hosted, fronted by memory-mcp
+### Memory — Hindsight
 
-Accumulated per-user facts (preferences, people, ongoing context). Runs
-locally on Postgres/pgvector.
+Accumulated per-user facts (preferences, people, ongoing context), stored in
+**banks**. Postgres is embedded in the image, so it is one container.
 
-This layer was rebuilt because **OpenMemory was deprecated and sunset
-upstream**. Its replacement, the unified Mem0 self-hosted server, is
-multi-user (`user_id` per request, per-user API keys) but **REST-only** — and
-MCP is what lets HA and Open WebUI share one store. So a small first-party
-shim, [novak-integracije/memory-mcp/](https://github.com/almadon/novak-integracije/blob/HEAD/memory-mcp/README.md), exposes Mem0 over MCP and
-injects the caller's `user_id` from a bearer token. The caller cannot name a
-user; that is what keeps one person's memories out of another's context, and
-what stops a prompt-injected document from asking the model to read someone
-else's history.
+Hindsight speaks MCP natively at `/mcp/<bank>/`, and each connection is scoped
+to one bank by URL — the tools have no bank parameter. That is what keeps one
+person's memories out of another's context, and out of reach of anything a
+model reads: there is no argument in which to name someone else.
 
-The console (not the shim) is the inspect/edit surface — it authenticates via
-Pocket ID and calls Mem0's REST API directly. Do not rely on Open WebUI's
-built-in Memory feature for anything important; it is siloed inside Open WebUI.
+This replaced a Mem0-plus-shim arrangement. The shim existed to add MCP and to
+enforce exactly that scoping; Hindsight does both, so ~400 lines of first-party
+code were deleted. See [how-memory-works.md](how-memory-works.md) and
+[memory-setup.md](memory-setup.md).
 
-Backend choice is deliberately replaceable: the Mem0-specific code is confined
-to [memory-mcp/src/mem0.ts](https://github.com/almadon/novak-integracije/blob/HEAD/memory-mcp/src/mem0.ts). Identity resolution
-and the MCP surface are backend-agnostic, so swapping memory engines means
-rewriting one file, not the integration.
+The console is the inspect/edit surface — it authenticates via Pocket ID and
+maps each person to their bank. Do not rely on Open WebUI's built-in Memory
+feature for anything important; it is siloed inside Open WebUI.
+
+Backend choice stays replaceable, but the bar is now higher: any replacement
+must bind identity to the connection rather than accept it as a parameter, or
+the shim comes back.
 
 ### Tools / plugins — one MCP server per capability
 
@@ -87,7 +86,7 @@ data rather than instruction, and confirm before acting. See
 ## Data flow examples
 
 **Text chat**: browser → Open WebUI → oMLX (`chat`); tool calls go Open
-WebUI → MCP servers → Outline/Vikunja/memory-mcp.
+WebUI → MCP servers → Outline/Vikunja/Hindsight.
 
 **Voice via HA**: speaker → HA Assist → Wyoming whisper (STT, on the mini)
 → conversation agent → oMLX (`ha-voice`) with HA-registered MCP tools →
@@ -117,13 +116,12 @@ What constrains each piece:
 | Service | Constraint | Where |
 |---|---|---|
 | oMLX | Metal/MLX — cannot be containerized or moved | mini, mandatory |
-| Mem0 + Postgres | **every memory write triggers LLM extraction calls** — wants to be next to oMLX, or each write pays a round trip | with oMLX |
-| memory-mcp | thin; follows Mem0 | with Mem0 |
+| Hindsight | **every memory write triggers an LLM extraction call** — wants to be next to oMLX, or each write pays a round trip | with oMLX |
 | Wyoming STT/TTS | voice latency budget is ~1–2s end to end; keep close to HA and the satellites | with HA |
 | Open WebUI | just a frontend; only needs to reach oMLX | already on VPS |
-| Console | reaches Mem0 often, Pocket ID once per session | with Mem0 (decided) |
+| Console | reaches Hindsight often, Pocket ID once per session | with Hindsight (decided) |
 
-The console runs beside Mem0 for data locality. The accepted cost: **Pocket ID
+The console runs beside Hindsight for data locality. The accepted cost: **Pocket ID
 is on a VPS, so a WAN outage prevents logging in to a console that is otherwise
 entirely local.** Existing sessions survive (8h JWT), so a brief outage is not
 locking. If that becomes annoying, the fix is a break-glass path, not moving
@@ -138,14 +136,14 @@ Public ingress lives on the VPS; the home network forwards nothing.
                                      │
                                      │  Tailscale
                                      ▼
-                          oMLX · Mem0 · memory-mcp · Konzol   (Mac, home)
+                          oMLX · Hindsight · Konzol   (Mac, home)
                                      ▲
                           Wyoming voice ── HA + satellites    (LAN)
 ```
 
 Exposure is a per-service decision recorded in [decisions.md](decisions.md)
 #15. The rule: a service faces the internet only if it was built to — Open
-WebUI has accounts and sessions and expects strangers; oMLX and memory-mcp
+WebUI has accounts and sessions and expects strangers; oMLX and Hindsight
 assume every caller is friendly, so they stay on Tailscale.
 
 Two consequences worth being explicit about:
@@ -167,8 +165,8 @@ Two consequences worth being explicit about:
 | Open WebUI | 3000 |
 | Outline MCP | external — `https://et.a64.one/mcp` |
 | Vikunja MCP | 8002 |
-| Mem0 (REST) | 8765 |
-| memory-mcp (MCP) | 8003 |
+| Hindsight (API + MCP) | 8888 |
+| Hindsight (web UI) | 9999 |
 | Console | 3002 |
 | Wyoming whisper (STT) | 10300 |
 | Wyoming piper (TTS) | 10200 |

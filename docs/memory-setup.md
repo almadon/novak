@@ -1,95 +1,98 @@
-# Setting up memory (Mem0)
+# Setting up memory (Hindsight)
 
-Memory is the one dependency Novak does not run for you. This explains why, and
-what to do instead.
+Memory runs in this stack's compose file. This covers the settings that decide
+whether it is private and whether it is safe.
 
-## Why it isn't in docker-compose.yml
+## Why Hindsight
 
-Upstream publishes **no container image** for the current Mem0 self-hosted
-server. Their own compose builds it from `server/Dockerfile`, and bringing it up
-involves more than starting a container:
+It speaks MCP natively and scopes each connection to one memory "bank" by URL:
 
-- a Postgres init script (`init-db.sh`) mounted at first boot
-- Alembic schema migrations (`alembic upgrade head`)
-- a bootstrap step that creates the first admin account and generates the first
-  API key — **printed once, and unrecoverable afterwards**
+```
+http://<host>:8888/mcp/<bank>/
+```
 
-There is an older image on Docker Hub, `mem0/mem0-api-server`, last pushed in
-September 2025. It predates the current server and does not match these docs.
-An earlier version of this repo referenced `mem0/mem0-server`, which does not
-exist at all — that was a mistake, not a version drift.
+The tools have no bank parameter, so a caller cannot reach another bank by
+asking for it. That property is the whole reason this backend was chosen — it
+is what lets different people have separate memories without a model being able
+to cross between them, and it removed about 400 lines of first-party shim that
+existed only to enforce the same thing over a backend that lacked it.
 
-Reproducing upstream's bootstrap inside our compose would mean owning the most
-breakable parts of someone else's deployment, and re-owning them at every
-upstream change. Running it as upstream intends is less work and less wrong.
+Postgres is embedded in the image, so it is genuinely one container.
 
-It also dissolves a problem this repo used to document: `MEM0_API_KEY` is
-issued *by* Mem0 at bootstrap, but was needed *before* other services started.
-Setting Mem0 up first makes that ordering natural rather than awkward.
+## The two settings that matter
 
-## Setting it up
+**1. Set `HINDSIGHT_API_KEY`, or the endpoint is open.** Authentication is off
+by default. Without the tenant extension and a key, anything that can reach
+port 8888 reads and writes every bank.
 
 ```bash
-git clone https://github.com/mem0ai/mem0.git
-cd mem0/server
-cp .env.example .env
+openssl rand -hex 32
+security add-generic-password -s "novak/HINDSIGHT_API_KEY" -a novak -w
 ```
 
-Edit `.env`:
+Run that **as the account that runs the stack** — the login keychain is
+per-user. `up.sh` refuses to start while this is still `changeme`.
 
-- **`POSTGRES_PASSWORD`** — required, no default.
-- **Point inference at oMLX, not OpenAI.** Mem0 calls a language model to
-  decide what is worth remembering, so this is the setting that determines
-  whether your memories are computed locally. Confirm the exact variable names
-  against upstream's `.env.example`; the base URL wants oMLX's `/v1` endpoint.
-- **`MEM0_TELEMETRY=false`** — on by default.
+**2. Stay in single-bank mode.** Multi-bank mode exposes extra tools that take
+a bank id as an argument. That hands the choice back to the model and undoes
+the isolation the URL scoping provides. Single-bank is the default; do not
+change it.
 
-Then:
+## Pointing inference at oMLX
 
-```bash
-make bootstrap
-```
-
-This starts the stack, waits for readiness, creates an admin, and prints
-credentials in a `=== Ready ===` block. **Save the password and API key before
-closing that terminal.** The key cannot be recovered.
-
-Store the key where the rest of the stack expects it:
-
-```bash
-security add-generic-password -s "novak/MEM0_API_KEY" -a novak -w
-```
-
-Run that **as the account that runs Novak** — the login keychain is per-user.
-
-## Connecting Novak to it
-
-Set `MEM0_URL` in `$NOVAK_HOME/.env` to wherever it listens. Upstream's compose
-publishes the API on **8888** (the container's own port is 8000):
+Hindsight calls a language model to decide what is worth remembering. That
+call is where your conversations could leave the machine, so it is worth
+verifying rather than assuming:
 
 ```
-MEM0_URL=http://host.docker.internal:8888
+HINDSIGHT_API_LLM_PROVIDER=openai
+HINDSIGHT_API_LLM_BASE_URL=http://host.docker.internal:8080/v1
 ```
 
-`host.docker.internal` because `memory-mcp` runs in Novak's compose project and
-Mem0 runs in its own — they are not on a shared Docker network. If you put Mem0
-on another host entirely, use its Tailscale address instead.
+Provider `openai` with a local base URL, because oMLX is OpenAI-compatible.
+`ollama` and `lmstudio` are also accepted, which is good evidence local setups
+are a supported path rather than an afterthought.
+
+**The base URL variable name is marked VERIFY in docker-compose.yml** — it was
+not confirmed off-host. Check it against upstream's docs on first run, and
+watch Hindsight's logs while storing a memory to confirm the call lands on
+oMLX. That check is the one that proves privacy; the failure is silent.
+
+## Banks
+
+One bank per person, plus one shared:
+
+| Bank | For | Registered in |
+|---|---|---|
+| `household` | voice — everyone | Home Assistant |
+| `tmeuze` | one person's memories | Open WebUI, that person's account |
+
+**Home Assistant finally works properly here.** Its MCP client cannot send an
+`Authorization` header, which is why the previous backend forced voice into a
+single shared identity. With the bank in the URL path, HA points at
+`/mcp/household/` and is correctly scoped with no header at all.
+
+Voice still gets the shared bank rather than a personal one, but now for the
+one honest reason: a microphone cannot tell who is speaking. That is a property
+of voice, not a limitation of the backend.
+
+**Never register a personal bank in Home Assistant.** Anyone who talks to a
+satellite would reach it.
 
 ## Checks worth doing
 
-- [ ] `curl $MEM0_URL/docs` — the OpenAPI page loads
-- [ ] **`AUTH_DISABLED` is not set.** It bypasses authentication completely on
-      a service holding every user's memories.
-- [ ] Watch Mem0's logs while storing a memory and confirm the model call goes
-      to oMLX. This is the check that proves memories are computed locally —
-      the failure mode is silent and only visible here.
-- [ ] `curl http://<mini>:8003/healthz` — memory-mcp is up
-- [ ] Ask the assistant to remember something, then start a new conversation
-      and ask about it
+- [ ] `curl http://<host>:8888/` without the API key — should be refused. If it
+      answers, the tenant extension is not configured and every bank is open.
+- [ ] Store a memory while watching the logs; confirm the model call goes to
+      oMLX and not outward.
+- [ ] Register `hindsight-tmeuze` in Open WebUI, ask it to remember something,
+      start a new conversation, ask about it.
+- [ ] Confirm the household bank and a personal bank do not see each other's
+      memories.
+- [ ] The web UI on 9999 is reachable only over Tailscale/LAN, never the WAN.
 
 ## Upgrading
 
-Mem0's own repo, its own `git pull`, its own migrations. Novak's only coupling
-is `MEM0_URL` and the API key — so an upgrade there is invisible here unless the
-REST surface changes, in which case the single file to fix is
-`memory-mcp/src/mem0.ts` in the integrations repo.
+Its own image tag. The only coupling is the URL and the API key, so an upgrade
+is invisible here unless the MCP surface changes — and since there is no shim
+any more, there is no first-party code to fix if it does.

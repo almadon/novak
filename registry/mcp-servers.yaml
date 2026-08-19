@@ -119,26 +119,61 @@ servers:
       accepted_by: tmeuze
       accepted_on: 2026-08-17
 
-  # First-party. Source lives in the novak-integracije repo; this references
-  # the image its CI publishes to ghcr.io.
-  - name: memory
-    image: ghcr.io/almadon/novak-integracije/memory-mcp:latest
-    port: 8003
-    env: [MEM0_URL, MEM0_API_KEY, MEMORY_TOKEN_MAP, MEMORY_DEFAULT_USER]
+  # Hindsight speaks MCP natively — no wrapper, no shim, no first-party code.
+  #
+  # ONE ENTRY PER BANK. The bank is in the URL, and each MCP connection is
+  # scoped to exactly one; the tools have no bank parameter, so a caller cannot
+  # reach another bank by asking. That is what makes per-person memory safe
+  # here, and it is why there is no shim any more.
+  #
+  # Two rules that keep it that way:
+  #   * Stay in SINGLE-bank mode. Multi-bank mode exposes extra tools that take
+  #     a bank id as an argument, which hands the choice back to the model —
+  #     exactly what the URL scoping prevents.
+  #   * Keep the tenant API key set (see docker-compose.yml). Without it the
+  #     endpoint is open and every bank is readable by anything on the network.
+  - name: hindsight-household
+    kind: external
+    url: http://mini.local:8888/mcp/household/ # VERIFY host
+    auth: HINDSIGHT_API_KEY
     enabled: true
-    clients: [open-webui, home-assistant]
+    # Home Assistant CAN use this: the bank is in the path, so it needs no
+    # custom header — the thing that made per-person voice memory impossible
+    # with the previous backend.
+    clients: [home-assistant]
     source:
-      url: https://github.com/almadon/novak-integracije
-      license: first-party
+      url: https://github.com/vectorize-io/hindsight
+      license: MIT
     risk:
       level: elevated
       why:
-        - "Holds every user's memories; a misconfiguration exposes all of them."
-        - "delete_memory is permanent — Mem0 has no trash."
-        - "With MEMORY_DEFAULT_USER set, it answers unauthenticated callers with
-           the shared household identity. Keep the port on Tailscale only."
+        - "Holds memories; a wrong bank id in a client points someone at
+           another person's history."
+        - "27 tools including delete. VERIFY whether Hindsight has a trash
+           before trusting deletes to be recoverable."
       accepted_by: tmeuze
-      accepted_on: 2026-08-16
+      accepted_on: 2026-08-19
+
+  # One of these per person. The bank name is what scopes it — keep them
+  # distinct and keep them out of the voice pipeline.
+  - name: hindsight-tmeuze
+    kind: external
+    url: http://mini.local:8888/mcp/tmeuze/ # VERIFY host
+    auth: HINDSIGHT_API_KEY
+    enabled: true
+    # Deliberately NOT home-assistant: a voice satellite cannot tell who is
+    # speaking, so a personal bank must never be on that pipeline.
+    clients: [open-webui]
+    source:
+      url: https://github.com/vectorize-io/hindsight
+      license: MIT
+    risk:
+      level: elevated
+      why:
+        - "Personal memories. Registering this in a shared client would expose
+           them to everyone using it."
+      accepted_by: tmeuze
+      accepted_on: 2026-08-19
 
   - name: vikunja
     image: node:22-alpine

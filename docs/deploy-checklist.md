@@ -34,9 +34,7 @@ as the unprivileged service account. See docs/headless-operation.md.
 
 ## Before you start (off-host)
 
-- [ ] **Integration images published.** MCP servers come from the
-      `novak-integracije` repo. `memory-mcp` has no lockfile, so its CI and
-      Docker build both fail until `npm install` is run there and committed.
+- [ ] *(Nothing to build for memory — Hindsight ships its own image.)*
 - [ ] *(Only if using the console — it lives in the `novak-konzol` repo and is
       optional)* Pocket ID client registered: `groups` scope enabled, redirect
       URI `http://<host>:3002/api/auth/callback/pocketid` for every hostname
@@ -55,7 +53,7 @@ as the unprivileged service account. See docs/headless-operation.md.
       registry entry names its own via `auth:` — check there rather than
       guessing which key belongs to which instance.
 - [ ] Same for `CONSOLE_AUTH_SECRET` (`openssl rand -base64 32`),
-      `OIDC_CLIENT_SECRET`, `MEM0_POSTGRES_PASSWORD`, `MEM0_JWT_SECRET`.
+      `OIDC_CLIENT_SECRET`, and `HINDSIGHT_API_KEY` (`openssl rand -hex 32`).
 - [ ] `MEMORY_TOKEN_MAP` — JSON of `{"<token>": "<pocket-id-sub>"}`, tokens
       ≥16 chars (`openssl rand -hex 24`). Only needed once you have real users.
 - [ ] `.env` has no real secrets in it.
@@ -64,12 +62,8 @@ as the unprivileged service account. See docs/headless-operation.md.
       `registry/mcp-servers.yaml` — the repo's copy is only a template.
 - [ ] `./scripts/up.sh` no longer refuses to start (it checks for `changeme`).
 
-**Ordering:** `MEM0_API_KEY` is issued by the Mem0 server on first start, so it
-can't be set in advance. First run is two passes:
-
-- [ ] `docker compose up -d mem0-db mem0` — let it bootstrap, note the key.
-- [ ] `security add-generic-password -s "novak/MEM0_API_KEY" -a novak -w`
-- [ ] `./scripts/up.sh` for the rest.
+No ordering problem any more: Hindsight's key is one you generate, not one it
+issues, so there is nothing to bootstrap first.
 
 ## Docker stack — items to verify on first `./scripts/up.sh`
 
@@ -78,19 +72,17 @@ can't be set in advance. First run is two passes:
 - [ ] **Outline needs no wrapper.** It serves MCP natively at
       `https://et.a64.one/mcp`. Confirm that endpoint answers and what auth it
       wants. Multiple Outlines get one registry entry and one key each.
-- [ ] **Mem0 image/tag**: `docker-compose.yml` marks the image `VERIFY` — the
-      self-hosted server's image path was not confirmed off-host. Check
-      upstream's own compose file.
-- [ ] **Mem0 LLM + embedder point at oMLX, not OpenAI.** This is the one
-      service that defaults to a cloud key; confirm the env var names against
-      upstream and that no request leaves the machine.
-- [ ] **Never set `AUTH_DISABLED`** on the Mem0 service — it holds every
-      user's memories.
-- [ ] **memory-mcp starts and answers**: `curl http://<mini>:8003/healthz`.
-      Endpoint paths in its `src/mem0.ts` came from documentation, not
-      observed traffic — expect to correct them against the real server.
-- [ ] Test isolation: with two token→user entries, confirm each token sees only
-      its own memories, and that `delete_memory` refuses another user's id.
+- [ ] **Hindsight LLM points at oMLX, not a cloud provider.** The base-URL
+      variable is marked VERIFY in docker-compose.yml — confirm it upstream,
+      then watch the logs while storing a memory. This is the check that proves
+      memories are computed locally; the failure is silent.
+- [ ] **`HINDSIGHT_API_KEY` is set.** Without it the MCP endpoint is open and
+      every bank is readable by anything that can reach port 8888.
+- [ ] **Single-bank mode.** Multi-bank exposes tools taking a bank id as an
+      argument, which undoes the URL scoping.
+- [ ] Banks resolve: `curl -H "Authorization: Bearer $HINDSIGHT_API_KEY" \
+      http://<mini>:8888/mcp/household/` answers.
+- [ ] Two banks cannot see each other's memories.
 - [ ] Wyoming images run on arm64 (`rhasspy/wyoming-whisper`, `rhasspy/wyoming-piper`,
       `rhasspy/wyoming-openwakeword`).
 - [ ] **openwakeword will crash-loop until a matching model exists** — either

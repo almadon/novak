@@ -56,9 +56,9 @@ model ("forward this thread to..."). Mitigations, in order of importance:
 - Two multi-user surfaces: Open WebUI (accounts + RBAC on, signup disabled
   after your users exist) and the Console (Pocket ID OIDC; admin functions
   gated on the `admins.novak` group). Both LAN-only.
-- `memory-mcp` is multi-tenant but not a login surface: it maps a bearer token
-  to a `user_id` and never lets a caller name a user. Its token map is a
-  secret — Keychain, not `.env`.
+- Hindsight is multi-tenant but not a login surface: each MCP connection is
+  scoped to one bank by URL, and no tool takes a bank as an argument. Its API
+  key is a secret — Keychain, not `.env` — and without it the endpoint is open.
 - Remote access via Tailscale only.
 
 ## Rule 5 — the stores are readable; audit them

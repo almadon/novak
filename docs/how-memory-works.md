@@ -65,6 +65,24 @@ Each MCP connection is scoped to exactly one bank, and **the tools have no bank
 parameter**. A client is configured once with a bank URL; every tool call it
 makes lands in that bank and nowhere else.
 
+## Why voice uses the household bank — and when it will not have to
+
+Today the bank is fixed per client, so voice gets the household one: a speaker
+in the kitchen cannot tell who is talking to it, and a microphone that guessed
+wrong would hand one person another's memories.
+
+That is a limit of **shared hardware**, not of voice. Asking from the Home
+Assistant app on your own phone is an authenticated session on a device you own
+— no less certain than logging into the chat interface. Decisions 9 and 21 cover
+the distinction and where it leads: the bank becomes a routing decision made
+from a verified identity, personal when the channel proves who is asking and
+household when it cannot.
+
+Speaker recognition fits underneath that rather than replacing it. On the
+kitchen speaker it can greet you by name; it still will not choose whose
+memories are read, because a voice match is a good guess and this is not a place
+for guessing.
+
 ## Why that matters more than it sounds
 
 The obvious alternative is to let the model say whose memories to fetch —

@@ -166,6 +166,36 @@ which is what voice commands are.
 the memory connection *before* the model sees anything, so the model never gets
 a say in whose data it's reading.
 
+### Also evaluated: EuleMitKeule/speaker-recognition
+
+A later candidate, and better built on the point that sank the first. It is a
+custom HA integration with a REST API and neural voice embeddings
+(Resemblyzer), and it reports a **confidence score** rather than editing the
+transcript. That satisfies the safe path above: the identity arrives as
+structured data outside the words, so no document and no clever phrasing can
+claim to be someone else.
+
+**It changes the delivery problem and not the underlying one.** A voice
+embedding is evidence, not proof. Confidence around 0.95 means roughly one turn
+in twenty is wrong, and applied to memory routing a wrong turn is a disclosure,
+not an annoyance. The earlier cautions also stand: 200-500ms against a 1-2s
+budget, and worst accuracy on short utterances, which is exactly what voice
+commands are. Its README has no limitations section at all, which is not
+reassuring in something that makes identity claims.
+
+Health at time of writing: 48 stars, MIT, last commit 2026-05-01.
+
+**So: adopt it for personalization, never for authorization.** Greeting by
+name, preferring someone's music, choosing a voice — being wrong there is
+merely irritating. Selecting a memory bank — no.
+
+And note where it is actually needed. Decision 21 establishes that identity
+comes from the channel: a personal phone or browser session already answers
+"who is this" with something signed. **Speaker recognition earns its place only
+on a shared satellite** — the one channel authentication cannot reach — and
+there it may personalise while the bank stays household. It adds warmth exactly
+where proof is impossible, and is redundant everywhere proof exists.
+
 ## 10. Powerful integrations are allowed, but must be turned on deliberately
 
 `ha-mcp` gives a model 88+ tools over Home Assistant, including editing config
@@ -716,12 +746,44 @@ route stays source-restricted, exactly as in #20. A plain header is a claim; a
 signature is evidence. Getting this wrong would hand one person another's
 memories, which is the failure this whole architecture exists to prevent.
 
-### What it does not do
+### Identity comes from the channel, not the modality
 
-**Home Assistant cannot participate in the multi-user half.** A microphone
-cannot tell who is speaking — the reason the household bank exists at all. Voice
-stays household-scoped, and the router must not pretend otherwise by inventing
-an identity for it.
+An earlier draft of this said Home Assistant could not participate in the
+multi-user half, because "a microphone cannot tell who is speaking". That is
+true of a **shared satellite** and false of voice in general, and the difference
+matters: roughly half the voice surface is authenticated as well as Open WebUI
+is, by the same means — a login plus a device someone owns.
+
+Home Assistant hands the conversation agent more than its public API docs
+suggest. `ConversationInput` carries:
+
+```python
+context: Context        # context.user_id — the authenticated HA user
+device_id: str | None
+satellite_id: str | None
+```
+
+So:
+
+| Channel | Identity | Scope |
+|---|---|---|
+| Companion app on a personal phone | authenticated `context.user_id` | personal |
+| Assist in a browser session | authenticated `context.user_id` | personal |
+| Siri / Shortcuts via HA's API | personal long-lived token | personal |
+| A speaker in the kitchen | nobody — anyone in the room | **household** |
+
+**`satellite_id` is the discriminator**, and it is a field rather than an
+inference. A request carrying one arrived through shared hardware; one carrying
+a `user_id` and no satellite came from an authenticated personal session.
+
+The rule, stated so that it fails safe:
+
+> Scope to a personal bank only when `context.user_id` is present **and** no
+> shared `satellite_id` is involved. Otherwise, household.
+
+A missing field yields household rather than a personal bank, so the failure
+mode degrades toward less disclosure rather than more. That direction is not
+incidental — it is the whole reason to write the rule this way round.
 
 ### Costs, stated plainly
 

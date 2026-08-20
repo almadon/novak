@@ -24,7 +24,7 @@ this repo or any image built from it.
 | [supergateway](https://github.com/supercorp-ai/supergateway) | Wraps stdio MCP servers as HTTP | VERIFY |
 | [Wyoming / Rhasspy](https://github.com/rhasspy) | Voice protocol; whisper, piper, openWakeWord services | MIT |
 | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | Speech to text | MIT |
-| [Piper](https://github.com/rhasspy/piper) | Text to speech — **archived Oct 2025** | MIT |
+| [Piper](https://github.com/OHF-Voice/piper1-gpl) | Text to speech. Development moved to the Open Home Foundation as `piper1-gpl`; the old `rhasspy/piper` repo was archived Oct 2025 and its banner is widely misread as abandonment | GPL-3.0 |
 | [openWakeWord](https://github.com/dscripka/openWakeWord) | Wake word detection | Apache-2.0 |
 | [Pocket ID](https://github.com/pocket-id/pocket-id) | Single sign-on | VERIFY |
 | [Home Assistant](https://www.home-assistant.io) | Home automation, voice pipeline | Apache-2.0 |

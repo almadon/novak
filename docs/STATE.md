@@ -133,6 +133,23 @@ This is why `novak up` now succeeds with both MCP servers unconfigured.
 installed at `/usr/local/bin/tailscaled` from
 `/Library/LaunchDaemons/com.tailscale.tailscaled.plist` and survives logout.
 
+## Decided, not built
+
+Two layers are agreed and written down but do not exist yet. Both are recorded
+so the reasoning is not re-derived a third time.
+
+- **Drift check for client-side config** (decision 18). `novak drift` compares
+  settings and the registry against the repo; it cannot see whether a client's
+  persona still matches `prompts/`. Read-only, needs each client's credentials.
+- **Inference routing layer** (decision 21). An OpenAI-compatible router — most
+  likely LiteLLM — in front of oMLX, so the persona is injected once for every
+  client rather than copied into each, and so a verified user identity travels
+  with the request. That last part is what makes per-user memory routing
+  possible; per-client config structurally cannot do it.
+
+  Build the drift check first. It is what tells you whether the router is
+  actually delivering the uniformity it exists for.
+
 ## Not started
 
 - Konzol has three placeholder pages and a design token layer, no components.

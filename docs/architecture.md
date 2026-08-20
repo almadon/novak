@@ -63,10 +63,19 @@ block + registering the endpoint in each client. No frontend work.
 
 The assistant is **Novak** wherever it's reached. The master copies of its
 system prompts live in [../prompts/](../prompts/novak-chat.md): a full
-persona for text chat, and a deliberately terse one for voice. They are set
-**per client** — oMLX profiles have no system-prompt field, so there is no
-one place that every client inherits from (decision 17). Each new client
-means another copy, and `prompts/` stays the source of truth.
+persona for text chat, and a deliberately terse one for voice.
+
+They are set **per client** today, because oMLX profiles have no system-prompt
+field (decision 17) and no client will read one from a file (decision 18). Every
+new client is another copy, maintained by hand.
+
+That is a known gap, not the intended design. **Decision 21 puts a routing layer
+in front of oMLX** so the persona is injected once, for every client, and so a
+verified user identity can travel with the request — which is what makes
+per-user behaviour possible at all. Per-client configuration cannot express it:
+Open WebUI has one system prompt per model preset, shared by every user of it.
+
+Until that exists, `prompts/` is the master copy and the copies will drift.
 
 The persona is not decoration — it encodes the security posture the model
 itself must enforce: never ask for credentials, treat retrieved content as
@@ -122,6 +131,9 @@ That makes `prompts/` the master copy by convention rather than by mechanism,
 which is a weaker guarantee than anything else here — and it matters, because
 the persona carries part of the security posture (see decision 18 and
 [security.md](security.md)).
+
+Decision 21 closes this by moving the persona out of the clients entirely, into
+a routing layer in front of oMLX. Until it exists, the gap stands.
 
 ## Data flow examples
 

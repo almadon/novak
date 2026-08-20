@@ -12,6 +12,15 @@ is two, and short phrases false-trigger constantly on ordinary speech.
 Use **"hey novak"** (or "ok novak"). The assistant is still named Novak;
 the wake phrase is just how you address it.
 
+This is not a style preference, and it gets stronger the shorter you go. A
+wake-word model decides from a fixed, very short window of audio; fewer
+syllables mean less to distinguish the phrase from everything else a room
+produces. Truncations are the worst case — **"hey no" is not a viable wake
+word.** It sits inside ordinary speech ("hey, no —", "hey, Noah", "hey, you
+know"), so no `probability_cutoff` separates it: lower and the television
+wakes it, higher and it stops hearing you. Shortening the phrase to make
+detection cheaper trades away the only thing detection has to work with.
+
 ## Training a model
 
 openWakeWord trains from synthetic speech — no recording sessions, no ML
@@ -74,7 +83,7 @@ or headless:
 It produces `trained_wake_words/hey_novak.tflite` and a matching `.json`
 manifest. The JSON is what ESPHome consumes.
 
-### Getting it onto Voice PE — the part that actually costs something
+### Getting it onto the device — cost depends entirely on which device
 
 ESPHome's `micro_wake_word` accepts a custom model:
 
@@ -86,10 +95,36 @@ micro_wake_word:
       probability_cutoff: 0.95
 ```
 
-But **Voice PE ships stock firmware**. To change its models you adopt the
-device in ESPHome Builder and flash your own build — which means leaving the
-stock update path and owning that firmware from then on. That is the real
-decision here, not the training.
+**On HA Voice PE this is the expensive part.** It ships stock firmware, so
+changing its models means adopting the device in ESPHome Builder and flashing
+your own build — leaving the stock update path and owning that firmware from
+then on.
+
+**On a FutureProofHomes Satellite 1 it is not.** Its firmware is
+[open source ESPHome](https://github.com/FutureProofHomes/Satellite1-ESPHome)
+that you are expected to build yourself; the vendor documents compiling your own
+with additional microWakeWords and points at the same author's model collection.
+Nothing is given up by customising it, because customising it is the supported
+path. It also has an XMOS chip doing echo cancellation and beamforming *before*
+detection, so the model sees a cleaner signal than a bare microphone gives.
+
+### Why on-device usually beats this service
+
+Where the hardware supports it, on-device detection is the better arrangement,
+and not marginally:
+
+- **Nothing streams until the wake word fires.** openWakeWord needs a continuous
+  audio stream to the mini; microWakeWord sends nothing until it triggers. Less
+  network, less server work, and audio stays in the room until you address it —
+  which fits the rest of this project's reasoning better than the alternative.
+- **Detection stops depending on the mini.** With server-side detection, a
+  restart here means satellites cannot even hear their name.
+- **The latency budget starts later.** Detection is not competing with the
+  network hop for the 1–2s a spoken reply has.
+
+So this openWakeWord service is for microphones that *cannot* detect on-device —
+generic Wyoming satellites, a phone, anything streaming raw audio. If every
+satellite you own does it on-device, this container has no work to do.
 
 `probability_cutoff` is where a home-trained word lives or dies: too low and it
 triggers on the television, too high and it ignores you. Expect to tune it, and

@@ -60,7 +60,7 @@ ceiling; do not attach Vikunja/email/etc. to the voice pipeline.
 Add a third Wyoming integration pointing at `tcp://<mini>:10400` for the
 openWakeWord service, then select the wake word in the pipeline below.
 
-Read [../wakeword/README.md](../wakeword/README.md) first — it covers
+Read [wakeword.md](wakeword.md) first — it covers
 training the model (synthetic, ~no effort) and one significant constraint:
 **HA Voice PE hardware detects wake words on-device with microWakeWord,
 which has no custom-training path**, so "Hey Novak" works for Wyoming

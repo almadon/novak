@@ -107,7 +107,7 @@ checkouts carry over, and that is the point.
 
 ## Phase 4 — The model
 
-See [../omlx/settings.md](../omlx/settings.md) for the reasoning.
+See [omlx-settings.md](omlx-settings.md) for the reasoning.
 
 - [ ] Note oMLX's port → `novak config set OMLX_PORT <port>`.
 - [ ] Enable API-key auth in oMLX → `novak secret set OMLX_API_KEY`.
@@ -267,8 +267,8 @@ Do this deliberately, while you have time to fix what it finds.
 
 ## Later
 
-- [ ] Train a "hey novak" wake word ([../wakeword/README.md](../wakeword/README.md)).
-- [ ] TLS on the LAN via your existing reverse proxy ([../proxy/README.md](../proxy/README.md)).
+- [ ] Train a "hey novak" wake word ([wakeword.md](wakeword.md)).
+- [ ] TLS on the LAN via your existing reverse proxy ([proxy.md](proxy.md)).
 - [ ] Tududi — flip its registry entry on once it's running.
 - [ ] Time Machine covers OrbStack volumes and `~/.omlx`.
 - [ ] Check the licences marked VERIFY in [credits.md](credits.md) —

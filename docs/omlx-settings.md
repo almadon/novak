@@ -70,7 +70,7 @@ there is no system-prompt field.
 So the persona is set per client: Open WebUI's model preset, Home Assistant's
 agent prompt field. [`../prompts/`](../prompts/) is the master copy and the
 copies **will** drift — that is a maintenance cost, not an oversight. See
-decision 17 in [../docs/decisions.md](../docs/decisions.md).
+decision 17 in [decisions.md](decisions.md).
 
 ## If desktop contention is ever still noticeable
 
@@ -78,3 +78,103 @@ The defaults + idle TTLs should already behave well. If not, add a launchd
 job that polls console idle time (`ioreg -c IOHIDSystem | awk
 '/HIDIdleTime/'`) and unloads the 14B via the admin API when you're active.
 Don't build this preemptively.
+
+---
+
+# Applying this with `novak omlx apply`
+
+Everything above is reasoning. [`registry/omlx.yaml`](../registry/omlx.yaml) is
+the same thing as values, and `novak omlx apply` puts them into oMLX. Nothing
+here has to be typed into the admin panel.
+
+```bash
+novak omlx apply --dry-run   # what would change
+novak omlx apply             # do it
+```
+
+## What it does
+
+Writes oMLX's own files — `~/.omlx/model_settings.json` and
+`model_profiles.json` — rather than calling its admin API, which would need an
+admin password this repo deliberately does not hold (decision 17).
+
+Because oMLX keeps that state in memory and rewrites those files on its own
+saves, applying **stops oMLX, writes, and starts it again**, which drops loaded
+models. So it compares first and does nothing when nothing differs:
+
+```
+$ novak omlx apply
+fields:   47 accepted (read from model_profiles.py)
+model:    Qwen3-4B-Instruct-2507-4bit -> Qwen3-4B-Instruct-2507-4bit:ha-voice
+model:    Qwen3-14B-4bit -> Qwen3-14B-4bit:chat, Qwen3-14B-4bit:deep
+no change — oMLX already matches the registry
+```
+
+That is why `up.sh` can call it on every run without disturbing anything, and
+why it does so non-fatally: oMLX is a host app the stack does not manage, so at
+boot it may not be up yet. A missing inference server should no more stop the
+stack than a missing task tracker.
+
+## Editing the registry
+
+Each model needs `repo` (the HuggingFace id, exactly as published),
+`ttl_seconds` (`null` = never unload), and optionally `profiles`:
+
+```yaml
+  - repo: mlx-community/Qwen3-14B-4bit
+    role: main chat
+    ttl_seconds: 1200
+    profiles:
+      - name: chat
+        fields:
+          temperature: 0.7
+          max_tokens: 4096
+```
+
+`fields` takes oMLX profile fields — the sampling, thinking and cache settings
+listed above. **A name oMLX does not accept aborts the run**:
+
+```
+✋ [Qwen3-4B-Instruct-2507-4bit/ha-voice] oMLX does not accept: bogus_field
+  Either the name is wrong or this oMLX version renamed it.
+  Refusing rather than dropping it silently.
+```
+
+That is deliberate. The on-disk format is undocumented and moves between oMLX
+versions, and a profile that quietly did not take is exactly the failure this
+exists to prevent. The accepted list is read out of the installed oMLX, so it
+tracks the version you are actually running rather than the one this was
+written against.
+
+**`ttl_seconds` is not a profile field.** oMLX stores idle timeout per model,
+so it sits on the model, not in `fields`. Putting it in a profile is silently
+ignored by oMLX itself.
+
+## How you know it worked
+
+The applier does not take oMLX's word for it. After restarting it checks the
+profiles are actually being served, and fails if they are not:
+
+```
+verified: 3 profile(s) served by oMLX
+```
+
+You can check the same way:
+
+```bash
+curl -s -H "Authorization: Bearer $(novak secret show OMLX_API_KEY)" \
+  http://localhost:8000/v1/models
+```
+
+## What it will not do
+
+**Download models.** The model must already exist in oMLX, or the run stops and
+says which one is missing. Adding downloads would mean driving the admin API,
+which is the credential this design avoids.
+
+**Revert your manual changes.** It merges: models and profiles you set in the
+admin panel that the registry does not mention are left alone. Only what the
+registry declares is enforced.
+
+**Set personas.** oMLX profiles have no system-prompt field — see decision 17.
+Those are set per client from [`prompts/`](../prompts/novak-chat.md).

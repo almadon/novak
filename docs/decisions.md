@@ -306,7 +306,7 @@ reaching the console, anything hitting a published port by IP.
 
 **Novak does not run its own reverse proxy.** There is already an internal
 proxy on another host; adding a second inside this stack would duplicate
-infrastructure for no gain. [`proxy/`](../proxy/README.md) holds config to add
+infrastructure for no gain. [`proxy/`](proxy.md) holds config to add
 to the existing one, in both Caddy and Traefik form, since a move to Traefik is
 planned.
 
@@ -339,7 +339,7 @@ firewall rules on the Mac.
 
 ## 17. oMLX models and profiles come from files, not the admin API
 
-[`omlx/settings.md`](../omlx/settings.md) is a table of model names,
+[`docs/omlx-settings.md`](omlx-settings.md) is a table of model names,
 temperatures, idle TTLs and profile names that a person retypes into a web
 admin panel. Nothing checks the result afterwards. A mistyped temperature or a
 profile that never got created looks exactly like a working install until
@@ -427,7 +427,7 @@ written a file that oMLX quietly ignored.
 
 Also settled while building it: a profile must be marked `expose_as_model` or no
 client can select it, and profiles are exposed as `<model_id>:<api_name>` —
-`Qwen3-14B-4bit:chat`, not `chat`. `omlx/settings.md` said otherwise and is
+`Qwen3-14B-4bit:chat`, not `chat`. `docs/omlx-settings.md` said otherwise and is
 corrected.
 
 ## 18. Prompts are pushed to clients, because no client will pull them

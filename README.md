@@ -79,7 +79,7 @@ anywhere, while your home network accepts no incoming connections at all.
 
 Traffic between Tailscale devices is already encrypted, so that hop is covered.
 Traffic across your **local** network is not, by default — see
-[proxy/](proxy/README.md) for putting HTTPS in front of these services using a
+[proxy/](docs/proxy.md) for putting HTTPS in front of these services using a
 reverse proxy you already run.
 
 This is deliberate. The chat interface is designed to face the internet. The
@@ -136,6 +136,8 @@ the actual hardware.
 
 ## Documentation
 
+All of it lives in [docs/](docs/README.md) — that index is the fullest map.
+
 **Start here:**
 
 | | |
@@ -157,7 +159,7 @@ the actual hardware.
 | [Security](docs/security.md) | Secrets, permissions, and what the risks actually are |
 | [Home Assistant](docs/home-assistant.md) | Voice setup |
 | [Credits](docs/credits.md) | Whose software this is built from |
-| [oMLX settings](omlx/settings.md) | Which models, and how to tune them |
+| [oMLX settings](docs/omlx-settings.md) | Which models, how to tune them, and applying profiles |
 
 **Reference:**
 
@@ -169,7 +171,7 @@ the actual hardware.
 | [registry/omlx.yaml](registry/omlx.yaml) | Which models exist, and the profiles they expose |
 | [reconciler/](reconciler/reconcile.py) | Applies that list. The only thing here that controls containers |
 | [prompts/](prompts/novak-chat.md) | The assistant's personality — the master copy each client is given |
-| [wakeword/](wakeword/README.md) | Teaching it to answer to "Hey Novak" |
+| [wakeword/](docs/wakeword.md) | Teaching it to answer to "Hey Novak" |
 
 ## The three repositories
 

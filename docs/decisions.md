@@ -482,6 +482,12 @@ The alternative is middleware that injects the persona into every request, so
 there is exactly one copy and clients need no persona config at all. It is a
 real option and it solves the drift problem properly.
 
+**Superseded by decision 21.** The conclusion below was scoped to a client
+count — two clients, both with a persona field — rather than to a principle,
+and two of its three grounds do not survive scrutiny. Kept because the
+reasoning is instructive and because it names the condition that eventually
+triggered the change.
+
 It is rejected for now, on three grounds:
 
 **It rebuilds what was just deleted.** The Mem0 shim (see the memory section in
@@ -502,6 +508,11 @@ Provisioning-time consistency is strictly cheaper and does not foreclose this.
 If per-user context or request-time policy ever needs to be injected — things
 static config genuinely cannot express — that is the moment to revisit, as its
 own decision, with the shim's deletion as the argument to beat.
+
+That moment arrived, and the trigger was the one named above. See decision 21,
+which also corrects the latency figure: a router on this machine costs well
+under a millisecond against generations measured in seconds, so "it lands in
+the latency budget" was wrong about the magnitude, not just the balance.
 
 ### VERIFY before building
 
@@ -643,3 +654,88 @@ compatibility is not integration compatibility. The registry's `auth:` field
 records which credential an endpoint needs precisely because nothing injects it
 automatically — every client has to be capable of presenting it, and this one
 is not.
+
+## 21. An inference routing layer, because uniformity cannot be a client setting
+
+Supersedes the second half of #18.
+
+The project's claim is that memory, knowledge and behaviour belong to *you*
+rather than to whichever program you happen to be typing into. Memory already
+works that way: Hindsight holds it, the bank is in the URL, and no client can
+name someone else's. Persona does not. It exists as a copy inside every client,
+maintained by hand, drifting quietly.
+
+That is not a tidiness complaint. **Per-client configuration cannot express what
+this project is for**, and no amount of care fixes it:
+
+- Open WebUI has **one** system prompt per model preset, shared by every user of
+  it. "Isolated, multi-user" is unreachable from there.
+- Every new client is another copy to write and another chance to differ.
+- Nothing can vary by *who is asking*, because nothing in the path knows.
+
+A layer that sees the request is the only thing that can. #18 said as much and
+then rejected it on cost, which was right for two clients and wrong as a
+principle — an architecture is what it must become, not what is cheapest at N=2.
+
+### The shape
+
+An OpenAI-compatible router in front of oMLX. Clients point at it instead, and
+carry no persona of their own.
+
+```
+Open WebUI ─┐
+            ├─▶ router ──▶ oMLX
+Home Assist ─┘   (persona, identity, policy)
+```
+
+**LiteLLM is the vehicle.** Streaming, retries and OpenAI compatibility are
+solved problems and not worth re-solving; the injection itself is a small
+`async_pre_call_hook`. That is first-party code in the request path again, which
+#18 was right to weigh — but a hook inside a maintained gateway is a very
+different object from the ~400-line shim that was deleted, and unlike that shim
+it does something no backend does.
+
+**`prompts/` stays the master copy.** It is pushed to one place instead of N,
+which is what makes #18's drift problem tractable rather than perpetual.
+
+### Identity, and why it is the interesting part
+
+Open WebUI can forward the authenticated user with
+`ENABLE_FORWARD_USER_INFO_HEADERS`: `X-OpenWebUI-User-Id`, `-Email`, `-Name`,
+`-Role`, `-Jwt`.
+
+With a verified identity in the request, the household/personal split stops
+being "which URL did this client happen to register" and becomes a routing
+decision. That finishes *memory that follows you* rather than approximating it,
+and it is the capability that justifies the layer — persona uniformity alone
+would not.
+
+**Trust the JWT, not the header.** Anything that can reach the router could
+forge `X-OpenWebUI-User-Id`. The router validates `X-OpenWebUI-User-Jwt` and the
+route stays source-restricted, exactly as in #20. A plain header is a claim; a
+signature is evidence. Getting this wrong would hand one person another's
+memories, which is the failure this whole architecture exists to prevent.
+
+### What it does not do
+
+**Home Assistant cannot participate in the multi-user half.** A microphone
+cannot tell who is speaking — the reason the household bank exists at all. Voice
+stays household-scoped, and the router must not pretend otherwise by inventing
+an identity for it.
+
+### Costs, stated plainly
+
+**It is a true single point of failure.** #20 already accepted a proxy in the
+path, but that one only breaks memory. This breaks *all* inference, text and
+voice. It must be treated as infrastructure — on the mini beside oMLX, not
+across a WAN link, and watched.
+
+**It is another place the persona lives.** One place instead of many is the
+gain, but it is not zero, and it needs the same drift check as anything else.
+
+### Order of work
+
+The drift check first, then the router. Not the reverse: the check is what
+tells you whether the layer is delivering the uniformity it was built for, and
+building the layer first means trusting an unverified claim about the thing you
+built to fix verification.

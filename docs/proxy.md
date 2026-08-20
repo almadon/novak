@@ -19,6 +19,66 @@ precise about what was and wasn't already covered:
 
 So the tailnet was never the exposure. The LAN was.
 
+## Which of these may face the internet
+
+**None of them.** This proxy is internal — it exists for TLS on your own
+network, not to publish anything. Public ingress is a different proxy, on the
+VPS, in front of Open WebUI only (decision #15).
+
+That distinction is the one worth holding onto, because the two look identical
+in a config file. A `reverse_proxy` line does not know whether the name in
+front of it resolves publicly, and the difference between a private service and
+an exposed one is often a single DNS record someone added months earlier.
+
+### What goes wrong, per service
+
+Not a ranking of paranoia — each has a specific failure that follows from what
+it is.
+
+| Service | Public? | What actually happens |
+|---|---|---|
+| **oMLX** (8000) | **No** | An inference API with no rate limiting and no quotas. A stranger with the key gets your GPU; a stranger without one still costs you every connection's worth of work. Worse, it is one endpoint away from your models and your machine's memory ceiling — the way to take this house down is to ask it to think. |
+| **Hindsight** (8888, 9999) | **No** | Holds every person's memories. Auth is one shared bearer token: no per-user identity, no rate limit, no lockout. Leak it once and there is no revoking it for one caller. Deletes are permanent, so the damage is not only disclosure. |
+| **Konzol** (3002) | **No** | Reconfigures the stack. It writes the registry, and the registry decides what runs. Treat public access to it as equivalent to a shell. |
+| **Wyoming** (10200/10300/10400) | **No** | No authentication of any kind, by protocol design. Anything that reaches the port can speak to your microphones' pipeline. |
+| **Open WebUI** (3000) | Yes — **on the VPS** | The only one built for it: accounts, sessions, its own rate limiting, and it expects strangers to knock. It is public because it earned it, not because it was convenient. |
+
+### The test
+
+Being reachable from the internet is a property a service **earns by being
+designed for it**. Concretely, ask of anything you are tempted to expose:
+
+1. Does it authenticate individual callers, or does it have one shared secret?
+2. Does it survive someone hammering it — rate limits, quotas, timeouts?
+3. If its credential leaked, could you revoke access for one caller without
+   breaking every other?
+4. Is it maintained closely enough that you will actually apply its security
+   updates?
+
+Anything on the Mac fails at least the first two. That is not a criticism of
+them; they were written for a trusted network, which is exactly where they are.
+
+### If you need it from outside
+
+Use Tailscale. That is the whole reason it is here: the service stays private
+and you stop needing a decision about exposure at all. Adding a device to the
+tailnet is not a security event in the way opening a port is — you can see who
+is on it, and you can take them off.
+
+**Never port-forward to the Mac**, and be precise about why: the mini forwards
+nothing today, which is what makes it safe for oMLX to bind `0.0.0.0` and be
+reachable across the tailnet. Those two facts are load-bearing together. Add a
+forward and you have not "exposed one port" — you have published a rate-limitless
+inference API, because the bind was already permissive on the assumption nothing
+inbound could arrive.
+
+### If you decide to expose something anyway
+
+That is a legitimate decision, not a forbidden one — but write it down with the
+same shape as a risk acceptance in the registry: what it is, why it needs public
+reach, what sits in front of it, and who accepted it. A decision recorded is one
+someone can revisit; a port quietly forwarded is one nobody remembers making.
+
 ## The shape
 
 ```
@@ -133,3 +193,15 @@ tailnet can reach them directly**, bypassing the proxy and its TLS.
 
 Tailscale ACLs are the tool for that, not firewall rules on the Mac. Worth
 setting up if devices you don't fully trust are on the tailnet.
+
+So the tailnet is the real security boundary here — not the proxy, and not the
+bind address. The proxy adds TLS for LAN clients; it does not restrict who may
+connect. Everything in *Which of these may face the internet* above assumes the
+tailnet stays a set of machines you trust, and a phone you lend to a houseguest
+is on it until you remove it.
+
+One more thing this directory does not fix: the last hop from the proxy host to
+the Mac is WireGuard, not TLS. That is not weaker, but it does mean a service
+here never sees a client certificate and cannot tell one tailnet caller from
+another. Everything reaching Hindsight presents the same bearer token no matter
+who is holding it.

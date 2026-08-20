@@ -30,6 +30,22 @@ services:
       WEBUI_URL: "${OWUI_PUBLIC_URL:-http://${HOST_NAME:-mini.local}:${OPENWEBUI_PORT:-3000}}"
       # Keep everything local: no external telemetry-ish integrations.
       ENABLE_OPENAI_API: "true"
+      # .env is the source of truth, not Open WebUI's database.
+      #
+      # By default Open WebUI copies these settings into its DB on first run and
+      # the DB wins forever after, so later .env changes are read and ignored.
+      # That is how this instance ended up querying oMLX on port 8080 with the
+      # key "changeme" long after both were corrected — healthy-looking, wrong,
+      # and invisible to `novak drift`, which cannot see inside a container.
+      #
+      # With this false the DB is not consulted for config at all: every value
+      # comes from the environment, or from Open WebUI's own default where no
+      # variable sets one. The cost is that admin-UI changes to anything
+      # config-backed do not survive a restart — set it here instead.
+      #
+      # Chats, users, workspace models, prompts and knowledge are NOT config.
+      # They live in other tables and are untouched by this.
+      ENABLE_PERSISTENT_CONFIG: "${OWUI_PERSISTENT_CONFIG:-false}"
       # Pocket ID sign-in. Open WebUI has no admin UI for this — it reads these
       # at startup and enables OAuth only when client id, secret and provider
       # URL are all set, so leaving them unset simply leaves you on local

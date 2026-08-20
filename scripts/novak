@@ -7,6 +7,7 @@
 #   novak status              what's configured, what's running
 #   novak ports               what's listening, and whether it's reachable
 #   novak drift               where this deployment differs from the repo
+#   novak drift --adopt       copy settings the repo added into your .env
 #   novak doctor              check config without starting anything
 #   novak config              list settings and where each value comes from
 #   novak config get KEY
@@ -250,8 +251,71 @@ cmd_omlx() {
   esac
 }
 
+# Copies settings the repo has added into this deployment's .env, with the
+# comments that explain them, never touching a value already set.
+#
+# Exists because `novak config set` only accepts keys already present in .env —
+# so a setting the repo added is unreachable until the file gains the line, and
+# hand-editing .env is exactly the interface this CLI was written to replace.
+drift_adopt() {
+  local ex="$REPO_DIR/.env.example"
+  [ -f "$ex" ] || { red "No .env.example to adopt from."; exit 1; }
+
+  local backup="$ENV_FILE.bak-$(date +%Y%m%d-%H%M%S)"
+  cp "$ENV_FILE" "$backup"
+
+  local added
+  added="$(python3 - "$ex" "$ENV_FILE" <<'PYEOF'
+import re, sys
+example, envfile = sys.argv[1], sys.argv[2]
+have = {l.split("=", 1)[0].strip()
+        for l in open(envfile) if re.match(r"^[A-Z_][A-Z0-9_]*=", l)}
+
+lines = open(example).read().splitlines()
+block, out, added = [], [], []
+for line in lines:
+    m = re.match(r"^([A-Z_][A-Z0-9_]*)=", line)
+    if not m:
+        # Blank lines end a comment block; comments accumulate into one.
+        block = [] if not line.strip() else block + [line]
+        continue
+    key = m.group(1)
+    if key not in have:
+        if block:
+            out += block
+        out.append(line)
+        added.append(key)
+    block = []
+
+if out:
+    with open(envfile, "a") as f:
+        f.write("\n# ── Added by 'novak drift --adopt' ──────────────────────────\n")
+        f.write("\n".join(out) + "\n")
+print(" ".join(added))
+PYEOF
+)"
+
+  if [ -z "$added" ]; then
+    rm -f "$backup"
+    grn "  Nothing to adopt — every setting the repo defines is already here."
+    return 0
+  fi
+  grn "  Added to $ENV_FILE:"
+  printf '    %s\n' $added
+  echo
+  dim "  Values are the repo's defaults, with their comments. Backup: $backup"
+  dim "  Set one with:  novak config set <KEY> <value>"
+  dim "  Secrets among them still need:  novak secret set <KEY>"
+}
+
 cmd_drift() {
   need_env
+  if [ "${1:-}" = "--adopt" ]; then
+    bold "Adopting settings the repo has added"
+    echo
+    drift_adopt
+    return 0
+  fi
   bold "Drift   (this deployment vs the repo)"
   echo
   dim "  Read-only. Compares files only — client-side config (Open WebUI"
@@ -459,7 +523,7 @@ compose() {
 case "${1:-status}" in
   status)   cmd_status ;;
   ports)    cmd_ports ;;
-  drift)    cmd_drift ;;
+  drift)    shift; cmd_drift "$@" ;;
   omlx)     shift; cmd_omlx "$@" ;;
   doctor)   cmd_status ;;   # same checks up.sh runs, without starting anything
   config)   shift; cmd_config "$@" ;;

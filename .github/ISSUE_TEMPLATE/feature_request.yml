@@ -1,0 +1,80 @@
+name: Feature request
+description: Suggest something Novak doesn't do yet.
+title: "[feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas and disagreements are welcome — several of this project's choices
+        are deliberate trade-offs rather than settled truths, and they are
+        written down in [docs/decisions.md](../../blob/main/docs/decisions.md)
+        precisely so they can be argued with.
+
+        If your request contradicts one of those, say so and say why. A decision
+        that cannot survive being questioned was not a good decision.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Matches the roadmap milestones.
+      options:
+        - Clients — a new or improved way to reach Novak
+        - Functionality — new capability in the stack itself
+        - Integrations — a new tool, MCP server, or data source
+        - QA / UX — setup, onboarding, diagnostics, docs
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What are you trying to do, and where does Novak get in the way?
+      placeholder: |
+        e.g. "Each client needs its own copy of the persona, so they drift and
+        nothing notices."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+      description: Your proposed solution, however rough.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: privacy
+    attributes:
+      label: Does this send anything off this machine?
+      description: |
+        Local inference is the point of the project, so anything reaching an
+        external service is a deliberate trade rather than a detail.
+      options:
+        - "No — entirely local"
+        - "Yes — to a service I already run (Outline, Home Assistant, etc.)"
+        - "Yes — to a third-party or cloud service"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Optional — other ways to solve the same problem, and why they're worse.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, links, or examples from other projects.
+    validations:
+      required: false

@@ -1,0 +1,102 @@
+name: Bug report
+description: Something in the stack is broken, wrong, or behaving unexpectedly.
+title: "[issue] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. Novak is a distributed stack
+        across at least two machines, so the single most useful thing you can
+        give is **which piece you were touching and what it said** — most
+        failures here look identical from the outside and differ entirely
+        underneath.
+
+        If it involves a service being unreachable, `novak ports` answers that
+        faster than anything else.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the problem, and what you expected instead.
+      placeholder: |
+        e.g. "Open WebUI shows no models, but the container can reach oMLX and
+        /v1/models lists all five."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered, from a known state if you can.
+      placeholder: |
+        1. novak up
+        2. Open http://<host>:3000
+        3. Model switcher is empty
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Which part?
+      description: Best guess is fine.
+      options:
+        - novak CLI (status, config, secret, drift, omlx)
+        - oMLX / inference
+        - Hindsight / memory
+        - Open WebUI
+        - Home Assistant / voice (Wyoming, wake word)
+        - Konzol (console)
+        - MCP servers / registry
+        - Reverse proxy / networking / Tailscale
+        - Install, bootstrap, or unattended restart
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: status
+    attributes:
+      label: Output of `novak status` and `novak ports`
+      description: |
+        Paste both. They are safe to share — neither prints a secret value.
+        This is usually enough to tell a networking problem from a config one.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: |
+        `novak logs <service>` for a container, or oMLX's own log at
+        `~/.omlx/logs/server.log`. **Check for secrets before pasting** — some
+        components echo an Authorization header on failure.
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and hardware
+      placeholder: e.g. macOS 26.7, Mac mini M4 24GB
+    validations:
+      required: true
+
+  - type: dropdown
+    id: drift
+    attributes:
+      label: Does `novak drift` report anything?
+      description: A deployment can be healthy and still describe an older system.
+      options:
+        - "No drift"
+        - "Yes — it reports differences"
+        - "Haven't run it"
+    validations:
+      required: false

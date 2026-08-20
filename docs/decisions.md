@@ -427,7 +427,7 @@ written a file that oMLX quietly ignored.
 
 Also settled while building it: a profile must be marked `expose_as_model` or no
 client can select it, and profiles are exposed as `<model_id>:<api_name>` —
-`Qwen3-14B-4bit:chat`, not `chat`. `omlx/settings.md` said otherwise and is
+`Qwen3-14B-4bit:chat`, not `chat`. `docs/omlx-settings.md` said otherwise and is
 corrected.
 
 ## 18. Prompts are pushed to clients, because no client will pull them

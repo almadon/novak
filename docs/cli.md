@@ -31,6 +31,7 @@ Run with no arguments, it prints `status`.
 | `novak logs [SERVICE]` | follow logs |
 | `novak registry` | what the reconciler thinks it should start |
 | `novak drift` | where this deployment differs from the repo |
+| `novak omlx apply` | apply `registry/omlx.yaml` — models, profiles, TTLs |
 
 ---
 
@@ -169,6 +170,35 @@ The Tailscale column asks the system daemon by its socket. On macOS a bare
 `NeedsLogin` while the daemon underneath is perfectly online.
 
 ---
+
+## oMLX profiles
+
+```bash
+novak omlx apply            # apply registry/omlx.yaml
+novak omlx apply --dry-run  # show what would change
+```
+
+Writes oMLX's own JSON files rather than calling its admin API, which would need
+a second credential — decision 17. Because oMLX keeps this state in memory and
+rewrites it on its own saves, applying **stops oMLX, writes, and starts it
+again**, dropping loaded models.
+
+So it diffs first and does nothing when nothing differs. `up.sh` calls it on
+every run for that reason, and non-fatally: oMLX is a host app the stack does
+not manage, and at boot it may not be up yet. A missing inference server should
+no more stop the stack than a missing task tracker.
+
+Unknown field names are **refused**, never dropped — a profile that quietly did
+not take is the failure this exists to prevent. The accepted list is read from
+the installed oMLX itself, so it tracks the version actually running.
+
+After writing it restarts oMLX and checks the profiles really are served,
+rather than assuming. Profiles appear to clients as `<model>:<profile>`:
+
+```
+Qwen3-4B-Instruct-2507-4bit:ha-voice
+Qwen3-14B-4bit:chat
+```
 
 ## Drift
 

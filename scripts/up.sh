@@ -141,6 +141,17 @@ fi
 
 NOVAK_HOME="$NOVAK_HOME" "$PY" "$REPO_DIR/reconciler/reconcile.py"
 
+# oMLX profiles. Deliberately non-fatal: oMLX is a host app this script does not
+# manage, and at boot the LaunchAgent may well reach here before it is up.
+# Failing the whole stack because an inference server is not ready yet would be
+# the same mistake as the console gate. It is a no-op when nothing differs, so
+# running it every time costs nothing and never restarts oMLX needlessly.
+if [ -f "$REPO_DIR/reconciler/omlx_apply.py" ]; then
+  if ! NOVAK_HOME="$NOVAK_HOME" "$PY" "$REPO_DIR/reconciler/omlx_apply.py"; then
+    echo "note:     oMLX profiles not applied — run 'novak omlx apply' once it is up." >&2
+  fi
+fi
+
 docker compose \
   --project-directory "$NOVAK_HOME" \
   --env-file "$NOVAK_HOME/.env" \

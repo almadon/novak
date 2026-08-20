@@ -413,9 +413,22 @@ Downloading the models themselves. `model.model_dirs` points at
 takes and would avoid the admin API for that too — **VERIFY** that oMLX
 discovers models placed there rather than requiring its own downloader.
 
-None of this is built yet. The shape to copy is the registry and its
-reconciler: a declarative file in the repo, validated strictly, applied
-idempotently by something dumb.
+**Built** as [`reconciler/omlx_apply.py`](../reconciler/omlx_apply.py), run by
+`novak omlx apply` and, non-fatally, by `up.sh`. Two things learned building it:
+
+The accepted field list is read out of the installed oMLX rather than hardcoded,
+so it tracks the version actually running and the version-coupling above becomes
+self-correcting. An unrecognised field aborts the run.
+
+Success is confirmed by observation — after restarting, the exposed profiles
+must appear in `/v1/models` or the run fails. That matters because the
+`model_id` key had to be inferred, and a wrong guess would otherwise have
+written a file that oMLX quietly ignored.
+
+Also settled while building it: a profile must be marked `expose_as_model` or no
+client can select it, and profiles are exposed as `<model_id>:<api_name>` —
+`Qwen3-14B-4bit:chat`, not `chat`. `omlx/settings.md` said otherwise and is
+corrected.
 
 ## 18. Prompts are pushed to clients, because no client will pull them
 

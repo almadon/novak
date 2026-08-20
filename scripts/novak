@@ -22,6 +22,7 @@
 #   novak restart [SERVICE]
 #   novak logs [SERVICE]
 #   novak registry            show the MCP registry as the reconciler sees it
+#   novak omlx apply          apply registry/omlx.yaml (models, profiles, TTLs)
 #
 # Add to PATH:  ln -s "$PWD/scripts/novak" /usr/local/bin/novak
 set -euo pipefail
@@ -233,6 +234,22 @@ cmd_secret() {
 # deployment can run happily for months describing a system two migrations old
 # — which is exactly what happened here with a registry that still listed
 # Mem0-era entries and no Hindsight endpoints at all.
+# Applies registry/omlx.yaml. Kept separate from `up` because it can restart
+# oMLX, though only when something actually differs — see reconciler/omlx_apply.py.
+cmd_omlx() {
+  case "${1:-apply}" in
+    apply)
+      shift 2>/dev/null || true
+      # The applier reads OMLX_API_KEY from the environment; it never reads the
+      # Keychain itself, matching how up.sh resolves secrets.
+      local key; key="$(keychain OMLX_API_KEY)"
+      OMLX_API_KEY="$key" NOVAK_HOME="$NOVAK_HOME" \
+        "$NOVAK_HOME/.venv/bin/python" "$REPO_DIR/reconciler/omlx_apply.py" "$@"
+      ;;
+    *) red "unknown: novak omlx $1"; dim "  novak omlx apply [--dry-run]"; exit 1 ;;
+  esac
+}
+
 cmd_drift() {
   need_env
   bold "Drift   (this deployment vs the repo)"
@@ -443,6 +460,7 @@ case "${1:-status}" in
   status)   cmd_status ;;
   ports)    cmd_ports ;;
   drift)    cmd_drift ;;
+  omlx)     shift; cmd_omlx "$@" ;;
   doctor)   cmd_status ;;   # same checks up.sh runs, without starting anything
   config)   shift; cmd_config "$@" ;;
   secret)   shift; cmd_secret "$@" ;;

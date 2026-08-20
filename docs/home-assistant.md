@@ -5,22 +5,45 @@ LLM (oMLX), STT (Wyoming whisper), TTS (Wyoming piper), plus MCP tools.
 
 ## 1. Conversation agent → oMLX
 
-HA's stock OpenAI integration doesn't accept a custom base URL. Install
-**openai-compatible-conversation** via HACS
-(<https://github.com/michelle-avery/openai-compatible-conversation>) — a
-clean fork of the built-in agent with a base-URL field. If you want the
-agent to *control devices* through function calling instead of HA's
-built-in intent handling, use **Extended OpenAI Conversation**
-(<https://github.com/jekalmin/extended_openai_conversation>) instead.
+HA's stock OpenAI integration still doesn't accept a custom base URL
+([core#137087](https://github.com/home-assistant/core/issues/137087)), so this
+needs a custom component. Install **Custom Conversation** via HACS
+(<https://github.com/michelle-avery/custom-conversation>).
+
+It lets you keep HA's built-in Assist API for device control, which is what
+this stack wants: the conversation agent handles *language*, and tools arrive
+through HA's MCP integration (§3). It can also run both — built-in intents
+first, the LLM for whatever they don't match.
+
+Configure it as the **OpenAI** provider and override the base URL — its
+[supported providers](https://github.com/michelle-avery/custom-conversation/blob/main/docs/supported-providers.md)
+doc confirms that is how arbitrary self-hosted endpoints are meant to be used,
+while warning that *"supposedly 'OpenAI-compatible' APIs are sometimes not
+fully compatible."* It reaches the endpoint through LiteLLM, so there is a
+translation layer between HA and oMLX that neither project tests against the
+other. **VERIFY** a real voice turn end to end before trusting it; oMLX serves
+both `/v1/chat/completions` and `/v1/responses`, so the raw surface is there,
+but that is not the same as the pairing having been exercised.
+
+> **If you are following an older copy of these notes**, they recommended
+> `openai-compatible-conversation`. Its maintainer has since disclaimed it —
+> *"I personally cannot support this, as I don't actually use this
+> integration"* — and points at Custom Conversation, which is the same author
+> and actively maintained. See decision 19 for the full comparison, including
+> when Extended OpenAI Conversation is the better answer.
 
 Settings:
 
 - Base URL: `http://<mini>:<OMLX_PORT>/v1`
 - API key: the oMLX key
-- Model: `ha-voice` (the fast 4B profile — voice latency is unforgiving)
-- System prompt: [../prompts/novak-voice.md](../prompts/novak-voice.md)
-  (skip if the oMLX profile already carries it — don't set it twice).
-  Keep it short: long prompts produce long spoken answers.
+- Model: **`Qwen3-4B-Instruct-2507-4bit:ha-voice`** — the exposed id is the
+  base model and the profile joined by a colon, not the bare profile name.
+  `novak omlx apply` prints the exact strings; so does `GET /v1/models`.
+- System prompt: [../prompts/novak-voice.md](../prompts/novak-voice.md).
+  **Set it here** — oMLX profiles have no system-prompt field (decision 17),
+  so there is no risk of setting it twice and no single place that every
+  client inherits from. Keep it short: long prompts produce long spoken
+  answers.
 
 ## 2. Wyoming STT/TTS
 

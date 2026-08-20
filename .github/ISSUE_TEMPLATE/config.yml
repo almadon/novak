@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Read the decisions first
+    url: https://github.com/almadon/novak/blob/main/docs/decisions.md
+    about: Most "why is it like this?" questions are answered there, with the reasoning and the cost. Worth a look before opening an issue — and worth quoting if you disagree.
+  - name: Setup problem
+    url: https://github.com/almadon/novak/blob/main/docs/deploy-checklist.md
+    about: Working through a first install? The checklist is in the order things actually happen, and names the traps that are easy to hit.
+  - name: Something else / a question
+    url: https://github.com/almadon/novak/discussions
+    about: General questions or discussion that isn't a bug or a concrete feature request.

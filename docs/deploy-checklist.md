@@ -206,9 +206,19 @@ See [home-assistant.md](home-assistant.md).
       Keep HA's built-in Assist API for device control; tools come via MCP
       below. Decision 19 covers why not the other two candidates.
 - [ ] Wyoming integrations: STT 10300, TTS 10200, wake word 10400.
-- [ ] MCP integration → `http://<host>:8888/mcp/household/`.
-      **The household bank only.** Never a personal one: anyone who talks to a
-      satellite would reach it, and a microphone cannot tell who is speaking.
+- [ ] MCP integration → the household bank. **The household bank only.** Never
+      a personal one: anyone who talks to a satellite would reach it, and a
+      microphone cannot tell who is speaking.
+
+      **This does not work pointed straight at Hindsight.** HA's MCP client
+      authenticates by OAuth only; Hindsight takes a static API key in a
+      header. Pointing it at `http://<host>:8888/mcp/household/` gives:
+
+          httpx.HTTPStatusError: Client error '401 Unauthorized'
+
+      Put a proxy in front that adds the Authorization header, restricted to
+      HA's address — see [proxy.md](proxy.md). Decision 20 has the reasoning
+      and what the alternatives cost.
 - [ ] **openwakeword crash-loops until a model matching `WAKEWORD_MODEL`
       exists** in `$NOVAK_HOME/wakeword/models/`. Set a stock word (`ok_nabu`)
       until you have trained one. **VERIFY** whether the image wants `.tflite`

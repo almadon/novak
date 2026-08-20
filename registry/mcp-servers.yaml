@@ -140,9 +140,14 @@ servers:
     url: http://EDIT-ME:8888/mcp/household/
     auth: HINDSIGHT_API_KEY
     enabled: true
-    # Home Assistant CAN use this: the bank is in the path, so it needs no
-    # custom header — the thing that made per-person voice memory impossible
-    # with the previous backend.
+      # The bank is in the path, so no custom header is needed to SELECT a
+      # bank — the thing that made per-person voice memory impossible with the
+      # previous backend.
+      #
+      # Authentication is a separate matter, and HA cannot do it directly: its
+      # MCP client speaks OAuth only, Hindsight takes a static API key in an
+      # Authorization header, and there is no overlap. Reaching this from Home
+      # Assistant needs a proxy that adds the header — see docs/proxy.md.
     clients: [home-assistant]
     source:
       url: https://github.com/vectorize-io/hindsight

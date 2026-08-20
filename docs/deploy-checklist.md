@@ -199,7 +199,12 @@ this is private and whether it is safe.
 
 See [home-assistant.md](home-assistant.md).
 
-- [ ] HACS: install `openai-compatible-conversation`.
+- [ ] HACS: install **Custom Conversation**
+      (<https://github.com/michelle-avery/custom-conversation>), and point it at
+      `http://<mini>:<OMLX_PORT>/v1` with model
+      `Qwen3-4B-Instruct-2507-4bit:ha-voice` — the colon form, not `ha-voice`.
+      Keep HA's built-in Assist API for device control; tools come via MCP
+      below. Decision 19 covers why not the other two candidates.
 - [ ] Wyoming integrations: STT 10300, TTS 10200, wake word 10400.
 - [ ] MCP integration → `http://<host>:8888/mcp/household/`.
       **The household bank only.** Never a personal one: anyone who talks to a

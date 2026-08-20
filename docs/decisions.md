@@ -509,3 +509,71 @@ Neither client's API was exercised. Open WebUI 0.11.0 here still has
 `onboarding: true`, so no admin account and no API token exists yet, and Home
 Assistant does not run on this machine at all. Confirm the actual endpoint for
 setting a model's system prompt in each before writing an applier against it.
+
+## 19. Home Assistant's conversation agent: Custom Conversation
+
+Home Assistant's own OpenAI integration still refuses a custom base URL
+([core#137087](https://github.com/home-assistant/core/issues/137087)), so
+talking to oMLX needs a custom component. There are three plausible ones and
+the choice is not simply the most popular.
+
+Measured 2026-08-19:
+
+| | Stars | Last commit |
+|---|---|---|
+| `michelle-avery/openai-compatible-conversation` — what this repo used to say | 38 | 2025-09-09 |
+| `jekalmin/extended_openai_conversation` | 1,428 | 2026-05-17 |
+| `michelle-avery/custom-conversation` | 93 | 2026-08-05 |
+
+**The old recommendation is disclaimed by its own author**, who writes: *"I
+personally cannot support this, as I don't actually use this integration, which
+makes ensuring its quality challenging."* They are looking for a maintainer and
+point at Custom Conversation, which is theirs and which they do use. Eleven
+months without a commit on a fork of a fast-moving upstream is the real problem;
+the disclaimer just makes it explicit.
+
+### Why not the popular one
+
+Extended OpenAI Conversation has thirty-seven times the stars, and it would
+work. It is not chosen because **it is a different architecture, not a
+different base-URL field.** It brings its own function-calling system for
+device control, replacing Home Assistant's intent handling.
+
+This stack is deliberately arranged the other way: the conversation agent
+handles *language*, and tools arrive through HA's MCP client — the same
+endpoints every other client uses (#14, and the memory section in
+[architecture.md](architecture.md)). Moving device control into the agent's
+own function calling would mean voice tools stop being the shared MCP surface
+and become a per-client thing again.
+
+It also costs latency where there is none to spare. Every function definition
+sits in the context of every spoken turn, against a 1–2s budget. The registry
+already keeps Tududi off the voice pipeline for exactly this reason, at 59
+tools; adopting an agent whose model of the world *is* tool definitions works
+against that.
+
+**When it is the right answer:** if you decide you want the model driving
+devices directly rather than HA's intents doing it. That is a real position,
+and this decision is not an argument that it is wrong — only that it is a
+change of design rather than a swap of component, and should be taken as one.
+
+### The cost of what was chosen
+
+Custom Conversation has 93 stars. It is small, and being actively maintained by
+one person who uses it is a better guarantee than 1,428 stars on code nobody has
+touched in three months — but it is still one person.
+
+It reaches the endpoint **through LiteLLM**, so there is a translation layer
+between HA and oMLX that neither project tests against the other. Its own docs
+warn that *"supposedly 'OpenAI-compatible' APIs are sometimes not fully
+compatible."* oMLX serves both `/v1/chat/completions` and `/v1/responses`, so
+the surface is there; that is not the same as the pairing having been exercised,
+and the voice path should be tested end to end before it is trusted.
+
+### A thing worth knowing either way
+
+The maintenance note blames HA's native agent diverging by adopting the
+**Responses API**, "which many OpenAI-compatible services don't support". oMLX
+does support it. So that particular divergence is not a problem here — which is
+an argument for tracking a component that follows current HA, and against the
+frozen fork specifically.

@@ -26,6 +26,21 @@ services:
       WEBUI_URL: "http://${HOST_NAME:-mini.local}:${OPENWEBUI_PORT:-3000}"
       # Keep everything local: no external telemetry-ish integrations.
       ENABLE_OPENAI_API: "true"
+      # Pocket ID sign-in. Open WebUI has no admin UI for this — it reads these
+      # at startup and enables OAuth only when client id, secret and provider
+      # URL are all set, so leaving them unset simply leaves you on local
+      # accounts. Verified against its own config.py.
+      #
+      # This needs a SECOND Pocket ID client, separate from the console's: the
+      # redirect URI differs, so one client cannot serve both.
+      #   http://<HOST_NAME>:3000/oauth/oidc/callback
+      OPENID_PROVIDER_URL: "${OWUI_OIDC_ISSUER:-}"
+      OAUTH_CLIENT_ID: "${OWUI_OIDC_CLIENT_ID:-}"
+      OAUTH_CLIENT_SECRET: "${OWUI_OIDC_CLIENT_SECRET:-}"
+      OAUTH_PROVIDER_NAME: "${OWUI_OIDC_PROVIDER_NAME:-Pocket ID}"
+      # Off by default: with signup on, anyone your IdP authenticates gets an
+      # account here. Turn it on once the IdP admits only people you mean in.
+      ENABLE_OAUTH_SIGNUP: "${OWUI_OIDC_SIGNUP:-false}"
     volumes:
       - open-webui:/app/backend/data
     extra_hosts:

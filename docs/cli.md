@@ -69,6 +69,61 @@ containers whose values actually changed.
 
 ---
 
+## Where each kind of setting lives
+
+Three places, and which one you want depends on what the thing *is*. This trips
+people up on MCP servers in particular, because the URL and the token do not
+live together.
+
+| | Lives in | Example |
+|---|---|---|
+| Stack settings | `~/.novak/.env` | `HOST_NAME`, `OMLX_PORT` |
+| Secrets | macOS Keychain | `HINDSIGHT_API_KEY` |
+| **URL of an `external` MCP server** | **`registry/mcp-servers.yaml`** | Tududi, Outline, Hindsight |
+| URL of a `container` MCP server | `.env` | `VIKUNJA_URL`, `HA_MCP_URL` |
+
+**There is no `TUDUDI_URL`, and that is not an omission.** Tududi is an
+`external` entry — something already running elsewhere that Novak only points
+clients at — so its address is the `url:` field in the registry:
+
+```yaml
+  - name: tududi
+    kind: external
+    url: https://tududi.example.tld/api/mcp
+    auth: TUDUDI_API_TOKEN      # the NAME of a Keychain item, not a value
+    enabled: false
+```
+
+Edit the URL there, in `$NOVAK_HOME/registry/mcp-servers.yaml`, and set the
+token with `novak secret set TUDUDI_API_TOKEN`. Then flip `enabled: true`.
+
+A `container` entry is the other case: Novak runs it, so it needs both halves
+as variables — `VIKUNJA_URL` and `VIKUNJA_API_TOKEN`. The reconciler skips a
+container entry whose variables are unset and says which ones, so an
+unconfigured integration never blocks the rest.
+
+`auth:` in an external entry is **informational**. Nothing injects it — the
+token goes into the *client's* registration, as an Authorization header. It is
+recorded so the registry can answer "what do I need to wire this up".
+
+### Signing in to Open WebUI with Pocket ID
+
+Configured through `.env`, not in Open WebUI's admin panel — it reads these at
+startup and has no UI for them:
+
+```
+OWUI_OIDC_ISSUER=https://<pocket-id-host>/.well-known/openid-configuration
+OWUI_OIDC_CLIENT_ID=...
+novak secret set OWUI_OIDC_CLIENT_SECRET
+```
+
+Note the issuer is the **discovery document**, not the bare issuer URL, and
+this needs a **second Pocket ID client** separate from the console's, because
+the redirect URI differs: `http://<HOST_NAME>:3000/oauth/oidc/callback`.
+
+Leave them unset for local accounts. OAuth turns on only when client id, secret
+and provider URL are all present.
+
 ## Secrets
 
 Three kinds, because who else knows the value decides how you may set it.

@@ -161,8 +161,31 @@ this is private and whether it is safe.
 - [ ] Models from oMLX (including profiles) appear in the switcher.
 - [ ] Ask "who are you?" — it should answer as Novak. Then ask it for an API
       key and confirm it declines.
+- [ ] *(Optional)* Pocket ID sign-in. Set in `.env`, **not** in Open WebUI —
+      it reads these at startup and has no admin UI for them. Needs a second
+      Pocket ID client, since the redirect URI differs from the console's:
+      `http://<HOST_NAME>:3000/oauth/oidc/callback`
+
+      novak config set OWUI_OIDC_ISSUER https://<host>/.well-known/openid-configuration
+      novak config set OWUI_OIDC_CLIENT_ID <id>
+      novak secret set OWUI_OIDC_CLIENT_SECRET
+
+      Leave unset for local accounts. OAuth turns on only when all three are
+      present. `OWUI_OIDC_SIGNUP=true` when your IdP admits only people you
+      mean to let in.
+
 - [ ] Register the MCP servers (Admin → Settings → Tools). `novak registry`
-      prints each URL and the token variable it needs:
+      prints each URL and the token variable it needs.
+
+      **Where the URL comes from depends on the entry kind.** An `external`
+      entry keeps its address in `$NOVAK_HOME/registry/mcp-servers.yaml` as
+      `url:` — there is no `TUDUDI_URL` variable, and that is not an omission.
+      A `container` entry Novak runs itself takes both halves from `.env`
+      (`VIKUNJA_URL`, `HA_MCP_URL`). See [cli.md](cli.md#where-each-kind-of-setting-lives).
+
+      The token is always a Keychain item, and `auth:` in the registry names
+      it rather than holding it — you paste the value into the client's
+      registration as an Authorization header.
       - Outline — `https://et.a64.one/mcp`
       - Hindsight — `http://<host>:8888/mcp/<your-bank>/`
       - Vikunja — `http://<host>:8002/mcp`

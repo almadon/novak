@@ -577,3 +577,69 @@ The maintenance note blames HA's native agent diverging by adopting the
 does support it. So that particular divergence is not a problem here — which is
 an argument for tracking a component that follows current HA, and against the
 frozen fork specifically.
+
+## 20. Home Assistant reaches Hindsight through a header-injecting proxy
+
+Two components that both speak MCP cannot authenticate to each other.
+
+**Home Assistant's MCP client speaks OAuth only.** Its config flow asks for a
+Client ID and Secret from Application Credentials, and offers no field for a
+bearer token or a custom header.
+
+**Hindsight authenticates with a static API key** in an `Authorization` header.
+Its shipped tenant extensions are `Default`, `ApiKey` and `Supabase` — none of
+them OAuth. The key is accepted in a header and nowhere else; as a query
+parameter it is a 401.
+
+There is no overlap, so pointing HA at the bank URL fails:
+
+```
+httpx.HTTPStatusError: Client error '401 Unauthorized'
+  for url 'http://<mac>:8888/mcp/household/'
+```
+
+This invalidated something the repo asserted. The registry entry said Home
+Assistant *could* use this endpoint because the bank sits in the path and needs
+no custom header. That was true of bank *selection* and wrong about
+authentication — one header problem was solved and read as though both were.
+
+### What was chosen
+
+The proxy holds the credential and adds it per request. HA talks to a route
+that asks nothing of it; Hindsight still refuses anything arriving without the
+key. Config for both Caddy and Traefik is in [proxy.md](proxy.md).
+
+**This is the first concrete reason to run a proxy on this network.** #16 added
+one for TLS, which was optional given the tailnet is already WireGuard. This is
+not optional: without it, voice has no memory.
+
+**Cost, stated plainly.** The route converts "holds the key" into "can reach
+this hostname", so it must be restricted to Home Assistant's address — a
+source-IP rule, not an afterthought. And the credential now lives on the proxy
+host as well as in the Mac's Keychain: a second copy, and a second place to
+rotate it.
+
+### What was rejected
+
+**Turning Hindsight's tenant auth off.** It would work immediately and leave
+the MCP endpoint open to everything that can reach the port — every bank, read
+and write, no credential. `docker-compose.yml` already carries that warning in
+capitals. Trading all authentication for one client's convenience is the wrong
+shape of fix.
+
+**Writing an OAuth tenant extension for Hindsight.** The clean answer, and real
+work in someone else's codebase, on an interface that would then need
+maintaining against upstream.
+
+**Waiting for HA's MCP client to accept a token.** Also a clean answer, also
+not in our hands. Worth watching: if it lands, this proxy route becomes
+unnecessary and should be removed rather than kept out of habit.
+
+### The general shape
+
+Worth noticing because it will recur: two things that both "support MCP" still
+have to agree on **authentication**, and MCP does not settle that. Protocol
+compatibility is not integration compatibility. The registry's `auth:` field
+records which credential an endpoint needs precisely because nothing injects it
+automatically — every client has to be capable of presenting it, and this one
+is not.

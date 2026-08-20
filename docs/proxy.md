@@ -174,6 +174,80 @@ Repeat per service. Novak publishes no Docker labels, because the containers
 run on a different host from Traefik — label-based discovery won't see them.
 The file provider is the right mechanism here.
 
+## Giving Home Assistant access to Hindsight
+
+A special case, and the one concrete reason to want a proxy on this network
+rather than only for TLS.
+
+**Home Assistant's MCP client authenticates by OAuth only** — the config flow
+asks for a Client ID and Secret from Application Credentials, and offers no
+field for a bearer token or custom header. **Hindsight authenticates by static
+API key** in an `Authorization` header; its shipped tenant extensions are
+`Default`, `ApiKey` and `Supabase`, none of them OAuth. Verified: the token is
+accepted in a header and nowhere else — as a query parameter it is a 401.
+
+So HA cannot authenticate to Hindsight directly, and the failure is exactly
+this:
+
+```
+httpx.HTTPStatusError: Client error '401 Unauthorized'
+  for url 'http://<mac>:8888/mcp/household/'
+```
+
+The way through is to let the proxy hold the credential and add it per request.
+HA then talks to an endpoint that needs no auth from its side, while Hindsight
+still refuses anything that reaches it without the key.
+
+```caddy
+# Only Home Assistant may use this route — it carries no credential of its own.
+@ha remote_ip <ha-tailscale-ip>
+
+memory-ha.novak.example.tld {
+	import novak-internal
+	handle @ha {
+		reverse_proxy <mac-ts-ip>:8888 {
+			header_up Authorization "Bearer {env.HINDSIGHT_API_KEY}"
+		}
+	}
+	respond 403
+}
+```
+
+Traefik, file provider:
+
+```yaml
+http:
+  middlewares:
+    hindsight-auth:
+      headers:
+        customRequestHeaders:
+          Authorization: "Bearer <key>"     # from the proxy host's secret store
+    ha-only:
+      ipAllowList:
+        sourceRange: ["<ha-tailscale-ip>/32"]
+  routers:
+    novak-memory-ha:
+      rule: "Host(`memory-ha.novak.example.tld`)"
+      middlewares: [ha-only, hindsight-auth]
+      service: novak-memory
+```
+
+**The source restriction is not optional.** This route converts "holds the key"
+into "can reach this hostname", so without it anything on the network gets the
+household bank uncredentialed. Point Home Assistant at the household bank only
+— never a personal one, for the reason in the deploy checklist: a microphone
+cannot tell who is speaking.
+
+Note the credential now lives on the proxy host as well as in the Mac's
+Keychain. That is a second copy to rotate, and it is the cost of the approach.
+
+**Alternatives considered.** Turning Hindsight's tenant auth off would let HA
+connect, and would leave the MCP endpoint open to everything that can reach the
+port — every bank, read and write. Writing an OAuth tenant extension for
+Hindsight is the clean fix and is real work in someone else's codebase. Waiting
+for HA's MCP client to accept a token is the other real fix and is not in your
+hands.
+
 ## What stays plaintext, and why
 
 **The Wyoming voice services** (whisper 10300, piper 10200, openWakeWord

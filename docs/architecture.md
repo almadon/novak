@@ -17,7 +17,7 @@ tomorrow, nothing of value would be lost.
   reaches it via `host.docker.internal`.
 - Profiles present one loaded model as several virtual models
   (`ha-voice`, `chat`, `deep`) with different settings at zero RAM cost.
-- See [../omlx/settings.md](../omlx/settings.md) for the 24GB tuning.
+- See [omlx-settings.md](omlx-settings.md) for the 24GB tuning.
 
 ### Knowledge — Outline (canonical), via MCP
 
@@ -96,7 +96,7 @@ log.
 | [`registry/omlx.yaml`](../registry/omlx.yaml) | which models exist, and what profiles they expose | *not built* → oMLX's JSON files |
 | [`prompts/`](../prompts/novak-chat.md) | the assistant's personas | *not built* → each client's own config |
 
-**`registry/omlx.yaml`** is [`omlx/settings.md`](../omlx/settings.md) reduced to
+**`registry/omlx.yaml`** is [`docs/omlx-settings.md`](omlx-settings.md) reduced to
 values a machine can apply and re-check. settings.md holds the reasoning — why
 the 4B is always resident, why nothing 30B-class fits in 24GB; the YAML holds
 the numbers. Read one to decide, edit the other to apply. Idle TTL sits per
@@ -220,4 +220,4 @@ machine reaches it until `server.host` is changed in its own settings.
 Containers still can, because OrbStack forwards loopback through
 `host.docker.internal` — which is why the stack can work while the oMLX row in
 `novak ports` shows no Tailscale reachability. See
-[../proxy/README.md](../proxy/README.md) before putting a proxy in front of it.
+[proxy.md](proxy.md) before putting a proxy in front of it.

@@ -6,7 +6,7 @@ internal proxy you already run on another host.
 ## What problem this solves
 
 Not public access — that's handled separately (see
-[../docs/decisions.md](../docs/decisions.md) #15: public ingress lives on the
+[decisions.md](decisions.md) #15: public ingress lives on the
 VPS, home forwards nothing).
 
 This is about **encryption in transit on the local network**. Worth being

@@ -53,9 +53,13 @@ Two consequences worth internalising:
 Hindsight organises memories into **banks**, and the bank is part of the URL:
 
 ```
-http://mini.local:8888/mcp/household/     ← voice, everyone
-http://mini.local:8888/mcp/tmeuze/        ← one person
+http://<mac>:8888/mcp/household/     ← voice, everyone
+http://<mac>:8888/mcp/tmeuze/        ← one person
 ```
+
+`<mac>` is the Mac's Tailscale name or address — `novak registry` prints the
+real ones. Not a `.local` name: clients that live elsewhere, like Open WebUI on
+the VPS, cannot resolve those.
 
 Each MCP connection is scoped to exactly one bank, and **the tools have no bank
 parameter**. A client is configured once with a bank URL; every tool call it

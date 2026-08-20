@@ -23,7 +23,11 @@ services:
       OPENAI_API_BASE_URL: "http://host.docker.internal:${OMLX_PORT:-8080}/v1"
       OPENAI_API_KEY: "${OMLX_API_KEY:-none}"
       ENABLE_OLLAMA_API: "false"
-      WEBUI_URL: "http://${HOST_NAME:-mini.local}:${OPENWEBUI_PORT:-3000}"
+      # The address USERS reach this at, which Novak cannot work out: behind a
+      # reverse proxy it is a public name on another host that this stack never
+      # sees. HOST_NAME is how machines here reach each other, and is the wrong
+      # answer whenever a proxy is in front.
+      WEBUI_URL: "${OWUI_PUBLIC_URL:-http://${HOST_NAME:-mini.local}:${OPENWEBUI_PORT:-3000}}"
       # Keep everything local: no external telemetry-ish integrations.
       ENABLE_OPENAI_API: "true"
       # Pocket ID sign-in. Open WebUI has no admin UI for this — it reads these
@@ -38,6 +42,13 @@ services:
       OAUTH_CLIENT_ID: "${OWUI_OIDC_CLIENT_ID:-}"
       OAUTH_CLIENT_SECRET: "${OWUI_OIDC_CLIENT_SECRET:-}"
       OAUTH_PROVIDER_NAME: "${OWUI_OIDC_PROVIDER_NAME:-Pocket ID}"
+      # Pin the callback. Left unset, Open WebUI builds it from the incoming
+      # request's Host header — so it becomes whatever name you happened to
+      # type, and http://mini.local:3000/... and http://<tailscale-ip>:3000/...
+      # are different redirect URIs that BOTH have to be registered with the
+      # IdP. Pinning it means one URI to register and the same behaviour from
+      # every hostname. Verified in Open WebUI's oauth.py.
+      OPENID_REDIRECT_URI: "${OWUI_OIDC_REDIRECT_URI:-${OWUI_PUBLIC_URL:-http://${HOST_NAME:-mini.local}:${OPENWEBUI_PORT:-3000}}/oauth/oidc/login/callback}"
       # Off by default: with signup on, anyone your IdP authenticates gets an
       # account here. Turn it on once the IdP admits only people you mean in.
       ENABLE_OAUTH_SIGNUP: "${OWUI_OIDC_SIGNUP:-false}"
@@ -73,7 +84,9 @@ services:
       - "${CONSOLE_PORT:-3002}:3002"
     environment:
       AUTH_SECRET: "${CONSOLE_AUTH_SECRET}"
-      AUTH_URL: "http://${HOST_NAME:-mini.local}:${CONSOLE_PORT:-3002}"
+      # Same reasoning as OWUI_PUBLIC_URL: if a proxy fronts the console, this
+      # must be the name users type, not how machines here reach each other.
+      AUTH_URL: "${KONZOL_PUBLIC_URL:-http://${HOST_NAME:-mini.local}:${CONSOLE_PORT:-3002}}"
       AUTH_TRUST_HOST: "true"
       OIDC_ISSUER: "${OIDC_ISSUER}"
       OIDC_CLIENT_ID: "${OIDC_CLIENT_ID}"

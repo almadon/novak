@@ -106,6 +106,33 @@ unconfigured integration never blocks the rest.
 token goes into the *client's* registration, as an Authorization header. It is
 recorded so the registry can answer "what do I need to wire this up".
 
+### When a reverse proxy is in front
+
+`HOST_NAME` is how machines in this stack reach each other. It is **not** how a
+person reaches a service through a proxy — that name lives on another host and
+nothing here can discover it. Set it explicitly:
+
+```bash
+novak config set OWUI_PUBLIC_URL https://cas.example.tld
+novak config set KONZOL_PUBLIC_URL https://konzol.example.tld
+```
+
+Blank means "no proxy, use `HOST_NAME`", which is right for direct access.
+
+This is worth getting right because it fails *softly*. Open WebUI derives its
+OIDC callback from the incoming request's Host header when nothing pins it, so
+a login started at one hostname returns you to whichever name you happened to
+type — and every such name is a separate redirect URI the IdP must have
+registered. The symptom is being bounced to a URL you never asked for rather
+than an error. Setting `OWUI_PUBLIC_URL` pins both the site URL and the
+callback, leaving one URI to register.
+
+Check what a service actually ended up with:
+
+```bash
+docker compose config | grep -E 'WEBUI_URL|OPENID_REDIRECT_URI'
+```
+
 ### Signing in to Open WebUI with Pocket ID
 
 Configured through `.env`, not in Open WebUI's admin panel — it reads these at

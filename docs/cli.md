@@ -272,7 +272,28 @@ novak drift
 ```
 
 Compares settings against `.env.example` and the deployed registry against the
-repo's, and prints what differs. `novak status` shows a one-line pointer when
+repo's, and prints what differs.
+
+```bash
+novak drift --adopt
+```
+
+Copies settings the repo has added into your `.env`, with the comments that
+explain them, and **never touches a value already set** (it backs the file up
+first regardless). This matters more than it sounds: `novak config set` only
+accepts keys already present in `.env`, so a setting the repo added is
+unreachable —
+
+```
+$ novak config set OWUI_OIDC_ISSUER https://...
+Unknown setting 'OWUI_OIDC_ISSUER'. 'novak config' lists them.
+```
+
+— until the file gains the line. Without `--adopt` the only way through is
+hand-editing `.env`, which is the interface this CLI exists to replace.
+
+Adopting only adds the lines. Values stay at the repo's defaults until you set
+them, and any secrets among them still need `novak secret set`. `novak status` shows a one-line pointer when
 the registry differs, since nobody thinks to look for a silent problem.
 
 It is **read-only and credential-free** — it opens two files and prints the

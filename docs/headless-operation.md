@@ -304,6 +304,60 @@ Re-authenticating an existing node with tags may make it appear as a new device
 needing approval — expected, not a failure. Its Tailscale IP can change, so
 re-check anything pinned to the old address, including `HOST_NAME`.
 
+### Secrets and the Keychain after a reboot
+
+**The login keychain unlocks at login, not at boot.** That single fact makes the
+chain longer than it looks:
+
+```
+FileVault unlocked (KVM)  →  novak's session starts  →  login keychain unlocks
+                                                     →  LaunchAgent runs
+                                                     →  up.sh reads secrets
+```
+
+So the KVM unlock is not only what boots the machine — it is what makes the
+secrets readable. Nothing extra is needed, because unlocking FileVault *is*
+logging in and the keychain comes with it. No password is stored anywhere to
+make that automatic, which is the point.
+
+The corollary is worth saying plainly: **if nobody logs in, there are no
+secrets.** A machine sitting at the FileVault prompt has a locked keychain and
+cannot start the stack. It is waiting, not broken.
+
+#### The trap is prompts, not locking
+
+The failure that actually catches people is different. macOS can raise a GUI
+dialog the first time a given tool reads an item — *"security wants to use your
+confidential information"*. On an unattended boot nothing clicks it, so `up.sh`
+**hangs rather than failing**, which is far worse than an error: no log line,
+no exit code, just a stack that never comes up.
+
+`novak secret set` avoids this by pre-authorising the reader
+(`-T /usr/bin/security`) when it stores the item. A secret added by hand with a
+bare `security add-generic-password` has no such grant and will hang.
+
+Check rather than assume:
+
+```bash
+novak secret verify
+```
+
+It reads every secret the way `up.sh` does, with a timeout, and reports anything
+that would block. Re-add whatever it flags with `novak secret set`.
+
+#### If you would rather not depend on this
+
+The alternative is a file: real values in `$NOVAK_HOME/.env`, mode `600`, owned
+by `novak`. It always works and needs no session.
+
+On a FileVault'd disk with a dedicated Standard account that is not far off what
+the Keychain gives you, since the Keychain auto-unlocks at that same account's
+login anyway. What you lose is protection from other logged-in users and from
+processes never granted access — real, but modest on a single-purpose box.
+
+`up.sh` falls back to `.env` whenever a Keychain lookup finds nothing, so this
+is a per-secret choice and needs no code change.
+
 ### Docker is per-account
 
 Each macOS user runs **their own OrbStack VM with its own socket**. Containers

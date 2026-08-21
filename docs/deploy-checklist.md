@@ -99,6 +99,10 @@ checkouts carry over, and that is the point.
       novak secret set OMLX_API_KEY
 
 - [ ] `novak status` again — **Config: ready**.
+- [ ] `novak secret verify` — every secret reads back without a prompt. One
+      added by hand rather than through the CLI can raise a GUI authorisation
+      dialog on first read, which on an unattended boot hangs instead of
+      failing.
 - [ ] Sanity check: the `.env` still shows `set-in-keychain` on every secret
       line. That literal text is never used; if you replaced it with a real
       secret, undo that and use `novak secret set` instead.

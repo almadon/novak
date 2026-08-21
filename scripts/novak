@@ -18,6 +18,7 @@
 #                             Refused for secrets another system owns.
 #   novak secret show KEY     print one, when a client needs it pasted in
 #   novak secret list         which secrets are present (never their values)
+#   novak secret verify       do they read back unattended, without a prompt?
 #   novak up                  apply config and start
 #   novak down                stop, keep data
 #   novak restart [SERVICE]
@@ -175,7 +176,8 @@ cmd_secret() {
         # process list.
         local gen; gen="$(openssl rand -hex 32)"
         if ! printf '%s\n%s\n' "$gen" "$gen" |
-             security add-generic-password -s "novak/$key" -a "$(whoami)" -w >/dev/null 2>&1; then
+             security add-generic-password -s "novak/$key" -a "$(whoami)" \
+               -T /usr/bin/security -w >/dev/null 2>&1; then
           red "Could not store the generated value in the Keychain."; exit 1
         fi
         # Trust nothing: confirm what came back is what went in, because the
@@ -189,7 +191,12 @@ cmd_secret() {
       else
         security delete-generic-password -s "novak/$key" >/dev/null 2>&1 || true
         # -w with no argument prompts without echoing.
-        security add-generic-password -s "novak/$key" -a "$(whoami)" -w
+        # -T /usr/bin/security pre-authorises the tool that reads this back.
+        # Without it macOS raises a GUI authorisation dialog on first read,
+        # which on an unattended boot hangs rather than failing — the stack
+        # simply never starts. See `novak secret verify`.
+        security add-generic-password -s "novak/$key" -a "$(whoami)" \
+          -T /usr/bin/security -w
         grn "$key stored in the Keychain."
       fi
 
@@ -220,6 +227,39 @@ cmd_secret() {
       ylw "This prints a secret to your terminal."
       echo
       printf '%s\n' "$val"
+      ;;
+    verify)
+      bold "Unattended readability"
+      echo
+      dim "  Reads each secret the way up.sh does, with a timeout. A hang means"
+      dim "  macOS wants an authorisation dialog — which on a headless boot"
+      dim "  nothing will ever click, so the stack waits forever instead of"
+      dim "  failing."
+      echo
+      local v out rc failed=0
+      for v in "${SECRET_VARS[@]}"; do
+        # Capture status separately: `if x="$(...)"; rc=$?; then` tests the
+        # assignment, which always succeeds, and reports everything as fine.
+        out="$(perl -e 'alarm 5; exec @ARGV' security find-generic-password \
+                -s "novak/$v" -w 2>/dev/null)" && rc=0 || rc=$?
+        if [ "$rc" -eq 0 ] && [ -n "$out" ]; then
+          printf '  %-30s %s\n' "$v" "$(grn 'reads cleanly')"
+        elif [ "$rc" -eq 142 ] || [ "$rc" -eq 14 ]; then
+          printf '  %-30s %s\n' "$v" "$(red 'HANGS — would block boot')"; failed=1
+        else
+          printf '  %-30s %s\n' "$v" "$(dim 'not set')"
+        fi
+      done
+      unset out
+      echo
+      if [ "$failed" -eq 1 ]; then
+        red "  Re-add the hanging items with 'novak secret set <NAME>' — this CLI"
+        red "  pre-authorises the reader; a hand-run 'security' call does not."
+      else
+        dim "  This proves nothing about a LOCKED keychain. The login keychain"
+        dim "  unlocks when this account logs in, so unattended boot depends on"
+        dim "  the session starting at all — see docs/headless-operation.md."
+      fi
       ;;
     *) red "unknown: novak secret $1"; exit 1 ;;
   esac

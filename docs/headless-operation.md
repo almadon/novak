@@ -393,13 +393,21 @@ Login Items start OrbStack, but Docker isn't usable the instant the app
 launches — `docker compose` run too early fails against a socket that isn't
 listening yet. `scripts/launch-stack.sh` waits for it.
 
+`bootstrap.sh` installs the plist for you, substituting the real path to
+your checkout. Loading it is the only manual step:
+
 ```bash
-cp scripts/one.a64.novak.stack.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/one.a64.novak.stack.plist
 ```
 
-The plist defaults to `~/Workspaces/Novak/novak`. If your checkout is
-elsewhere, edit that one line in the copy under `~/Library/LaunchAgents/`.
+The checked-in template holds a `__NOVAK_REPO__` placeholder rather than a
+default path, so copying it by hand produces an agent that cannot start. That
+failure is worth understanding: the containers carry `restart=unless-stopped`,
+so OrbStack brings them back on its own and the stack looks perfectly healthy
+while boot recovery is broken. Check `launchctl list | grep novak` — a `-` in
+the PID column with a non-zero status is an agent that never ran.
+
+If the checkout moves, re-run `bootstrap.sh`, then unload and load the agent.
 
 Logs to `/tmp/novak-stack.log` and `/tmp/novak-stack.err`.
 

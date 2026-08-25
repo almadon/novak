@@ -78,11 +78,31 @@ warn "  System Settings → General → Login Items — add OrbStack and oMLX."
 # first time anything registers an agent.
 mkdir -p "$HOME/Library/LaunchAgents"
 
-warn "Then install the LaunchAgent so the stack starts once Docker is ready:"
-warn "  cp scripts/one.a64.novak.stack.plist ~/Library/LaunchAgents/"
-warn "  launchctl load ~/Library/LaunchAgents/one.a64.novak.stack.plist"
-warn "Load it AFTER your secrets are set — up.sh exits non-zero while one is"
-warn "missing, and KeepAlive retries every 60s into /tmp/novak-stack.err."
+# Installed rather than copied: the plist has to name an absolute path, and a
+# checked-in default is right only on the machine it was written on. When it is
+# wrong the agent does not complain — it fails into the KeepAlive loop every
+# 60s while the containers stay up under their own restart policy, so the stack
+# looks healthy and boot recovery is quietly broken. Substituting REPO_DIR here
+# means the path is a fact rather than a guess, and re-running fixes a move.
+AGENT_DST="$HOME/Library/LaunchAgents/one.a64.novak.stack.plist"
+AGENT_TMP="$(mktemp)"
+sed "s|__NOVAK_REPO__|$REPO_DIR|g" scripts/one.a64.novak.stack.plist > "$AGENT_TMP"
+
+if [ ! -f "$AGENT_DST" ]; then
+  mv "$AGENT_TMP" "$AGENT_DST"
+  echo "installed LaunchAgent -> $REPO_DIR"
+  warn "Load it AFTER your secrets are set — up.sh exits non-zero while one is"
+  warn "missing, and KeepAlive retries every 60s into /tmp/novak-stack.err."
+  warn "  launchctl load $AGENT_DST"
+elif cmp -s "$AGENT_TMP" "$AGENT_DST"; then
+  rm -f "$AGENT_TMP"
+  echo "LaunchAgent already points at $REPO_DIR"
+else
+  mv "$AGENT_TMP" "$AGENT_DST"
+  warn "LaunchAgent path was stale — repointed at $REPO_DIR."
+  warn "Reload it to pick the change up:"
+  warn "  launchctl unload $AGENT_DST && launchctl load $AGENT_DST"
+fi
 
 step "Environment"
 NOVAK_HOME="${NOVAK_HOME:-$HOME/.novak}"

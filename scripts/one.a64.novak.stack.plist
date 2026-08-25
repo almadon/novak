@@ -13,9 +13,13 @@
   <array>
     <string>/bin/bash</string>
     <string>-lc</string>
-    <!-- NOVAK_REPO must match wherever the checkout actually lives; edit this
-         one line rather than moving the repo. -->
-    <string>exec "${NOVAK_REPO:-$HOME/Workspaces/Novak/novak}/scripts/launch-stack.sh"</string>
+    <!-- bootstrap.sh substitutes the placeholder below with the real checkout
+         path at install time, so this template is not usable by a bare `cp`.
+         A hardcoded default is only ever correct on the machine it was written
+         on, and when it is wrong the agent does not complain — it fails into
+         the KeepAlive loop while containers stay up under their own restart
+         policy. Re-run bootstrap.sh if the checkout moves. -->
+    <string>exec "${NOVAK_REPO:-__NOVAK_REPO__}/scripts/launch-stack.sh"</string>
   </array>
 
   <key>RunAtLoad</key>

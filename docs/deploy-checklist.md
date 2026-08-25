@@ -61,6 +61,9 @@ checkouts carry over, and that is the point.
       git clone https://github.com/almadon/novak.git ~/Workspaces/Novak/novak
       cd ~/Workspaces/Novak/novak && ./scripts/bootstrap.sh
 
+      The path is yours to choose — bootstrap.sh reads it from where the
+      checkout actually is, so nothing downstream hardcodes it.
+
       No sudo needed. It checks Phase 1 actually happened and tells you what to
       ask for if not.
 
@@ -265,14 +268,16 @@ The point of the whole exercise: it comes back without you.
 - [ ] Login Items **as `novak`**: OrbStack and oMLX. They are per-account —
       setting them as yourself does nothing here.
 - [ ] Install the LaunchAgent. **`mkdir -p` is not optional** — a fresh macOS
-      account has no `~/Library/LaunchAgents`, and `cp` into a missing
-      directory fails:
+      account has no `~/Library/LaunchAgents`, and installing into a missing
+      directory fails.
 
-      mkdir -p ~/Library/LaunchAgents
-      cp scripts/one.a64.novak.stack.plist ~/Library/LaunchAgents/
+      `bootstrap.sh` has already created the directory and installed the
+      plist, with your checkout path substituted in. You only load it:
+
       launchctl load ~/Library/LaunchAgents/one.a64.novak.stack.plist
 
-      Edit the path inside if your checkout is not at `~/Workspaces/Novak/novak`.
+      Do not `cp` the template by hand — it carries a placeholder, not a
+      path. If the checkout ever moves, re-run `bootstrap.sh` and reload.
 
       **Set your secrets before loading it.** `up.sh` exits non-zero when a
       required secret is missing, and `KeepAlive` retries every 60s — so

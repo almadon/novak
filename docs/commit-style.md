@@ -14,7 +14,8 @@ BREAKING CHANGE: only when something breaks
 ## The subject
 
 Lowercase type, optional scope in parentheses, colon, space, description.
-72 characters or fewer, **imperative mood** ("add", not "added"), no full stop.
+72 characters or fewer, **imperative mood** ("add", not "added" or "adding"),
+lowercase description, no full stop. The hook checks all four.
 
 | Type | For | Version effect |
 |---|---|---|

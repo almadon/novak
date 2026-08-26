@@ -26,11 +26,12 @@
 #   novak registry            show the MCP registry as the reconciler sees it
 #   novak omlx apply          apply registry/omlx.yaml (models, profiles, TTLs)
 #
-# Add to PATH:  ln -s "$PWD/scripts/novak" /usr/local/bin/novak
+# Add to PATH: bootstrap.sh does this, at ~/.local/bin/novak (see docs/cli.md
+# for why not /usr/local/bin)
 set -euo pipefail
 
 # Same defensive PATH as scripts/launch-stack.sh. This is reached through a
-# symlink in /usr/local/bin, so it runs under whatever environment the caller
+# symlink in ~/.local/bin, so it runs under whatever environment the caller
 # had — cron, a LaunchAgent, or a login shell that never sourced Homebrew.
 # `tailscale` in particular lives only in /opt/homebrew/bin, and when it is
 # absent `novak ports` reports no Tailscale address on a machine that is
@@ -53,7 +54,7 @@ if [ ! -f "$REPO_DIR/scripts/lib/vars.sh" ]; then
   echo "✋ Could not locate the Novak checkout from $0" >&2
   echo "   Resolved to: $REPO_DIR" >&2
   echo "   If this is a symlink, re-create it pointing at scripts/novak in the" >&2
-  echo "   checkout:  ln -sf /path/to/novak/scripts/novak /usr/local/bin/novak" >&2
+  echo "   checkout:  ln -sf /path/to/novak/scripts/novak ~/.local/bin/novak" >&2
   exit 1
 fi
 NOVAK_HOME="${NOVAK_HOME:-$HOME/.novak}"

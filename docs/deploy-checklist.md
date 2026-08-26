@@ -67,9 +67,14 @@ checkouts carry over, and that is the point.
       No sudo needed. It checks Phase 1 actually happened and tells you what to
       ask for if not.
 
-- [ ] Put the CLI on PATH — everything below uses it:
+- [ ] `bootstrap.sh` already put the CLI on PATH, at `~/.local/bin/novak`
+      rather than `/usr/local/bin` — this account has no sudo, and that
+      directory needs root to write to. Confirm it resolved:
 
-      ln -s "$PWD/scripts/novak" /usr/local/bin/novak
+      command -v novak
+
+      If that prints nothing, `~/.local/bin` is not on your shell's PATH;
+      see [cli.md](cli.md).
 
 - [ ] **Everything from here runs as `novak`, including Docker.** Each macOS
       account has its own OrbStack VM: containers started from another account

@@ -64,9 +64,22 @@ if printf '%s' "$DESC" | grep -qE '\.$'; then
   fail "Don't end the subject with a full stop."
 fi
 
+# Lowercase, so the subject reads as one line rather than a title. Checked
+# before the mood test below, since a capitalised past-tense subject should
+# report the more obvious of the two problems first.
+if printf '%s' "$DESC" | grep -qE '^[A-Z]'; then
+  fail "Start the description lowercase: 'add the applier', not 'Add the applier'."
+fi
+
 # Conventional Commits wants the imperative: "add", not "added" or "adds".
+# Gerunds are the other half of this and were missing: "adding the applier"
+# is the same drift as "added the applier", and shows up just as often.
 if printf '%s' "$DESC" | grep -qiE '^(added|adds|fixed|fixes|updated|updates|removed|removes|changed|changes|created|creates) '; then
   fail "Use the imperative mood: 'add', not 'added'/'adds'."
+fi
+
+if printf '%s' "$DESC" | grep -qiE '^(adding|fixing|updating|removing|changing|creating|refactoring) '; then
+  fail "Use the imperative mood: 'add', not 'adding'."
 fi
 
 # A breaking change should say why somewhere, not just carry a '!'.

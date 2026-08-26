@@ -68,6 +68,31 @@ services:
       # Off by default: with signup on, anyone your IdP authenticates gets an
       # account here. Turn it on once the IdP admits only people you mean in.
       ENABLE_OAUTH_SIGNUP: "${OWUI_OIDC_SIGNUP:-false}"
+      # admins.novak already exists in Pocket ID — the console's client
+      # requests the `groups` scope and gates on it (deploy-checklist.md).
+      # Reusing it here, rather than a second group, means one Pocket ID
+      # change grants admin in both surfaces instead of two.
+      #
+      # Two SEPARATE mechanisms, both keyed off the same `groups` claim
+      # Pocket ID already returns — Open WebUI does not read one claim for
+      # both roles and groups:
+      #   - role management grants the admin ROLE (bypasses model RBAC)
+      #   - group management syncs actual Open WebUI GROUPS, which is what
+      #     "Restricted to admins.novak" on a model checks
+      # Pocket ID's default claim is `groups`; OAUTH_ROLES_CLAIM is pointed
+      # at it explicitly rather than left on Open WebUI's own default of
+      # `roles`, since Pocket ID was never asked for a `roles` scope.
+      #
+      # Fails safe either way: an unmatched or missing claim grants nothing,
+      # not everything, so a misconfigured claim path is a silent no-op, not
+      # an accidental admin grant. VERIFY the exact claim shape (some IdPs
+      # nest or namespace group names) by decoding the ID token after the
+      # first Pocket ID login before relying on this.
+      ENABLE_OAUTH_ROLE_MANAGEMENT: "${OWUI_OIDC_ROLE_MANAGEMENT:-true}"
+      OAUTH_ROLES_CLAIM: "${OWUI_OIDC_ROLES_CLAIM:-groups}"
+      OAUTH_ADMIN_ROLES: "${OWUI_OIDC_ADMIN_ROLES:-admins.novak}"
+      ENABLE_OAUTH_GROUP_MANAGEMENT: "${OWUI_OIDC_GROUP_MANAGEMENT:-true}"
+      OAUTH_GROUP_CLAIM: "${OWUI_OIDC_GROUP_CLAIM:-groups}"
     volumes:
       - open-webui:/app/backend/data
     extra_hosts:

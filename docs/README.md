@@ -36,7 +36,7 @@ directory on purpose:
 | [oMLX settings](omlx-settings.md) | Which models, how to tune them, and the profiles |
 | [Memory setup](memory-setup.md) | Standing up the memory backend |
 | [Home Assistant](home-assistant.md) | Voice setup |
-| [Reverse proxy](proxy.md) | TLS on the LAN, using a proxy you already run |
+| [Reverse proxy](proxy.md) | TLS on the LAN via a proxy you run elsewhere, plus the portal: Novak's own, scoped to one page |
 | [Wake word](wakeword.md) | Teaching it to answer to "Hey Novak" |
 
 ## Conventions

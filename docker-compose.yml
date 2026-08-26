@@ -98,9 +98,12 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  # NOTE: there is no reverse proxy here on purpose. TLS for these services is
-  # terminated by the existing internal proxy on another host — see proxy/
-  # for the config to add there, and docs/decisions.md #16 for why.
+  # NOTE: none of these services are fronted by a reverse proxy here, on
+  # purpose. TLS for them is terminated by the existing internal proxy on
+  # another host — see docs/proxy.md for the config to add there, and
+  # decision #16 for why. The one exception is the portal below, whose own
+  # small Caddy instance fronts exactly one static page and nothing in this
+  # comment (decision #22) — it does not change what's said here.
 
   # ── Console (profiles, memory views, MCP catalog) ─────────────────────
   # Lives in its own repository: novak-konzol. It is an OPTIONAL client of

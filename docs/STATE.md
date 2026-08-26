@@ -3,156 +3,142 @@
 Working notes for the Mac mini. Delete this once the stack has run for a while
 unattended.
 
-**Last updated:** 2026-08-19, from the mini (`Mitochon`) as `novak`.
-**The stack has now run end to end for the first time.**
+**Last updated:** 2026-08-27, from the mini (`Mitochon`) as `novak`. This is a
+full rewrite, not a patch. The previous version was dated 2026-08-19 and
+described problems (oMLX on the wrong port, the registry seeded from a
+pre-Hindsight checkout, the Tailscale GUI app shadowing the CLI) that are all
+resolved. That version is not reproduced here; see git history for it if the
+detail is ever needed again.
+
+**On this file's own exit condition:** the stack has now run unattended for
+about a week, survived a deliberate reboot test, and the LaunchAgent path bug
+that would have broken that is fixed (`fix/launchagent-path-substitution`).
+The condition at the top of this file, "delete once it's run a while
+unattended," is close to met. Not deleted yet because two things below are
+still genuinely unverified in production (the portal's OAuth-group
+restriction, and drift-adopt under real drift), not because the file has
+nothing left to say.
 
 ## What is true right now
 
-- Six services up, zero restarts, reachable on both localhost and Tailscale:
-  console 3002, hindsight 8888/9999, open-webui 3000, whisper 10300,
-  piper 10200, openwakeword 10400.
-- Tailscale: node `mitochon`, `100.120.1.110`, tagged `tag:infra`, **no key
-  expiry**. `HOST_NAME` already matches, so nothing was re-pinned.
-- oMLX is a host app, not a container, and is running. It serves
-  **port 8000**, not 8080 — `OMLX_PORT` said 8080, so Open WebUI and Hindsight
-  were both pointed at a dead port and failed silently. Fixed in `.env`.
-  It binds `127.0.0.1` only, which is fine: OrbStack forwards loopback, so
-  containers reach it through `host.docker.internal` regardless. Only change
-  that if something off this machine needs it — see [decisions.md](decisions.md),
-  which wants oMLX on Tailscale/LAN only, as it has no rate limiting.
-- **No models are loaded.** `/v1/models` returns an empty list and
-  `~/.omlx/models/` is empty, so chat will connect and offer nothing until a
-  model is added.
-- **Hindsight asks oMLX for `gpt-4o-mini`** — its own built-in default, since
-  `docker-compose.yml` sets no model name. Startup verification therefore fails
-  with `Model 'gpt-4o-mini' not found. Available models: (none)`, and it logs
-  that LLM-dependent operations may fail. Loading a model into oMLX is not
-  enough on its own; the model name has to be set too. The variable is likely
-  `HINDSIGHT_API_LLM_MODEL`, following the pattern of the three already set —
-  **VERIFY** before relying on it.
-- No MCP servers are running. Both enabled ones are unconfigured; see below.
-- The design decisions are in [decisions.md](decisions.md). Read that before
-  changing anything structural.
-
-## What the previous notes got wrong
-
-Both diagnoses in the old version of this file were wrong. Recorded because
-the wrong guesses are plausible and someone will make them again.
-
-1. **"Containers are running in the wrong account."** They were not running at
-   all. OrbStack was fine in `novak`'s session and `docker info` succeeded;
-   `novak up` had simply never been run, and could not run — `up.sh` refused to
-   start while `VIKUNJA_URL` was unset. See the next section.
-
-2. **"The CLI cannot reach the daemon."** The system daemon was reachable,
-   logged in, tagged, and holding the tailnet address the whole time. What
-   fails is *which* daemon the CLI picks: on macOS `tailscale` prefers a
-   per-user GUI app's local API when one is running, and the installed
-   **App Store build (`io.tailscale.ipn.macos`, sandboxed)** answers
-   `NeedsLogin` while the system daemon underneath is up. So
-   `tailscale ip -4` reported nothing about a machine that was fully online.
-
-   `tailscale --socket=/var/run/tailscaled.socket ip -4` was the tell, and
-   `novak ports` now pins that socket ([scripts/novak](../scripts/novak)).
-
-   The old note's *remedy* — quit the GUI app — was right even though its
-   reasoning was not. But quitting is not enough: it is a login item and
-   relaunches within seconds.
-
-## Still to do
-
-- **Remove the App Store Tailscale app.** It is the sandboxed build, it cannot
-  host the system daemon (see [headless-operation.md](headless-operation.md)),
-  it relaunches at login, and it shadows the CLI. `novak ports` works around
-  it; nothing else does. Needs a human to drag it out of /Applications and
-  clear the login item.
-- **The deployed registry has been brought up to date.** It had been seeded
-  from a pre-Hindsight checkout and `up.sh` never overwrites it, so it still
-  listed the Mem0-era `memory` and `outline` entries and had *no* Hindsight
-  endpoints — nothing advertised memory to any client. Replaced with the repo's
-  copy (old one kept as `mcp-servers.yaml.bak-*`), hosts set to the tailnet
-  address, vikunja re-disabled.
-
-  Both banks verified live over Tailscale — `401` unauthenticated, `200` with
-  the key:
-
-      http://100.120.1.110:8888/mcp/household/
-      http://100.120.1.110:8888/mcp/tmeuze/
-
-  They are `kind: external`, so nothing is started for them; they are
-  advertised for clients to register. **That registration has not been done** —
-  see phase 7. Note the two banks are separate on purpose: `tmeuze` is personal
-  and registering it in a shared client would expose it to everyone using that
-  client.
-
-  Worth remembering that this drift was invisible: the stack was healthy and
-  the registry file was valid, it just described an older system. `up.sh`
-  seeding once and never overwriting is deliberate — your registry is yours —
-  but it means a repo-side change to the default registry never reaches an
-  existing deployment.
-- **`VIKUNJA_URL` is commented out** in `~/.novak/.env` (line 25). Uncomment
-  and set it, plus the `VIKUNJA_API_TOKEN` keychain item, to enable that MCP.
-- Missing keychain items: `OMLX_API_KEY`, `TUDUDI_API_TOKEN`,
-  `VIKUNJA_API_TOKEN`.
-- The console image is `linux/amd64` and runs under emulation on this arm64
-  host. Works, but worth building a native image.
-
-## Failing soft, not hard
-
-An unconfigured integration used to stop the entire stack. It no longer does:
-
-- `REQUIRED_EDITS` in [vars.sh](../scripts/lib/vars.sh) now holds only
-  `HOST_NAME` — the one value the whole stack needs. Anything used by a single
-  MCP server or extension must not go in that list.
-- The reconciler skips any enabled server whose declared `env` variables are
-  unset or still placeholders, and logs which ones
-  (`skipped: vikunja — not configured: VIKUNJA_URL, VIKUNJA_API_TOKEN`).
-  Nothing else is affected.
-
-This is why `novak up` now succeeds with both MCP servers unconfigured.
-
-## Traps already hit, all documented
-
-- Login Items, Keychain items, Docker, and Tailscale are **all per-account** on
-  macOS. Something set up as the admin user does nothing for `novak`.
-- OrbStack's first launch in a new account shows a dialog; until it is
-  dismissed the Docker socket never listens and the error is a bare `EOF`.
-- `HOST_NAME` does not affect what anything binds to — it only builds URLs.
-- `pip --user` is per-account and Homebrew python refuses it; the reconciler
-  uses its own virtualenv under `$NOVAK_HOME` for that reason.
-- A macOS Tailscale CLI with no `--socket` may be talking to a GUI app rather
-  than the daemon. Never trust a bare `tailscale status` on this machine.
-
-## Open VERIFY items
-
-- Whether Hindsight has a trash, before trusting `delete` to be recoverable.
-- openwakeword's model extension: `.tflite` or `.onnx`.
-- Licences marked VERIFY in [credits.md](credits.md). **Outline is BSL 1.1.**
-
-`Tailscaled install-system-daemon` is **confirmed working** — the daemon is
-installed at `/usr/local/bin/tailscaled` from
-`/Library/LaunchDaemons/com.tailscale.tailscaled.plist` and survives logout.
+- Six core services up: console 3002, hindsight 8888/9999, open-webui 3000,
+  whisper 10300, piper 10200, openwakeword 10400. All reachable on both
+  localhost and Tailscale. `novak status` reports `Config: ready`.
+- The portal and TinyAuth exist in `docker-compose.yml` but are **not yet
+  configured on this deployment**: `novak drift` correctly reports their
+  variables as unset, defaults apply, nothing starts. See
+  [proxy.md](proxy.md#portal-a-single-page-over-open-webui-and-konzol) and
+  decision #22.
+- `novak drift` is real and works, but only for what it says it covers:
+  settings and the registry, against the repo. It cannot see whether a
+  client's persona still matches `prompts/`; that check does not exist (see
+  Decided, not built below). Don't read "no drift" as "personas match";
+  they're different claims.
+- `admins.novak` (the Pocket ID group) now governs three things instead of
+  one: the console (original), Open WebUI's admin role and model RBAC
+  (`feat/owui-oauth-group-admin`), and the portal (decision #22). One group,
+  three enforcement points, each independent, not itself a single
+  mechanism, and each one's actual behaviour against a live Pocket ID login
+  should be spot-checked on its own rather than assumed transitive.
+- The registry has a `brave-search` entry (`kind: container`, official
+  `@modelcontextprotocol/server-brave-search` wrapped by `supergateway`),
+  enabled for both `open-webui` and `home-assistant`. Currently skipped:
+  `BRAVE_API_KEY` is unset on this deployment.
+- Konzol's role narrowed on purpose, not by neglect. It was never going to
+  become a section of Open WebUI (checked directly, no plugin surface for
+  that exists); the portal covers the "one glass pane" want instead, and
+  konzol keeps the memory/registry-editing job it always had. See decision
+  #22 if this reads as a demotion. It isn't one; the two solve different
+  problems.
 
 ## Decided, not built
 
-Two layers are agreed and written down but do not exist yet. Both are recorded
-so the reasoning is not re-derived a third time.
+Three items, not two as the previous version of this file said. The count
+itself had drifted.
 
-- **Drift check for client-side config** (decision 18). `novak drift` compares
-  settings and the registry against the repo; it cannot see whether a client's
-  persona still matches `prompts/`. Read-only, needs each client's credentials.
-- **Inference routing layer** (decision 21). An OpenAI-compatible router — most
-  likely LiteLLM — in front of oMLX, so the persona is injected once for every
-  client rather than copied into each, and so a verified user identity travels
-  with the request. That last part is what makes per-user memory routing
-  possible; per-client config structurally cannot do it.
+- **Persona push to clients** (decision #18). **Does not exist.** The
+  decision names the shape (`prompts/` as source, an applier per client) and
+  ends with its own "VERIFY before building: neither client's API was
+  exercised." Nobody has exercised them since. If Open WebUI or Home
+  Assistant show Novak's persona today, a person pasted it in by hand; there
+  is no automation and nothing to have "failed."
+- **Client-side persona drift check** (decision #18, the weaker half).
+  Also does not exist. `novak drift` (built, working) checks settings and
+  the registry only. A drift check for whether a client's actual persona
+  still matches `prompts/` would need each client's credentials and has not
+  been written.
+- **Inference routing layer** (decision #21). An OpenAI-compatible router in
+  front of oMLX (most likely LiteLLM) so the persona is injected once for
+  every client and a verified identity travels with the request. Not built.
 
-  Build the drift check first. It is what tells you whether the router is
-  actually delivering the uniformity it exists for.
+  **The stated order still holds and still hasn't been followed**: build the
+  persona drift check first, since it's what would tell you whether the
+  router is actually delivering the uniformity it's built for. Nothing above
+  has started on either front.
+
+## Open VERIFY items
+
+Carried forward, plus what the last few days of work added:
+
+- Whether Hindsight has a trash, before trusting `delete` to be recoverable.
+- openwakeword's model extension: `.tflite` or `.onnx`.
+- Licences marked VERIFY in [credits.md](credits.md): oMLX, Open WebUI
+  (licence changed once already, confirm the version in use), Pocket ID,
+  outline-mcp-server, Tududi, @aimbitgmbh/vikunja-mcp, **supergateway**
+  (checked its `package.json` directly this week; no license field set at
+  all, not merely undocumented).
+- **The portal's OAuth-group restriction against a live Pocket ID login.**
+  Everything about TinyAuth's startup and the OIDC connection was verified
+  directly; whether `TINYAUTH_APPS_PORTAL_OAUTH_GROUPS` actually refuses an
+  account outside `admins.novak` was not, since that needs a real round
+  trip. Confirm before treating it as an enforced boundary.
+- **The exact Pocket ID claim shape** feeding `OWUI_OIDC_ROLES_CLAIM` /
+  `OWUI_OIDC_GROUP_CLAIM`. Decode a real ID token after first login; some
+  IdPs nest or namespace group names differently than a flat string.
 
 ## Not started
 
-- Konzol has three placeholder pages and a design token layer, no components.
+- Konzol has three placeholder pages and a design token layer, no
+  components, unchanged since the previous note, and now less urgent given
+  the portal covers the cross-app viewing want that was the main pressure on
+  it.
 - No interactive first-run wizard; `novak status` names what is missing.
-- `docs/security.md` still uses jargon its reader found impenetrable and wants
-  rewriting in the plain style of [decisions.md](decisions.md).
+- `docs/security.md` still wants rewriting in the plain style of
+  [decisions.md](decisions.md), flagged before, still true.
+- **`LICENSE` file.** Public repo, still all-rights-reserved by default.
+  Flagged by the conformIT audit (`docs/conformit-audit.md`) as the one gap
+  in that audit worth treating as active harm, not a backlog item. Choosing
+  one is the maintainer's call, not something an audit resolves on its own.
+- **`CLAUDE.md` and `CHANGELOG.md`**, both on conformIT's required-file
+  list. `CLAUDE.md` is the one with a real, immediate cost: conventions like
+  the 72-character commit subject limit have been rediscovered by trial and
+  error across sessions repeatedly, which is exactly what the file exists to
+  prevent.
+- **Version pinning on the six core images**, still `:latest`/`:main`
+  across the board. `novak update` (added this week) makes pulling a new
+  version a one-command action, which makes the *lack* of pinning more
+  consequential, not less: it's now easier to accidentally run something
+  new than before.
+
+## Traps already hit, all documented (still true, still worth knowing)
+
+- Login Items, Keychain items, Docker, and Tailscale are **all per-account**
+  on macOS. Something set up as the admin user does nothing for `novak`.
+- `HOST_NAME` does not affect what anything binds to; it only builds URLs.
+- A dangling symlink or LaunchAgent pointing at an old checkout path fails
+  silently, not loudly, and containers with `restart: unless-stopped` will
+  keep looking healthy the whole time. Both `~/.local/bin/novak` and the
+  LaunchAgent hit this for real after the repo moved to
+  `~/Workspaces/Apps/Novak/novak`; both are fixed and both are now installed
+  by `bootstrap.sh` rather than copied by hand, specifically so this class
+  of bug can't recur the same way.
+- `up.sh`'s own `envval()` was silently missing a guard that let ANY
+  variable newly added to a gating array in `vars.sh` crash the whole script
+  under `set -e`, before reaching Docker at all, if that variable wasn't yet
+  a line in an already-deployed `.env`. Fixed; worth remembering that adding
+  to `REQUIRED_EDITS`/`CONSOLE_EDITS`/`PORTAL_EDITS` and similar is not as
+  side-effect-free as it looks without this guard.
+- `TINYAUTH_APPURL` (and by extension anything relying on a forward-auth
+  cookie domain) must be a real hostname with a scheme. A bare Tailscale IP
+  (otherwise a perfectly valid way to reach every other service in this
+  stack) is refused outright.

@@ -55,7 +55,13 @@ model ("forward this thread to..."). Mitigations, in order of importance:
 - Enable oMLX API-key auth (LAN peers include IoT junk).
 - Two multi-user surfaces: Open WebUI (accounts + RBAC on, signup disabled
   after your users exist) and the Console (Pocket ID OIDC; admin functions
-  gated on the `admins.novak` group). Both LAN-only.
+  gated on the `admins.novak` group). Both LAN-only. `admins.novak` now also
+  grants Open WebUI's own admin role and gates the portal (below) — one
+  group, three enforcement points, each independent.
+- The portal (optional): a single static page, TinyAuth forward-auth against
+  the same `admins.novak` group, gating access to the page itself rather
+  than to Open WebUI or Konzol directly — each keeps its own login. LAN/
+  tailnet-only, never public. See [proxy.md](proxy.md#portal-a-single-page-over-open-webui-and-konzol).
 - Hindsight is multi-tenant but not a login surface: each MCP connection is
   scoped to one bank by URL, and no tool takes a bank as an argument. Its API
   key is a secret — Keychain, not `.env` — and without it the endpoint is open.

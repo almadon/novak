@@ -21,7 +21,9 @@ this repo or any image built from it.
 | [Vikunja](https://vikunja.io) | Tasks | AGPL-3.0 |
 | [Tududi](https://github.com/chrisvel/tududi) | Tasks — **serves MCP natively**, no adapter needed | VERIFY |
 | [@aimbitgmbh/vikunja-mcp](https://www.npmjs.com/package/@aimbitgmbh/vikunja-mcp) | MCP access to Vikunja | VERIFY |
-| [supergateway](https://github.com/supercorp-ai/supergateway) | Wraps stdio MCP servers as HTTP | VERIFY |
+| [Brave Search API](https://api.search.brave.com/) | Web search, shared by Open WebUI and Home Assistant | Proprietary API, free tier |
+| [@modelcontextprotocol/server-brave-search](https://github.com/modelcontextprotocol/servers) | MCP access to Brave Search | MIT |
+| [supergateway](https://github.com/supercorp-ai/supergateway) | Wraps stdio MCP servers as HTTP — now actually running (brave-search), previously catalogued but unused | VERIFY |
 | [Wyoming / Rhasspy](https://github.com/rhasspy) | Voice protocol; whisper, piper, openWakeWord services | MIT |
 | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | Speech to text | MIT |
 | [Piper](https://github.com/OHF-Voice/piper1-gpl) | Text to speech. Development moved to the Open Home Foundation as `piper1-gpl`; the old `rhasspy/piper` repo was archived Oct 2025 and its banner is widely misread as abandonment | GPL-3.0 |

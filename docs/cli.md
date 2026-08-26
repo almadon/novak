@@ -1,10 +1,19 @@
 # `novak` — CLI reference
 
 One command for everything you touch after setup. It lives at
-[`scripts/novak`](../scripts/novak) and is meant to be symlinked onto PATH:
+[`scripts/novak`](../scripts/novak). `bootstrap.sh` symlinks it onto PATH at
+`~/.local/bin/novak`, not `/usr/local/bin`: the service account has no sudo,
+and `/usr/local/bin` needs root to write to. A stale `/usr/local/bin/novak`
+symlink from an old checkout path is also unfixable by this account, since
+removing it needs root too, which is what happened on the mini after the
+repo moved and is why `~/.local/bin` (writable, and already earlier on PATH)
+is the answer rather than a workaround.
+
+If you ever need to link it by hand:
 
 ```bash
-ln -s "$PWD/scripts/novak" /usr/local/bin/novak
+mkdir -p ~/.local/bin
+ln -sf "$PWD/scripts/novak" ~/.local/bin/novak
 ```
 
 Run with no arguments, it prints `status`.

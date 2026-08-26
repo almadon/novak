@@ -69,6 +69,33 @@ else
   warn "Not a git checkout — skipping hook setup."
 fi
 
+step "CLI on PATH"
+# /usr/local/bin needs root to write to, which this account deliberately does
+# not have (see the file header). Docs used to say `ln -s ... /usr/local/bin`
+# anyway, which only ever worked because an admin ran it once by hand — and
+# then went stale and unfixable by this account the moment the repo moved,
+# since removing a root-owned symlink needs root too.
+#
+# ~/.local/bin is already first on PATH on a stock macOS account (see
+# /etc/paths.d or the shell's own default) and is writable by this account,
+# so it needs nothing from the admin half at all.
+mkdir -p "$HOME/.local/bin"
+CLI_DST="$HOME/.local/bin/novak"
+CLI_SRC="$REPO_DIR/scripts/novak"
+if [ -L "$CLI_DST" ] && [ "$(readlink "$CLI_DST")" = "$CLI_SRC" ]; then
+  echo "novak CLI already linked -> $CLI_SRC"
+else
+  ln -sf "$CLI_SRC" "$CLI_DST"
+  echo "linked novak CLI -> $CLI_SRC"
+fi
+if ! command -v novak >/dev/null 2>&1; then
+  warn "~/.local/bin is not on PATH in this shell. Add to your shell profile:"
+  warn '  export PATH="$HOME/.local/bin:$PATH"'
+elif [ "$(command -v novak)" != "$CLI_DST" ]; then
+  warn "another 'novak' earlier on PATH is shadowing this one: $(command -v novak)"
+  warn "check for a stale /usr/local/bin/novak an admin needs to remove."
+fi
+
 step "Login items"
 warn "Manual, and it must be done from THIS account:"
 warn "  System Settings → General → Login Items — add OrbStack and oMLX."

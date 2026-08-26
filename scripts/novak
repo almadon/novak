@@ -20,6 +20,7 @@
 #   novak secret list         which secrets are present (never their values)
 #   novak secret verify       do they read back unattended, without a prompt?
 #   novak up                  apply config and start
+#   novak update [SERVICE...] pull new images and recreate what changed
 #   novak down                stop, keep data
 #   novak restart [SERVICE]
 #   novak logs [SERVICE]
@@ -503,6 +504,29 @@ cmd_ports() {
   fi
 }
 
+cmd_update() {
+  need_env
+  if ! docker info >/dev/null 2>&1; then
+    red "Docker isn't responding — is OrbStack running?"
+    exit 1
+  fi
+  # Every image in docker-compose.yml is unpinned (:latest, :main) on purpose
+  # for now — see docs/credits.md. `up.sh` never pulls, so a new release
+  # sitting on the registry doesn't reach a running stack until something
+  # calls `docker compose pull`. This is that something.
+  bold "Pulling images"
+  compose pull "$@" || { red "pull failed — see above."; exit 1; }
+  echo
+  # Recreate through up.sh rather than `compose up -d` directly: it also
+  # re-applies the MCP registry and the oMLX profiles, so a newer app image
+  # never ends up running against a stale registry from before the pull.
+  # `docker compose up -d` only recreates containers whose image or config
+  # actually changed, so this is a no-op for anything that didn't get a new
+  # image above.
+  bold "Recreating anything that changed"
+  exec "$REPO_DIR/scripts/up.sh"
+}
+
 cmd_status() {
   bold "Novak"
   echo "  repo    $REPO_DIR"
@@ -570,6 +594,7 @@ case "${1:-status}" in
   config)   shift; cmd_config "$@" ;;
   secret)   shift; cmd_secret "$@" ;;
   up)       exec "$REPO_DIR/scripts/up.sh" ;;
+  update)   shift; cmd_update "$@" ;;
   down)     compose down ;;
   restart)  shift; compose restart "$@" ;;
   logs)     shift; compose logs -f --tail=100 "$@" ;;

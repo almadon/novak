@@ -36,6 +36,7 @@ Run with no arguments, it prints `status`.
 | `novak secret verify` | do they read back unattended, or would a prompt hang boot? |
 | `novak secret show KEY` | print one, for pasting into a client |
 | `novak up` | apply config and start |
+| `novak update [SERVICE...]` | pull new images and recreate what changed |
 | `novak down` | stop, keep data |
 | `novak restart [SERVICE]` | restart everything, or one service |
 | `novak logs [SERVICE]` | follow logs |
@@ -230,6 +231,32 @@ later — nothing else is disturbed.
 Only genuinely shared values refuse: `HOST_NAME`, which every service builds
 its URLs from, and `HINDSIGHT_API_KEY`, without which the memory endpoint would
 be open to anything that can reach the port.
+
+### Updating
+
+Every image in `docker-compose.yml` is unpinned (`:latest`, `:main`), and
+`up` never pulls, so a new release sitting on the registry does not reach a
+running stack on its own. `update` is the missing half:
+
+```bash
+novak update              # pull every image, recreate whatever changed
+novak update open-webui   # just one
+```
+
+It runs `docker compose pull`, then re-runs `up.sh`, which is what actually
+recreates containers, re-applies the MCP registry, and re-applies the oMLX
+profiles. That last part matters more than it looks: pulling a newer app
+image and skipping the reapply is how a stack ends up running new code
+against an old registry. `docker compose up -d` only recreates a container
+whose image or config actually changed, so running `update` when nothing
+is new is a clean no-op.
+
+Being unpinned cuts both ways. It also means an upstream breaking change
+reaches you the next time you happen to run this, with no version to roll
+back to. If that becomes a real problem, the fix is pinning digests in
+`docker-compose.yml`, which turns an update from an automatic pull into a
+deliberate, reviewable edit — worth a decision entry if you go that route,
+not a CLI flag.
 
 ---
 

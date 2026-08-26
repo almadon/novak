@@ -176,7 +176,10 @@ this is private and whether it is safe.
 - [ ] *(Optional)* Pocket ID sign-in. Set in `.env`, **not** in Open WebUI —
       it reads these at startup and has no admin UI for them. Needs a second
       Pocket ID client, since the redirect URI differs from the console's:
-      `http://<HOST_NAME>:3000/oauth/oidc/callback`
+      `http://<HOST_NAME>:3000/oauth/oidc/callback`. **Give this client the
+      `groups` scope too**, the same one the console's client already has —
+      without it, `admins.novak` never reaches Open WebUI at all and the
+      admin-grant below silently does nothing.
 
       novak config set OWUI_OIDC_ISSUER https://<host>/.well-known/openid-configuration
       novak config set OWUI_OIDC_CLIENT_ID <id>
@@ -185,6 +188,14 @@ this is private and whether it is safe.
       Leave unset for local accounts. OAuth turns on only when all three are
       present. `OWUI_OIDC_SIGNUP=true` when your IdP admits only people you
       mean to let in.
+
+      `admins.novak` membership also grants Open WebUI admin and syncs into
+      an Open WebUI group of the same name, so one Pocket ID group governs
+      both surfaces — see `.env.example`'s `OWUI_OIDC_*` block. **VERIFY**
+      the actual claim shape by decoding the ID token after your first
+      Pocket ID login through Open WebUI; an unmatched claim path grants
+      nothing rather than granting admin to everyone, but it should still
+      be confirmed rather than assumed.
 
 - [ ] Register the MCP servers (Admin → Settings → Tools). `novak registry`
       prints each URL and the token variable it needs.

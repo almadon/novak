@@ -191,6 +191,10 @@ Public ingress lives on the VPS; the home network forwards nothing.
                           oMLX · Hindsight · Konzol   (Mac, home)
                                      ▲
                           Wyoming voice ── HA + satellites    (LAN)
+
+   LAN / tailnet ──▶ Portal's own Caddy ──▶ TinyAuth ──▶ Open WebUI, Konzol
+                      (Mac, home — decision #22; not the VPS Caddy above,
+                       and not public — see docs/proxy.md)
 ```
 
 Exposure is a per-service decision recorded in [decisions.md](decisions.md)

@@ -332,6 +332,15 @@ Do this deliberately, while you have time to fix what it finds.
 
 - [ ] Train a "hey novak" wake word ([wakeword.md](wakeword.md)).
 - [ ] TLS on the LAN via your existing reverse proxy ([proxy.md](proxy.md)).
+- [ ] The portal — one tab per app behind a single Pocket ID login
+      ([proxy.md](proxy.md#portal-a-single-page-over-open-webui-and-konzol),
+      decision #22). Needs a fourth Pocket ID client and TinyAuth's three
+      OIDC endpoint URLs; genuinely optional and independent of everything
+      above.
+- [ ] Brave Search — `novak secret set BRAVE_API_KEY` is the only step left;
+      the registry entry already ships enabled for both Open WebUI and Home
+      Assistant. See the registry's own comment on why this isn't Open
+      WebUI's built-in Web Search toggle instead.
 - [ ] Tududi — flip its registry entry on once it's running.
 - [ ] Time Machine covers OrbStack volumes and `~/.omlx`.
 - [ ] Check the licences marked VERIFY in [credits.md](credits.md) —

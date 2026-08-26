@@ -6,10 +6,17 @@ You talk to it in a browser or out loud through Home Assistant. It remembers
 things about you, can look things up in your notes, and can act on your behalf
 through tools you choose to give it. Nothing you say to it leaves your machines.
 
-> **Status: not finished.** This has never been deployed. Some of it has never
-> even been run. Treat every instruction here as untested, and see
-> [What state is this in?](#what-state-is-this-in) before spending an evening
-> on it.
+> **Status: in testing.** The stack is deployed and running on one Mac mini,
+> and it comes back on its own after a reboot. It has not run unattended for
+> long, has never survived a real power cut, and several documented steps are
+> still marked VERIFY. See [What state is this in?](#what-state-is-this-in)
+> for what is actually confirmed.
+
+**LLM use:** this project is built and maintained with substantial AI
+assistance (Claude Code). Architecture and review are human decisions, and
+the reasoning behind each one is recorded in
+[docs/decisions.md](docs/decisions.md). Individual commits disclose model
+authorship in their trailers.
 
 ## What it can do
 

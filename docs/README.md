@@ -44,3 +44,4 @@ directory on purpose:
 |---|---|
 | [Commit style](commit-style.md) | Conventional Commits, enforced by a hook |
 | [Credits](credits.md) | Whose software this is built from |
+| [conformIT audit](conformit-audit.md) | Where Novak diverges from the shared engineering standard |

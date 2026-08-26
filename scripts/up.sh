@@ -43,7 +43,13 @@ done
 # Two different kinds of unconfigured value, reported separately because the
 # fix differs: EDIT-ME means "put a real value in .env", set-in-keychain means
 # "the Keychain lookup above found nothing".
-envval() { grep -E "^${1}=" "$NOVAK_HOME/.env" 2>/dev/null | head -1 | cut -d= -f2- ; }
+# || true matters: under set -e, a variable declared in vars.sh but not yet
+# a line in an existing deployment's .env (exactly what happens the first
+# time a new optional-profile variable is added, before that .env has been
+# regenerated) makes grep return no match, which is exit 1, which kills the
+# whole script here rather than just leaving that one profile unconfigured.
+# scripts/novak's own envval() already had this guard; this one didn't.
+envval() { grep -E "^${1}=" "$NOVAK_HOME/.env" 2>/dev/null | head -1 | cut -d= -f2- || true ; }
 
 # The console is optional (docs/deploy-checklist.md phase 9 calls it genuinely
 # skippable), so its configuration must not gate anything else. Rather than

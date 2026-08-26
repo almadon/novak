@@ -1,7 +1,12 @@
 # Reverse proxy config
 
-**Novak does not run a reverse proxy.** These are snippets to add to the
-internal proxy you already run on another host.
+**Novak does not run a reverse proxy for the rest of the stack.** These are
+snippets to add to the internal proxy you already run on another host.
+
+One exception, added later and narrower: the [portal](#portal-a-single-page-over-open-webui-and-konzol)
+runs its own small Caddy instance, but only to gate one static page. It does
+not front Open WebUI, Konzol, or anything else this document covers, and
+the statement above still holds for all of that.
 
 ## What problem this solves
 
@@ -279,3 +284,103 @@ the Mac is WireGuard, not TLS. That is not weaker, but it does mean a service
 here never sees a client certificate and cannot tell one tailnet caller from
 another. Everything reaching Hindsight presents the same bearer token no matter
 who is holding it.
+
+## Portal: a single page over Open WebUI and Konzol
+
+Optional, behind the `portal` compose profile, and unrelated to the rest of
+this document's subject: it protects one page, not the stack. Recorded
+because two people using it read different names into "reverse proxy" and
+it's worth being precise about which one this is.
+
+### What it is, and what it deliberately isn't
+
+A static HTML page (`portal/index.html`) with a tab per app, served by a
+Caddy instance that does one other thing: forward-auth every request
+against [TinyAuth](https://github.com/tinyauthapp/tinyauth), checked
+against Pocket ID's `admins.novak` group — the same group that already
+gates the console and, since the `feat/owui-oauth-group-admin` change,
+Open WebUI's own admin role. One Pocket ID group now governs three
+surfaces.
+
+It does not reverse-proxy Open WebUI or Konzol. Each app keeps its own
+port and its own already-working Pocket ID login; the portal's iframes
+point straight at those ports, and Caddy's only job is serving the shell
+page and gating access to it. This was not a simplicity shortcut. It was
+tested directly against the running stack: proxying Open WebUI under a
+Caddy subpath (`/app/owui/`) breaks it, because it ships absolute asset
+paths (`/static/...`, `/_app/immutable/...`) that resolve against the
+proxy's own root rather than the subpath, and Caddy does no URL rewriting
+here to fix that up.
+
+Hindsight's own web UI is deliberately not a tab. It has no per-caller
+access control beyond the shared tenant API key (see
+[security.md](security.md)), and putting it a click away from Open WebUI
+makes it too easy to open by habit rather than by intent. Add a tab if
+that trade-off is one you want.
+
+### Why TinyAuth
+
+Chosen over [Homepage](https://gethomepage.dev) and
+[Organizr](https://organizr.org), the two other real candidates:
+
+- Homepage's iframe widget explicitly does not proxy authentication — each
+  embedded tile authenticates on its own, using whatever session the
+  browser already has for that app's domain. It's a launcher, not a login
+  gate.
+- Organizr does genuine iframe tabs, which is closer to what's wanted
+  here, but has no native OIDC of its own. Getting one login working would
+  mean putting a forward-auth proxy in front of Organizr too, which is
+  TinyAuth's whole job, minus a second app with its own local user
+  accounts competing with Pocket ID as a fourth identity system.
+- Pocket ID's own documentation names TinyAuth as a paired forward-auth
+  proxy, and TinyAuth supports Pocket ID's `groups` claim by name.
+  OpenID Certified (Basic OP) as of v5.1.0, actively maintained, MIT-scale
+  community (8000+ stars) around an AGPL-3.0 core — see
+  [credits.md](credits.md) on why running it unmodified keeps that low
+  risk.
+
+### What was verified, and what wasn't
+
+Read directly against the running containers, not assumed from
+documentation:
+
+- **`TINYAUTH_APPURL` must be a real hostname with a scheme, never an IP.**
+  Confirmed directly: TinyAuth refuses to start with "ip addresses not
+  allowed" against a bare Tailscale IP, and separately with "invalid url,
+  must be in format https(s)://host" against a schemeless hostname.
+  `http://mini.local:8199` starts cleanly; `http://100.120.1.110:8199`
+  does not start at all. If the portal needs to be reachable from off the
+  LAN, use your tailnet's MagicDNS name for the node (visible in
+  `tailscale status`), not the IP `novak ports` otherwise reports.
+- **Caddy's `templates` directive correctly substitutes `{{env "..."}}`**
+  in the served HTML, and Caddyfile's own `{$VAR}` substitution works for
+  the listen port — both tested against a real `caddy:2` container before
+  being relied on, not assumed from the docs.
+- **Open WebUI sends no `X-Frame-Options` or CSP `frame-ancestors` header**
+  today, checked directly with `curl -I` against the running container,
+  so nothing currently blocks the iframe approach. It does have code
+  capable of setting `X-Frame-Options` (opt-in via an environment
+  variable, unset here) — if header hardening is ever turned on, keep it
+  at `SAMEORIGIN` or leave it unset, never `DENY`, or the portal breaks.
+- **Not verified: the actual OAuth-group restriction against a live
+  Pocket ID login.** The OIDC connection and `TINYAUTH_APPURL` validation
+  were tested directly; whether `TINYAUTH_APPS_PORTAL_OAUTH_GROUPS` and
+  `TINYAUTH_APPS_PORTAL_CONFIG_DOMAIN` actually restrict access the way
+  the flag names imply was not, since that needs a real round trip against
+  a live Pocket ID instance this environment doesn't have. Confirm with an
+  account **not** in `admins.novak` and expect it refused before trusting
+  this as a real boundary, not just a configured one.
+
+### Setting it up
+
+1. Register a fourth Pocket ID OIDC client (console, Open WebUI, and now
+   this each need their own — the redirect URI differs every time), with
+   the `groups` scope.
+2. Fetch that Pocket ID instance's `/.well-known/openid-configuration` and
+   copy `authorization_endpoint`, `token_endpoint`, and `userinfo_endpoint`
+   verbatim into `TINYAUTH_OIDC_AUTH_URL`, `_TOKEN_URL`, `_USERINFO_URL`.
+   TinyAuth does not do discovery-document lookup the way Open WebUI and
+   the console's OIDC libraries do; these three must be spelled out.
+3. Set `PORTAL_APPURL` to a real hostname with scheme — see the VERIFY
+   above before picking one.
+4. `novak secret set TINYAUTH_OIDC_CLIENT_SECRET`, `novak up`.

@@ -48,7 +48,8 @@ done
 # time a new optional-profile variable is added, before that .env has been
 # regenerated) makes grep return no match, which is exit 1, which kills the
 # whole script here rather than just leaving that one profile unconfigured.
-# scripts/novak's own envval() already had this guard; this one didn't.
+# Found by adding PORTAL_EDITS/PORTAL_SECRETS to a deployment whose .env
+# predated them; scripts/novak's own envval() already had this guard.
 envval() { grep -E "^${1}=" "$NOVAK_HOME/.env" 2>/dev/null | head -1 | cut -d= -f2- || true ; }
 
 # The console is optional (docs/deploy-checklist.md phase 9 calls it genuinely
@@ -64,6 +65,16 @@ done
 for var in "${CONSOLE_SECRETS[@]}"; do
   v="${!var:-$(envval "$var")}"
   case "$v" in ""|set-in-keychain|changeme) console_missing+=("$var") ;; esac
+done
+
+portal_missing=()
+for var in "${PORTAL_EDITS[@]}"; do
+  v="$(envval "$var")"
+  case "$v" in ""|EDIT-ME|changeme) portal_missing+=("$var") ;; esac
+done
+for var in "${PORTAL_SECRETS[@]}"; do
+  v="${!var:-$(envval "$var")}"
+  case "$v" in ""|set-in-keychain|changeme) portal_missing+=("$var") ;; esac
 done
 
 unedited=()
@@ -136,13 +147,26 @@ if [ ! -x "$PY" ] || ! "$PY" -c 'import yaml' 2>/dev/null; then
   echo "🐍 PyYAML ready"
 fi
 # Compose reads COMPOSE_PROFILES from the environment, and the reconciler is
-# what runs `docker compose up`, so this is all it takes to include or omit the
-# console — no reconciler change, and nothing here needs to know about it.
+# what runs `docker compose up`, so this is all it takes to include or omit
+# either optional profile — no reconciler change, and nothing here needs to
+# know about them beyond this check. Additive (comma-joined) since both can
+# be active at once.
+profiles=()
 if [ ${#console_missing[@]} -eq 0 ]; then
-  export COMPOSE_PROFILES=console
+  profiles+=(console)
 else
   echo "skipped:  console — not configured: ${console_missing[*]}" >&2
   echo "          everything else starts; set those and re-run to add it." >&2
+fi
+if [ ${#portal_missing[@]} -eq 0 ]; then
+  profiles+=(portal)
+else
+  echo "skipped:  portal — not configured: ${portal_missing[*]}" >&2
+  echo "          everything else starts; set those and re-run to add it." >&2
+fi
+if [ ${#profiles[@]} -gt 0 ]; then
+  export COMPOSE_PROFILES
+  COMPOSE_PROFILES="$(IFS=,; echo "${profiles[*]}")"
 fi
 
 NOVAK_HOME="$NOVAK_HOME" "$PY" "$REPO_DIR/reconciler/reconcile.py"

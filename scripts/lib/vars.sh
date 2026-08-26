@@ -22,6 +22,7 @@ SECRET_VARS=(
   OIDC_CLIENT_SECRET
   OWUI_OIDC_CLIENT_SECRET
   HA_MCP_TOKEN
+  TINYAUTH_OIDC_CLIENT_SECRET
 )
 
 # HOST_NAME alone: every service builds its URLs from it. VIKUNJA_URL used to
@@ -30,6 +31,13 @@ SECRET_VARS=(
 REQUIRED_EDITS=(HOST_NAME)
 CONSOLE_EDITS=(OIDC_ISSUER OIDC_CLIENT_ID)
 CONSOLE_SECRETS=(CONSOLE_AUTH_SECRET OIDC_CLIENT_SECRET)
+# TinyAuth wants each OIDC endpoint spelled out, not a discovery document —
+# it does not do discovery the way Open WebUI and the console's own OIDC
+# libraries do. All three plus the client id come from Pocket ID's
+# /.well-known/openid-configuration; see docs/proxy.md.
+PORTAL_EDITS=(PORTAL_APPURL TINYAUTH_OIDC_CLIENT_ID TINYAUTH_OIDC_AUTH_URL
+  TINYAUTH_OIDC_TOKEN_URL TINYAUTH_OIDC_USERINFO_URL)
+PORTAL_SECRETS=(TINYAUTH_OIDC_CLIENT_SECRET)
 
 # Secrets without which the stack must not start at all.
 CORE_SECRETS=(HINDSIGHT_API_KEY)
@@ -59,6 +67,7 @@ EXTERNAL_SECRETS=(
   OUTLINE_EVERYTHING_API_KEY
   TUDUDI_API_TOKEN
   VIKUNJA_API_TOKEN
+  TINYAUTH_OIDC_CLIENT_SECRET
 )
 SHARED_SECRETS=(HINDSIGHT_API_KEY)
 

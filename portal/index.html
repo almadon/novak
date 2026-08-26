@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Novak</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: dark light; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: -apple-system, system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; background: #16171a; color: #e6e6e6; }
+
+  nav {
+    display: flex;
+    gap: 4px;
+    padding: 8px 12px 0;
+    background: #1c1d21;
+    border-bottom: 1px solid #2a2b30;
+    flex-shrink: 0;
+  }
+  nav button {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: #9a9ba3;
+    padding: 10px 16px;
+    font-size: 14px;
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+  }
+  nav button:hover { background: #24252b; color: #e6e6e6; }
+  nav button[aria-selected="true"] {
+    background: #16171a;
+    color: #e6e6e6;
+    font-weight: 600;
+  }
+
+  .panes { flex: 1; position: relative; }
+  iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: #16171a;
+    display: none;
+  }
+  iframe.active { display: block; }
+</style>
+</head>
+<body>
+
+<!--
+  Deliberately iframing each app at its OWN origin (port), not through a
+  Caddy subpath: tested directly against the running stack, and Open WebUI
+  ships absolute asset paths (/static/..., /_app/immutable/...) that break
+  under a reverse-proxied subpath without rewriting Caddy does not do here.
+  Each app keeps its own port and its own already-working Pocket ID login;
+  this page only supplies the tabs.
+
+  Only the ports need injecting, via Caddy's `templates` directive
+  (confirmed working against a real container before relying on it),
+  reading the same OPENWEBUI_PORT/CONSOLE_PORT every other service already
+  uses. The hostname comes from the browser's own location at runtime
+  instead of a second template expression: whatever name or address you
+  reached this page by (mini.local, a Tailscale IP, HOST_NAME) is also the
+  right one to reach each app by, and JS already has it.
+
+  Hindsight's own web UI is deliberately not a tab here: it has no
+  per-caller access control beyond the shared tenant API key
+  (docs/security.md), and a click away from Open WebUI makes it too easy
+  to open by habit. Add one if that trade-off is what you want.
+-->
+<nav role="tablist" aria-label="Novak surfaces">
+  <button role="tab" aria-selected="true" data-target="owui">Open WebUI</button>
+  <button role="tab" aria-selected="false" data-target="konzol">Konzol</button>
+</nav>
+
+<div class="panes" data-owui-port="{{env "OPENWEBUI_PORT"}}" data-konzol-port="{{env "CONSOLE_PORT"}}">
+  <iframe id="owui" class="active" title="Open WebUI"></iframe>
+  <iframe id="konzol" title="Konzol"></iframe>
+</div>
+
+<script>
+  // Iframes load on first activation, not on page load — a tab nobody
+  // clicks costs nothing, and a chat-heavy app like Open WebUI shouldn't
+  // pay startup cost for tabs sitting behind it.
+  const buttons = document.querySelectorAll('nav button');
+  const panes = document.querySelectorAll('iframe');
+  const panesEl = document.querySelector('.panes');
+  const origin = location.protocol + '//' + location.hostname;
+  const ports = { owui: panesEl.dataset.owuiPort, konzol: panesEl.dataset.konzolPort };
+
+  function activate(id) {
+    for (const b of buttons) b.setAttribute('aria-selected', String(b.dataset.target === id));
+    for (const p of panes) {
+      const isTarget = p.id === id;
+      p.classList.toggle('active', isTarget);
+      if (isTarget && !p.src) p.src = `${origin}:${ports[id]}/`;
+    }
+  }
+
+  for (const b of buttons) b.addEventListener('click', () => activate(b.dataset.target));
+  activate('owui');
+</script>
+</body>
+</html>

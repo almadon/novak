@@ -53,6 +53,55 @@
 # reconciler/reconcile.py. Turning it off again needs no ceremony.
 
 servers:
+  # Web search, uniform across every client that speaks MCP rather than a
+  # per-client feature. Open WebUI has its own built-in Web Search toggle
+  # (Settings -> Admin -> Web); deliberately not used here, because it is a
+  # separate per-instance config with no equivalent in Home Assistant. This
+  # entry is the one thing both clients point at instead.
+  #
+  # The official reference server (modelcontextprotocol/servers,
+  # @modelcontextprotocol/server-brave-search, MIT) speaks stdio only, so
+  # supergateway (supercorp-ai/supergateway, licence unresolved — see
+  # credits.md's existing VERIFY) wraps it as HTTP on the required 8000.
+  # Both versions are pinned in `command` rather than left on `latest`,
+  # which is better than the npx-at-runtime pattern credits.md already
+  # flags as a known weakness, though not as strong as a built, pushed
+  # image: confirming the pin still means a network fetch on every
+  # container start, just of a known version rather than whatever is
+  # newest that day. Verified directly before writing this entry: pulled
+  # tools/list over the real HTTP endpoint and got brave_web_search and
+  # brave_local_search back.
+  - name: brave-search
+    kind: container
+    image: node:22-alpine
+    command: >
+      sh -c "npm install -g supergateway@3.4.3
+      @modelcontextprotocol/server-brave-search@0.6.2 &&
+      npx -y supergateway --stdio
+      'npx -y @modelcontextprotocol/server-brave-search@0.6.2'
+      --port 8000 --outputTransport streamableHttp"
+    port: 8299
+    env: [BRAVE_API_KEY]
+    enabled: true
+    # One tool (brave_web_search), not fifty-nine — the reasoning that
+    # excluded Tududi and Vikunja from voice does not apply here, but this
+    # is still a live decision: a spoken query now leaves the house for
+    # Brave's API. Recorded, not defaulted either way.
+    clients: [open-webui, home-assistant]
+    source:
+      url: https://github.com/modelcontextprotocol/servers
+      license: MIT
+    risk:
+      level: standard
+      why:
+        - "Read-only: no delete, no state, no side effect beyond the
+           search itself."
+        - "Sends the query text to Brave's API — a real disclosure, same
+           shape as any other external tool, not a chat-content leak to
+           an LLM vendor."
+      accepted_by: tmeuze
+      accepted_on: 2026-08-27
+
   # Outline serves MCP itself — no wrapper container, no supergateway, no
   # npx-at-runtime. Clients point straight at it.
   #

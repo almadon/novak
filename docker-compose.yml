@@ -234,8 +234,75 @@ services:
     volumes:
       - ./wakeword/models:/custom:ro
 
+  # ── Portal (single glass pane over Open WebUI and Konzol) ─────────────
+  # Optional, and gated behind a compose profile for the same reason the
+  # console is: a missing OIDC client must skip this, not refuse to start
+  # the rest of the stack. up.sh adds "portal" to COMPOSE_PROFILES once its
+  # config is complete. See docs/proxy.md for the full design and what was
+  # actually tested versus assumed.
+  #
+  # This is Novak's first reverse proxy. It fronts nothing but itself —
+  # Open WebUI and Konzol keep their own ports and their own already-working
+  # Pocket ID logins; tested directly, and Open WebUI's absolute asset paths
+  # (/static/..., /_app/immutable/...) do not survive being reverse-proxied
+  # under a subpath, which is why this does not attempt to.
+  caddy:
+    profiles: ["portal"]
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "${PORTAL_PORT:-8199}:${PORTAL_PORT:-8199}"
+    environment:
+      PORTAL_PORT: "${PORTAL_PORT:-8199}"
+      OPENWEBUI_PORT: "${OPENWEBUI_PORT:-3000}"
+      CONSOLE_PORT: "${CONSOLE_PORT:-3002}"
+    volumes:
+      - ./portal/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./portal/index.html:/srv/portal/index.html:ro
+
+  # TinyAuth: forward-auth in front of the portal only, checked against
+  # Pocket ID's admins.novak group. AGPL-3.0, run unmodified; see
+  # docs/credits.md on why that is the low-risk case for this licence.
+  #
+  # TINYAUTH_APPURL must be a real hostname, not an IP — confirmed directly:
+  # TinyAuth refuses to start with "ip addresses not allowed" against a bare
+  # Tailscale IP. mini.local and a Tailscale MagicDNS name both work; see
+  # docs/proxy.md if the portal needs to be reachable from off the LAN.
+  tinyauth:
+    profiles: ["portal"]
+    image: ghcr.io/tinyauthapp/tinyauth:v5
+    restart: unless-stopped
+    ports:
+      - "${TINYAUTH_PORT:-3003}:3000"
+    environment:
+      TINYAUTH_APPURL: "${PORTAL_APPURL:-}"
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_NAME: "Pocket ID"
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_CLIENTID: "${TINYAUTH_OIDC_CLIENT_ID:-}"
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_CLIENTSECRET: "${TINYAUTH_OIDC_CLIENT_SECRET:-}"
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_AUTHURL: "${TINYAUTH_OIDC_AUTH_URL:-}"
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_TOKENURL: "${TINYAUTH_OIDC_TOKEN_URL:-}"
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_USERINFOURL: "${TINYAUTH_OIDC_USERINFO_URL:-}"
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_SCOPES: "openid email profile groups"
+      # none, not auto: auto tries to read per-app ACLs from Docker labels,
+      # which needs the Docker socket mounted in. Nothing here grants that,
+      # deliberately, so config comes only from the explicit vars below.
+      TINYAUTH_LABELPROVIDER: "none"
+      # Restricts the ONE app this protects (the portal itself) to the same
+      # group that already gates the console and now Open WebUI's admin
+      # role. One Pocket ID group, three surfaces.
+      #
+      # VERIFY end to end before trusting this as a real boundary: syntax
+      # and startup were tested directly, the actual group-restriction
+      # behaviour against a live Pocket ID login was not. Confirm with an
+      # account NOT in admins.novak and expect it refused.
+      TINYAUTH_APPS_PORTAL_OAUTH_GROUPS: "${TINYAUTH_ADMIN_GROUP:-admins.novak}"
+      TINYAUTH_APPS_PORTAL_CONFIG_DOMAIN: "${PORTAL_APPURL:-}"
+    volumes:
+      - tinyauth:/data
+
 volumes:
   open-webui:
   hindsight:
   whisper:
   piper:
+  tinyauth:

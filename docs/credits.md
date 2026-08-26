@@ -28,6 +28,8 @@ this repo or any image built from it.
 | [openWakeWord](https://github.com/dscripka/openWakeWord) | Wake word detection | Apache-2.0 |
 | [Pocket ID](https://github.com/pocket-id/pocket-id) | Single sign-on | VERIFY |
 | [Home Assistant](https://www.home-assistant.io) | Home automation, voice pipeline | Apache-2.0 |
+| [Caddy](https://github.com/caddyserver/caddy) | Reverse proxy in front of the portal | Apache-2.0 |
+| [TinyAuth](https://github.com/tinyauthapp/tinyauth) | Forward-auth for the portal, against Pocket ID | AGPL-3.0 |
 
 ## Used to build the console and shim
 
@@ -74,3 +76,9 @@ Every entry above is something that can change under you. Before adding one:
 3. Pin a version. Several existing MCP servers run `npx -y` at container start,
    which fetches the latest release every time — no pinning, and a failure if
    the network is down. That's a known weakness, tracked separately.
+4. If it's AGPL (Vikunja, TinyAuth), that licence's obligation triggers on
+   modifying the source and offering the modified version as a network
+   service — not on merely running it. Both are run unmodified here,
+   straight from the published image, which is the low-risk case. That
+   stops being true the moment either gets patched and redeployed without
+   publishing the change.

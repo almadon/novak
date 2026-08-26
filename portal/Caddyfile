@@ -1,0 +1,28 @@
+# The Novak portal: one page, tabs for Open WebUI and Konzol, gated by
+# TinyAuth against Pocket ID's admins.novak group. See docs/proxy.md.
+#
+# This is the FIRST reverse proxy Novak runs itself — everything else in
+# this stack has been "bring your own proxy for TLS" (proxy.md). It exists
+# only to protect this one page; it does not front Open WebUI or Konzol,
+# which keep their own ports and their own already-working Pocket ID
+# logins. Nothing here changes decision #15 (public ingress stays on the
+# VPS, home forwards nothing) — this listens on the LAN/tailnet only.
+#
+# Plain HTTP, matching every other service in this stack today. TLS on the
+# LAN is the gap proxy.md has documented since it was written; this does
+# not close it, deliberately, to keep this change to the one thing that
+# was asked for. Revisit together if that gap gets addressed.
+
+:{$PORTAL_PORT} {
+	# TinyAuth's own container port is always 3000 regardless of what
+	# TINYAUTH_PORT this stack publishes it on for the browser to reach
+	# its login page — this is the internal docker-network address.
+	forward_auth tinyauth:3000 {
+		uri /api/auth/caddy
+		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+	}
+
+	root * /srv/portal
+	templates
+	file_server
+}

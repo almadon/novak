@@ -801,3 +801,75 @@ The drift check first, then the router. Not the reverse: the check is what
 tells you whether the layer is delivering the uniformity it was built for, and
 building the layer first means trusting an unverified claim about the thing you
 built to fix verification.
+
+## 22. The portal: Novak's first self-run reverse proxy, scoped to one page
+
+Konzol can't structurally become a section of Open WebUI. Checked directly:
+Open WebUI's extension system (Tools, Pipes, Filters, Actions, Events) hooks
+chat behaviour and system events, not UI navigation, and there is no
+first-party mechanism to register a new admin-panel page. The only way to
+make it "part of Open WebUI" would be forking Open WebUI's own frontend
+source, which is a materially larger and differently-shaped commitment than
+anything else in this stack: a maintained fork against a fast-moving
+upstream, for a much bigger surface than Konzol's own codebase, under a
+licence (`credits.md`'s Open WebUI `VERIFY`) that has already changed once.
+
+What was actually wanted was closer to two things: a single browser tab for
+the household's day-to-day surfaces, and one Pocket ID group governing who
+can reach the admin ones. The second is already solved natively (see the
+`feat/owui-oauth-group-admin` change: `admins.novak` now grants Open WebUI's
+own admin role and group, no new code). This decision is about the first.
+
+### What was chosen
+
+A static page (`portal/index.html`) with a tab per app, iframing Open WebUI
+and Konzol at their own existing ports rather than proxying them. Caddy
+serves the page and gates it with TinyAuth's forward-auth against Pocket
+ID's `admins.novak` group — the same group everywhere else now uses. Full
+design and what was verified versus assumed: [proxy.md](proxy.md#portal-a-single-page-over-open-webui-and-konzol).
+
+**This is Novak's first reverse proxy that Novak itself runs.** Every prior
+mention of a proxy (#16, #20) was something running on another host,
+fronting Novak's ports from outside. `docs/proxy.md` said as plainly as
+anything in this repo says something: "Novak does not run a reverse proxy."
+That line is now qualified, not deleted — the portal's Caddy instance fronts
+exactly one static page, nothing else in the stack, and every other service
+keeps reaching the network exactly as it did before this.
+
+**Cost, stated plainly.** A new service, a new forward-auth service behind
+it, a fourth Pocket ID OIDC client, and a page that has to be kept honest
+about which apps it lists as more get added. TinyAuth is AGPL-3.0 — run
+unmodified, which is the low-risk case (`credits.md`), but a real dependency
+this project now carries and has to keep patched. And `TINYAUTH_APPURL`
+must be a real hostname, never the Tailscale IP `novak ports` otherwise
+treats as an equally valid way to reach everything else — confirmed
+directly, not assumed, and it is the one place in this stack where that IP
+stops working.
+
+### What was rejected
+
+**Reverse-proxying Open WebUI under a subpath**, so the portal could be the
+only origin involved. Tested directly against the running container before
+building anything else on top of the assumption: Open WebUI ships absolute
+asset paths and breaks under a subpath without rewriting this setup does
+not do. Each app keeps its own port instead.
+
+**Organizr**, the closest off-the-shelf match for genuine tabs. It has no
+native OIDC, so getting one login working would mean a forward-auth proxy
+in front of it anyway — TinyAuth's whole job — plus a second app with its
+own local user accounts, a fourth identity system next to Pocket ID, Open
+WebUI's, and Konzol's.
+
+**Homepage.** A good launcher, not a login gate: its iframe widget does not
+proxy authentication, so it buys tabs but not the single sign-on that was
+the actual point.
+
+**Forking Open WebUI's frontend**, covered above. Rejected on cost, not on
+feasibility — it would work, and cost more than this is worth.
+
+### What would justify revisiting
+
+If Open WebUI ever ships a genuine plugin surface for admin-panel pages, or
+if Konzol's remaining responsibilities shrink enough that a page and a link
+cover what's left of it. Until then, two surfaces behind one login is judged
+close enough to the original ask to be worth the cost above.

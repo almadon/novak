@@ -16,7 +16,10 @@ mkdir -p ~/.local/bin
 ln -sf "$PWD/scripts/novak" ~/.local/bin/novak
 ```
 
-Run with no arguments, it prints `status`.
+Run with no arguments and it opens an interactive menu instead of printing
+`status` — see [The menu](#the-menu) below. Every command in this reference
+still works exactly as shown when typed directly; the menu is a second way
+in, not a replacement for scripting against these.
 
 ---
 
@@ -24,6 +27,7 @@ Run with no arguments, it prints `status`.
 
 | Command | What it does |
 |---|---|
+| `novak` | interactive menu — everything below, no arguments needed (aliases: `menu`, `tui`) |
 | `novak status` | what's configured, what's running |
 | `novak doctor` | the same checks, explicitly starting nothing |
 | `novak ports` | what's listening, and whether it's reachable |
@@ -41,10 +45,84 @@ Run with no arguments, it prints `status`.
 | `novak restart [SERVICE]` | restart everything, or one service |
 | `novak logs [SERVICE]` | follow logs |
 | `novak registry` | what the reconciler thinks it should start |
-| `novak drift` | where this deployment differs from the repo |
+| `novak drift` | where this deployment differs from the repo (aliases: `verify`, `check`) |
 | `novak omlx apply` | apply `registry/omlx.yaml` — models, profiles, TTLs |
 
 ---
+
+## The menu
+
+Run `novak` with no arguments (or `novak menu`, `novak tui`, identical) and
+you get this instead of a `status` printout:
+
+```
+ 1) Status
+ 2) Ports
+ 3) Drift / verify
+ 4) Guided setup — configure what's missing
+ 5) Deployment checklist — phase by phase, with live checks
+ 6) Config — view or change a setting
+ 7) Secrets — view, set, or verify one
+ 8) Registry — MCP servers the reconciler sees
+ 9) oMLX — apply models and profiles
+10) Stack — up / update / down / restart / logs
+11) Quit
+```
+
+No new dependency for this. [gum](https://github.com/charmbracelet/gum) was
+tried first, since it already solves "menu in a shell script" well —
+installing it failed here, because this account has no write access to
+`/opt/homebrew`, the same class of problem `bootstrap.sh`'s CLI-symlink and
+LaunchAgent fixes exist to avoid. A brew-installed binary as a hard
+dependency of the CLI's *default* invocation would reintroduce that for
+every fresh deployment, so the menu is plain `read` and `case`: nothing to
+install, works the moment `bootstrap.sh` has run.
+
+Every entry runs the same command you'd type directly — the menu is a
+second way in, not a separate implementation. Numbers 1, 2, 3, 8 just call
+`status`/`ports`/`drift`/`registry`; the rest ask a short follow-up question
+(which key, generate or paste, which service) and then call `config`,
+`secret`, `omlx`, or the stack commands the same way.
+
+### Guided setup (4)
+
+Walks through whatever `novak status` would otherwise just list as missing,
+asking for each value instead of making you go run the command yourself. If
+the repo has added settings this deployment's `.env` doesn't have yet (check
+`novak drift` reports this too), it offers to adopt them first — refuse and
+anything needing one of those lines reports "Unknown setting" instead of
+prompting, same as running `config set` on an unrecognized key directly
+would.
+
+Required settings and secrets first, then the console and the portal as
+separate opt-in passes — each one is a real yes/no question, not assumed
+from being present in the menu.
+
+### Deployment checklist (5)
+
+A phase-by-phase read-through of
+[deploy-checklist.md](deploy-checklist.md), pausing between phases. Where a
+step is something this CLI can actually check — a file present, a port
+answering, a process running — it runs that check and reports pass or fail,
+rather than just repeating the markdown. Where the step is inherently
+manual (clicking through Pocket ID's own admin UI, downloading a model
+file), it prints the instruction and asks you to confirm you did it.
+
+Nothing here is saved between runs. It's a guided walk with real checks
+where checks are possible, not a persisted checklist — rerun it any time to
+recheck everything from the top.
+
+Two of its checks are worth knowing about because they were wrong on the
+first pass and are recorded here rather than quietly fixed: the oMLX check
+originally sent no API key and didn't handle a non-2xx response, so an
+`API key required` error looked identical to "reachable, no models loaded."
+The Hindsight check originally sent a bare `GET`, which Hindsight answers
+with `200 {}` regardless of authentication — a handshake response, not a
+tool call — so it read as "wide open" when a real unauthenticated tool call
+correctly gets refused with 401. Both were reproduced directly against the
+running stack before being fixed, which is the reason to trust the numbers
+this reports over a first instinct about what a health check like this
+"should" do.
 
 ## Where things live
 

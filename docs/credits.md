@@ -32,6 +32,7 @@ this repo or any image built from it.
 | [Home Assistant](https://www.home-assistant.io) | Home automation, voice pipeline | Apache-2.0 |
 | [Caddy](https://github.com/caddyserver/caddy) | Reverse proxy in front of the portal | Apache-2.0 |
 | [TinyAuth](https://github.com/tinyauthapp/tinyauth) | Forward-auth for the portal, against Pocket ID | AGPL-3.0 |
+| [LiteLLM](https://github.com/BerriAI/litellm) | Inference router — persona injection in front of oMLX (decision #21/#23) | MIT for everything used here; an `enterprise/` subdirectory is separately licensed and not enabled |
 
 ## Used to build the console and shim
 

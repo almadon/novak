@@ -873,3 +873,123 @@ If Open WebUI ever ships a genuine plugin surface for admin-panel pages, or
 if Konzol's remaining responsibilities shrink enough that a page and a link
 cover what's left of it. Until then, two surfaces behind one login is judged
 close enough to the original ask to be worth the cost above.
+
+## 23. The inference router, built ahead of the drift check decision #21 named first
+
+Decision #21 ordered this explicitly: build the persona drift check first,
+because it's what tells you whether the router delivers the uniformity it
+exists for. Neither existed when this was requested directly, by name,
+with an explicit instruction to build the router now. That instruction is
+followed here, and the departure from the stated order is recorded rather
+than silently taken — the reasoning in #21 for that order hasn't changed,
+only the sequence it happened in.
+
+### What this actually is
+
+`router/config.yaml` and `router/persona_hook.py`: LiteLLM in front of
+oMLX, injecting the persona from `prompts/` into every request for
+`chat`, `deep`, and `ha-voice`, transparently — no client-side
+`prompt_id`, no per-client system prompt field. Open WebUI and Home
+Assistant switch to it by changing one port (`OWUI_INFERENCE_PORT`); the
+model names they already ask for are unchanged.
+
+**This is half of what #21 asked for, not all of it.** The other half —
+"a verified user identity travels with the request, which is what makes
+per-user memory routing possible" — is not built. The router today
+injects a persona and nothing else; it does not read, forward, or act on
+who is calling. Recorded plainly so this isn't mistaken for more than it
+is: personas are now uniform across clients, and memory bank selection
+still works exactly as it did before this, through Hindsight's own
+per-connection URL scoping, unrelated to anything here.
+
+### The mechanism, and why it isn't the one the docs recommend
+
+LiteLLM's own documentation names `CustomPromptManagement` /
+`get_chat_completion_prompt` as the tool for exactly this: a per-model
+system prompt with no client-side parameter. It doesn't work in the
+version this was built against (`ghcr.io/berriai/litellm`, pinned by
+digest in `docker-compose.yml`). Not assumed — checked directly: the
+class's own source
+(`litellm/litellm_core_utils/litellm_logging.py`,
+`get_custom_logger_for_prompt_management`) confirms it should fall back
+to any registered `CustomPromptManagement` instance with no `prompt_id`
+needed; a callback was registered exactly per LiteLLM's own reference
+implementation
+(`litellm/proxy/custom_prompt_management.py`); the module load was
+confirmed with a debug print at import time; the method was never
+invoked, confirmed by the same debug print never firing across repeated
+real chat completions.
+
+`async_pre_call_hook` — the older, plainer `CustomLogger` method used
+everywhere for guardrails and rate limiting — does fire, verified the
+same way. `router/persona_hook.py` uses that instead. Worth revisiting
+if a future LiteLLM release fixes the newer API, since it's the
+documented, intended mechanism and this is a workaround for it not
+working, not a preference.
+
+### The topology correction this build surfaced
+
+Built against this deployment's real topology, stated directly rather
+than assumed: **this installation is monolithic.** Open WebUI, Hindsight,
+the console, and the Wyoming voice services all run on the same host as
+oMLX. The only thing off-host is the reverse proxy fronting the portal
+and Open WebUI, on a LAN-neighboring machine, not a VPS.
+
+`docs/architecture.md`'s Placement section and `docker-compose.yml`'s own
+header comment both said Open WebUI runs on a separate VPS, which was an
+earlier plan, not this deployment — both corrected in the same change as
+this router. Decision #15's public/private exposure model is deliberately
+left untouched: it describes what may and may not face the internet,
+which is a different question from which host runs which container, and
+whether this deployment currently has any public exposure at all was not
+confirmed one way or the other while building this. Marked VERIFY in
+architecture.md rather than guessed.
+
+### A real bug this surfaced, in already-merged code
+
+The portal (#22) has the identical bug this router's own bind mounts hit
+on first real deployment: `./portal/Caddyfile` and `./portal/index.html`
+are relative paths, and compose resolves a relative bind against
+`--project-directory`, which `up.sh` and `scripts/novak` both set to
+`$NOVAK_HOME`, not the checkout. Docker's behaviour on a relative bind
+whose source doesn't exist at that resolved path is to silently create an
+empty directory there rather than error — so the failure doesn't surface
+until the application inside tries to open the file and gets
+`IsADirectoryError`, which is exactly what happened here on the first
+real `novak up` with the router profile active. The portal has carried
+this since #22 merged, undiscovered because nothing had run it through a
+real `novak up` with that profile active end to end — the earlier testing
+was container-level (`docker run` in isolation), which never exercises
+compose's own path resolution.
+
+Fixed for both: `REPO_DIR` is now exported by both `up.sh` and
+`scripts/novak`, and every bind mount that needs the checkout — the
+portal's two, plus this router's three (`config.yaml`, `persona_hook.py`,
+and `prompts/`) — uses `${REPO_DIR}/...`, an absolute path, instead of a
+relative one. Deliberately not seeded into `$NOVAK_HOME` the way
+`registry/mcp-servers.yaml` is: that file is meant to be edited per
+deployment, and these are read-only application config that should track
+a `git pull` immediately, which a seeded copy would defeat.
+
+### What was verified, end to end, not assumed
+
+The full path, for real: `novak up` with `OMLX_API_KEY` already in the
+Keychain correctly activated the router profile with no other
+configuration; the real container started against the real
+`docker-compose.yml`; a chat completion sent to it with no system message
+came back answering as Novak, for `chat`, `deep`, and `ha-voice` all
+three; a client-supplied system message was respected untouched, not
+double-injected; a model name absent from the persona map passed through
+with no system message added, as designed.
+
+### What would justify revisiting
+
+Doing the identity half of #21 — reading a verified caller identity and
+making it available to per-user memory routing — is the obvious next
+step and is not started. Building `router/config.yaml`'s model list by
+hand also means it can drift from `registry/omlx.yaml` silently if a
+model's underlying repo changes; a generator step alongside
+`omlx_apply.py` would close that gap and hasn't been built. And the
+persona drift check #21 asked for first is still exactly as un-built as
+it was before this — this router does not verify its own claim of
+uniformity, only asserts it.

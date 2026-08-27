@@ -4,9 +4,12 @@
 # Exists because "edit a file, remember which lines are placeholders, re-run a
 # script" is a bad interface for something you touch every few weeks.
 #
+#   novak                     no args: an interactive menu covering everything
+#                             below (novak menu, novak tui — same thing)
 #   novak status              what's configured, what's running
 #   novak ports               what's listening, and whether it's reachable
 #   novak drift               where this deployment differs from the repo
+#                             (aliases: verify, check)
 #   novak drift --adopt       copy settings the repo added into your .env
 #   novak doctor              check config without starting anything
 #   novak config              list settings and where each value comes from
@@ -585,10 +588,388 @@ compose() {
   "${args[@]}" "$@"
 }
 
-case "${1:-status}" in
+##############################################################################
+# TUI — the menu shown when novak is run with no arguments.
+#
+# No new dependency for this. gum (charmbracelet/gum) was the obvious tool
+# and was tried first — MIT, actively maintained, exactly the "menu in a
+# shell script" problem already solved. Installing it here failed: this
+# account has no write access to /opt/homebrew, the same class of problem
+# bootstrap.sh's own CLI-symlink and LaunchAgent fixes exist to avoid, and
+# adding a brew-installed binary as a hard dependency of the CLI's DEFAULT
+# invocation would reintroduce it for every fresh deployment. Plain bash
+# `select` needs nothing extra and already ships with the account.
+##############################################################################
+
+# No `|| true`: a failed read here means stdin is closed (input piped in
+# ran out, Ctrl-D, EOF), and the caller needs to see that as a real failure
+# to exit the menu loop instead of looping forever with nothing left to
+# read. See cmd_menu's own comment on the read-vs-select bug this replaced.
+tui_pause() { echo; read -rp "Press Enter to continue... " _; }
+
+# Re-invokes this same script as a fresh process rather than calling a cmd_*
+# function directly. Every cmd_* here is written as a top-level command and
+# ends failure paths with `exit`, which is correct for a one-shot CLI call
+# and wrong for a subroutine inside a menu loop: `exit` always ends the
+# whole process, so a single failed action would silently kill the entire
+# TUI session rather than just that one step. A child process contains it.
+tui_run() { "$REPO_DIR/scripts/novak" "$@"; }
+
+# Both exit(0) outright on closed stdin (EOF: input piped in ran out,
+# Ctrl-D) rather than let `read`'s failure fall through to `set -e` and
+# kill the script with no explanation partway through a guided flow. If
+# there is genuinely nothing left to read, ending here is correct — it
+# just says so first, and does it as a deliberate exit rather than an
+# errexit crash the person watching didn't get an explanation for.
+tui_eof() { echo; ylw "No more input — exiting."; exit 0; }
+
+tui_ask() {
+  # $1 prompt, optional $2 default. Prints the answer; empty input keeps the
+  # default when one was given, or comes back empty when it wasn't.
+  #
+  # Every call site captures this via $(...), a subshell — `exit` here ends
+  # only that subshell, not the real script, and anything printed before it
+  # would be captured as part of the answer. So on EOF this exits silently
+  # rather than reusing tui_eof: the caller gets an empty string, exactly
+  # as if Enter had been pressed with no default, and the guided flow runs
+  # out naturally rather than corrupting a setting with an error message.
+  # cmd_menu's own top-level read is what actually ends the session once
+  # control returns there with stdin still closed.
+  local prompt="$1" default="${2:-}" ans
+  if [ -n "$default" ]; then
+    read -rp "$prompt [$default]: " ans || exit 0
+    printf '%s\n' "${ans:-$default}"
+  else
+    read -rp "$prompt: " ans || exit 0
+    printf '%s\n' "$ans"
+  fi
+}
+
+tui_yn() {
+  local ans
+  read -rp "$1 [y/N]: " ans || tui_eof
+  case "$ans" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
+}
+
+# Prompts for every REQUIRED_EDIT/CORE_SECRET that novak status would flag,
+# then offers the console and portal as separate opt-in passes — each is a
+# real question ("configure this now?"), not assumed from presence in the
+# menu. Reuses cmd_config/cmd_secret via tui_run rather than duplicating
+# their validation, generation, or Keychain handling.
+cmd_guided_setup() {
+  need_env
+  bold "Guided setup"
+  dim "  Asks for what 'novak status' would otherwise just list as missing."
+  echo
+
+  local ex="$REPO_DIR/.env.example"
+  local newkeys=()
+  if [ -f "$ex" ]; then
+    local k
+    while IFS= read -r k; do
+      grep -qE "^${k}=" "$ENV_FILE" 2>/dev/null || newkeys+=("$k")
+    done < <(grep -oE '^[A-Z_][A-Z0-9_]*=' "$ex" | tr -d '=')
+  fi
+  if [ ${#newkeys[@]} -gt 0 ]; then
+    ylw "  The repo has settings this deployment's .env doesn't yet have:"
+    printf '    %s\n' "${newkeys[@]}"
+    if tui_yn "  Adopt them now (existing .env is backed up first)"; then
+      tui_run drift --adopt
+    else
+      dim "  Skipping — anything below that needs one of those lines will"
+      dim "  report 'Unknown setting' instead of prompting for it."
+    fi
+    echo
+  fi
+
+  local v val
+  for v in "${REQUIRED_EDITS[@]}"; do
+    val="$(envval "$v")"
+    if [ -z "$val" ] || [[ "$val" =~ $PLACEHOLDERS ]]; then
+      local new; new="$(tui_ask "Enter $v")"
+      [ -n "$new" ] && tui_run config set "$v" "$new"
+    fi
+  done
+
+  for v in "${CORE_SECRETS[@]}"; do
+    if [ -z "$(keychain "$v")" ]; then
+      echo
+      bold "$v"
+      dim "  Required — up.sh refuses to start the stack without it."
+      if is_external "$v"; then
+        dim "  Owned by another system; the value must match what it already has."
+        tui_run secret set "$v"
+      elif tui_yn "  Generate one automatically"; then
+        tui_run secret set "$v" --generate
+      else
+        tui_run secret set "$v"
+      fi
+    fi
+  done
+
+  echo
+  if grep -qE '^\s*console:' "$REPO_DIR/docker-compose.yml" 2>/dev/null \
+     && tui_yn "Configure the optional console now"; then
+    for v in "${CONSOLE_EDITS[@]}"; do
+      val="$(envval "$v")"
+      if [ -z "$val" ] || [[ "$val" =~ $PLACEHOLDERS ]]; then
+        local new; new="$(tui_ask "Enter $v")"
+        [ -n "$new" ] && tui_run config set "$v" "$new"
+      fi
+    done
+    for v in "${CONSOLE_SECRETS[@]}"; do
+      [ -z "$(keychain "$v")" ] && tui_run secret set "$v"
+    done
+  fi
+
+  echo
+  if tui_yn "Configure the optional portal now (Caddy + TinyAuth)"; then
+    dim "  PORTAL_APPURL must be a real hostname with a scheme — never an IP."
+    dim "  See docs/proxy.md if you haven't registered TinyAuth's Pocket ID"
+    dim "  client yet; this only collects values, it doesn't create the client."
+    for v in "${PORTAL_EDITS[@]}"; do
+      val="$(envval "$v")"
+      if [ -z "$val" ] || [[ "$val" =~ $PLACEHOLDERS ]]; then
+        local new; new="$(tui_ask "Enter $v")"
+        [ -n "$new" ] && tui_run config set "$v" "$new"
+      fi
+    done
+    for v in "${PORTAL_SECRETS[@]}"; do
+      [ -z "$(keychain "$v")" ] && tui_run secret set "$v"
+    done
+  fi
+
+  echo
+  grn "Guided setup done."
+  tui_run status
+}
+
+# A phase-by-phase walk through deploy-checklist.md. Where a step is
+# something this CLI can actually check (a file, a running process, a
+# reachable port) it runs that check and reports pass/fail. Where the step
+# is inherently manual — clicking through Pocket ID's own UI, downloading a
+# model file — it prints the instruction and waits for you to confirm you
+# did it. Nothing here is persisted between runs; it's a guided read-through
+# with real checks where checks are possible, not a saved checklist.
+cmd_checklist() {
+  bold "Deployment checklist"
+  dim "  Full detail in docs/deploy-checklist.md. This runs what can be"
+  dim "  checked automatically and asks about what can't."
+  echo
+
+  bold "Phase 1 — Admin setup"
+  if sudo -n fdesetup list 2>/dev/null | grep -q "^$(whoami),"; then
+    grn "  novak can unlock FileVault at boot"
+  else
+    ylw "  Could not confirm — run manually: sudo fdesetup list"
+  fi
+  if pmset -g 2>/dev/null | grep -qE "autorestart\s*1"; then
+    grn "  autorestart is on"
+  else
+    red "  autorestart is off — the Mac won't power back on after an outage"
+  fi
+  tui_pause
+
+  bold "Phase 2 — The novak account and CLI"
+  if command -v novak >/dev/null 2>&1; then
+    grn "  novak resolves on PATH: $(command -v novak)"
+  else
+    red "  novak is not on PATH — see docs/cli.md"
+  fi
+  if docker info >/dev/null 2>&1; then
+    grn "  Docker is responding in this account"
+  else
+    red "  Docker isn't responding — is OrbStack running as $(whoami)?"
+  fi
+  tui_pause
+
+  bold "Phase 3 — Configuration"
+  tui_run status
+  tui_pause
+
+  bold "Phase 4 — The model"
+  # Two things this got wrong on the first pass, both real: curl's own exit
+  # status only reflects connection-level failure, not an HTTP error body —
+  # a 401 for a missing key still looks like success without -f/--fail — and
+  # `grep -o '"id"' | ...` under this script's `set -o pipefail` exits 1 on
+  # a legitimate zero-match response (no models loaded, or unauthorized),
+  # which killed the ENTIRE script here, not just this one check. Both
+  # reproduced directly against the running oMLX before being fixed.
+  local omlx_port omlx_key omlx_body
+  omlx_port="$(envval OMLX_PORT)"
+  omlx_key="$(keychain OMLX_API_KEY)"
+  if [ -n "$omlx_port" ]; then
+    omlx_body="$(curl -sf --max-time 3 \
+      ${omlx_key:+-H "Authorization: Bearer $omlx_key"} \
+      "http://127.0.0.1:${omlx_port}/v1/models" 2>/dev/null || true)"
+    if [ -z "$omlx_body" ]; then
+      ylw "  Could not reach oMLX on port ${omlx_port}, or the request was refused"
+      dim "  (missing/incorrect OMLX_API_KEY is the usual reason once it's running)"
+    else
+      local model_count
+      # `grep -o | wc -l` is the right count; the `|| true` on grep alone,
+      # inside its own group, is what's needed — pipefail cares about EVERY
+      # stage, and grep exits 1 on a legitimate zero-match line, which would
+      # otherwise fail the whole assignment before wc -l ever runs.
+      model_count="$({ grep -o '"id"' <<<"$omlx_body" || true; } | wc -l | tr -d ' ')"
+      if [ "${model_count:-0}" -gt 0 ]; then
+        grn "  oMLX is serving ${model_count} model(s)"
+      else
+        red "  oMLX answered but /v1/models looks empty — no model loaded"
+      fi
+    fi
+  else
+    ylw "  OMLX_PORT is not set — skipping"
+  fi
+  tui_yn "Have you set personas per client from prompts/ (decision #18 — no automation does this yet)" \
+    && grn "  noted" || dim "  reminder: still manual, see docs/STATE.md"
+  tui_pause
+
+  bold "Phase 5 — Start it"
+  tui_run status
+  tui_pause
+
+  bold "Phase 6 — Memory"
+  local hkey; hkey="$(keychain HINDSIGHT_API_KEY)"
+  local hport; hport="$(envval HINDSIGHT_PORT)"
+  if [ -n "$hkey" ] && [ -n "$hport" ]; then
+    local code
+    # curl exits non-zero on a connection failure regardless of -w, and
+    # this assignment isn't inside an if/&&/|| — Phase 4 had the same shape
+    # of bug (there via grep, here via a bare failed connection) and was
+    # fixed the same way: force the substitution to succeed so a genuinely
+    # unreachable Hindsight is reported by the case below, not by killing
+    # the whole checklist.
+    # A bare GET is not what this needs to send: Hindsight answers one with
+    # a bare 200 and an empty body regardless of auth (checked directly —
+    # that's a handshake response, not a tool call), which made this report
+    # the endpoint as open when it wasn't. A real MCP tool call, unauthenticated,
+    # is what actually exercises the auth check — and does correctly 401.
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 -X POST \
+      -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
+      -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+      "http://127.0.0.1:${hport}/mcp/household/" 2>/dev/null || true)"
+    case "${code:-000}" in
+      401) grn "  Hindsight refuses an unauthenticated tool call (got 401, as expected)" ;;
+      000) ylw "  Could not reach Hindsight on port ${hport}" ;;
+      *)   red "  Expected 401 from an unauthenticated tool call, got ${code} — VERIFY the endpoint is actually gated" ;;
+    esac
+  else
+    ylw "  HINDSIGHT_API_KEY or HINDSIGHT_PORT not set — skipping the check"
+  fi
+  tui_pause
+
+  bold "Phase 7 — Chat, Phase 8 — Voice, Phase 9 — The console"
+  dim "  Each is genuinely optional and has its own manual UI steps"
+  dim "  (Pocket ID clients, Open WebUI onboarding, HA integration setup)"
+  dim "  this CLI cannot drive. See docs/deploy-checklist.md phases 7-9."
+  tui_yn "Walked through those manually and they're working" \
+    && grn "  noted" || dim "  come back to this once they are"
+  tui_pause
+
+  bold "Phase 10 — Unattended operation"
+  if launchctl list 2>/dev/null | grep -q "one.a64.novak.stack"; then
+    grn "  LaunchAgent is loaded"
+  else
+    red "  LaunchAgent is NOT loaded — containers won't return after a reboot"
+    dim "  launchctl load ~/Library/LaunchAgents/one.a64.novak.stack.plist"
+  fi
+  tui_pause
+
+  bold "Phase 11 — The test that counts"
+  dim "  Pull the plug, or a clean reboot, and watch it come back on its own."
+  dim "  Nothing here can check this for you — it's the one phase that has"
+  dim "  to actually happen, not just be verified."
+  echo
+  grn "Checklist walk-through done."
+}
+
+cmd_menu() {
+  local options=(
+    "Status"
+    "Ports"
+    "Drift / verify"
+    "Guided setup — configure what's missing"
+    "Deployment checklist — phase by phase, with live checks"
+    "Config — view or change a setting"
+    "Secrets — view, set, or verify one"
+    "Registry — MCP servers the reconciler sees"
+    "oMLX — apply models and profiles"
+    "Stack — up / update / down / restart / logs"
+    "Quit"
+  )
+  local choice i
+  while true; do
+    bold "Novak"
+    dim "  $REPO_DIR"
+    echo
+    i=1
+    for opt in "${options[@]}"; do printf '%2d) %s\n' "$i" "$opt"; i=$((i+1)); done
+    echo
+    # A plain `read`, not `select`: select exits its own loop silently on
+    # EOF/closed stdin without running its body, which left this in an
+    # empty-body-forever spin against the enclosing `while true` — no error,
+    # no pause, just the menu redrawing as fast as the terminal could take
+    # it. Checking read's own exit status here is what makes closed stdin
+    # (piped input running out, Ctrl-D, a script driving this headlessly)
+    # exit the menu cleanly instead.
+    if ! read -rp "Choose an option (number): " choice; then
+      echo; return 0
+    fi
+    case "$choice" in
+      1) tui_run status ;;
+      2) tui_run ports ;;
+      3) tui_run drift ;;
+      4) cmd_guided_setup ;;
+      5) cmd_checklist ;;
+      6)
+        local key; key="$(tui_ask "Key to view or change (blank lists all)")"
+        if [ -z "$key" ]; then tui_run config list
+        else
+          local val; val="$(tui_ask "New value for $key (blank just shows it)")"
+          if [ -z "$val" ]; then tui_run config get "$key"
+          else tui_run config set "$key" "$val"; fi
+        fi
+        ;;
+      7)
+        local sub; sub="$(tui_ask "list / set / show / verify" "list")"
+        case "$sub" in
+          set)
+            local key; key="$(tui_ask "Key")"
+            [ -n "$key" ] && tui_run secret set "$key"
+            ;;
+          show)
+            local key; key="$(tui_ask "Key")"
+            [ -n "$key" ] && tui_run secret show "$key"
+            ;;
+          verify) tui_run secret verify ;;
+          *)      tui_run secret list ;;
+        esac
+        ;;
+      8) tui_run registry ;;
+      9) tui_run omlx apply ;;
+      10)
+        local sub; sub="$(tui_ask "up / update / down / restart / logs" "up")"
+        case "$sub" in
+          update)  tui_run update ;;
+          down)    tui_run down ;;
+          restart) tui_run restart ;;
+          logs)    tui_run logs ;;
+          *)       tui_run up ;;
+        esac
+        ;;
+      11|0|"") return 0 ;;
+      *) echo "Not a number on the list."; continue ;;
+    esac
+    tui_pause || return 0
+  done
+}
+
+case "${1:-menu}" in
+  menu|tui) cmd_menu ;;
   status)   cmd_status ;;
   ports)    cmd_ports ;;
-  drift)    shift; cmd_drift "$@" ;;
+  drift|verify|check) shift; cmd_drift "$@" ;;
   omlx)     shift; cmd_omlx "$@" ;;
   doctor)   cmd_status ;;   # same checks up.sh runs, without starting anything
   config)   shift; cmd_config "$@" ;;

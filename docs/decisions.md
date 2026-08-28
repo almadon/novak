@@ -1111,6 +1111,7 @@ session that was open to verify it. Flagged as its own follow-up rather
 than folded in here — a session-signing key is an unrelated concern from
 a task-routing one, and conflating them in one change would make either
 harder to revert independently if something about it needed undoing.
+Fixed in #26 below.
 
 ### What was verified, end to end
 
@@ -1120,3 +1121,83 @@ request — a stale list is expected, not a bug, after adding one).
 `TASK_MODEL`/`TASK_MODEL_EXTERNAL` confirmed set correctly inside the
 running container via `docker exec`, after a real `novak up` recreate,
 not just in the admin UI which alone wouldn't have proven persistence.
+
+## 26. Open WebUI's session key gets pinned, the same way CONSOLE_AUTH_SECRET is
+
+Confirmed directly: a routine `novak up` recreate of the `open-webui`
+container logged out an active admin session — the same symptom #25
+flagged as a follow-up rather than fixing inline.
+`docker-compose.yml` never set `WEBUI_SECRET_KEY`. Open WebUI signs
+its session JWTs with that key and, left unset, generates a random one
+at every container startup — so a restart or recreate doesn't just
+*eventually* expire sessions, it invalidates every one of them
+immediately, since the JWTs on file no longer verify against the new
+key.
+
+Fixed by adding `WEBUI_SECRET_KEY` to `SECRET_VARS` in
+`scripts/lib/vars.sh` and sourcing it from Keychain exactly the way
+`CONSOLE_AUTH_SECRET` already is — generated with `openssl rand -base64
+32`, never edited into `.env` directly. Not added to `CORE_SECRETS`:
+left unset, the stack still starts, `set-in-keychain` gets passed
+through as a literal value, and Open WebUI just logs everyone out on
+every restart, the same degrade-not-block shape as every other
+non-core secret here.
+
+**Verified end to end:** `novak secret set WEBUI_SECRET_KEY --generate`,
+then `novak up`, then `docker exec novak-open-webui-1 sh -c 'echo
+$WEBUI_SECRET_KEY'` — non-empty, and identical across repeated checks
+and after `novak restart open-webui`. A login made before the restart
+was still valid after it.
+
+## 27. Open Terminal joins the registry as the first `container` entry that isn't MCP
+
+Requested directly, as an explicitly optional, opt-in integration —
+consistent with how everything else in `registry/mcp-servers.yaml` works.
+[Open Webui's Open Terminal](https://github.com/open-webui/open-terminal)
+(Apache-2.0) is a sandboxed terminal and file browser a model can be
+given access to from Open WebUI's own Admin -> Settings -> Integrations.
+
+It doesn't speak MCP. Open WebUI connects to it directly as an
+"Integration," not through the MCP client wiring every other registry
+entry assumes. Checked `reconciler/reconcile.py` before assuming this was
+a problem: `render()` doesn't care what a container speaks, only that it
+has an image, a port, and declared env vars — the "MCP server" framing
+in the registry's header comment was descriptive, not a constraint the
+mechanics actually enforce. Landed as `kind: container` with a comment
+correcting the record, rather than inventing a new `kind` for one entry.
+
+### Two limits chosen deliberately, not defaults left alone
+
+This is `risk: dangerous` by the registry's own definition — it runs
+arbitrary code and reads/writes a filesystem, no reading between the
+lines required. Shipped disabled, no `accepted_by`/`accepted_on`, same
+as `ha-mcp` — the reconciler refuses to start it until a person accepts
+that in the record.
+
+Two things Open Terminal's own docs offer that this entry deliberately
+does not:
+
+- **No Docker socket mount.** Its README documents one for letting an
+  agent manage other containers, and its own words for what that grants
+  are "effectively root access." Nothing about this stack needs a model
+  that can start or stop its own containers, so it isn't offered.
+- **No filesystem mount into anything real.** Left on the image's own
+  default scratch space. A model reading its own sandbox is the
+  intended use; a model reading this repo, `$NOVAK_HOME`, or any secret
+  is not, and nothing here grants that path.
+
+Neither is a technical limitation being worked around — both are
+choices about what doesn't get added later without the same scrutiny
+turning this on in the first place got.
+
+### What was verified before shipping
+
+The registry entry validates and reports `disabled` (correct — it's off
+by default). Test-enabled with a dummy key and a filled-in
+`accepted_by`/`accepted_on` against a scratch `$NOVAK_HOME`, the
+reconciler correctly renders a real `open-terminal-mcp` service (the
+`-mcp` suffix is `render()`'s own hardcoded naming, cosmetically wrong
+for a non-MCP entry, not worth changing for one container), with the
+image, `8010:8000` port mapping, and `OPEN_TERMINAL_API_KEY` passed
+through from the host environment — the same path every other container
+entry already uses, unmodified for this one.

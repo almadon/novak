@@ -65,6 +65,7 @@ are excellent and simply aim at a different shape of problem.
 | [wyoming-voice-match](https://github.com/jxlarrea/wyoming-voice-match) | Speaker verification + audio cleanup. Adopt for audio quality; **not** for deciding who sees what (#9) |
 | [speaker-recognition](https://github.com/EuleMitKeule/speaker-recognition) | Cleaner integration point than a text tag, but far less mature |
 | [ha-mcp](https://github.com/homeassistant-ai/ha-mcp) | Rich Home Assistant control; classified `dangerous` in the registry (#10) |
+| [Open Terminal](https://github.com/open-webui/open-terminal) | Sandboxed terminal/file browser for Open WebUI, Apache-2.0; classified `dangerous` in the registry, ships disabled, no Docker socket mount |
 | [mcp-assist](https://github.com/mike-nott/mcp-assist) | Cuts voice token use ~95% by discovering entities instead of listing them; helps the 1–2s voice target |
 | [Tududi AI assistant](https://docs.tududi.com/features/ai-assistant) | Optional, off by default, and `LLM_BASE_URL` can point at oMLX — so it can use Novak's model rather than a cloud one |
 

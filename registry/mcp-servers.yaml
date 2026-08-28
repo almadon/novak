@@ -7,7 +7,12 @@
 #
 # Two kinds of entry:
 #
-#   kind: container  (default) — an MCP server we run. The reconciler starts it.
+#   kind: container  (default) — a container we run, almost always an MCP
+#                                 server. The reconciler doesn't actually
+#                                 care what the container speaks — see
+#                                 open-terminal below, the one entry so far
+#                                 that isn't MCP at all, just a tool backend
+#                                 a client connects to directly.
 #   kind: external              — an MCP endpoint that already exists somewhere
 #                                 else and that we merely point clients at.
 #                                 Nothing is started; it is catalogued here so
@@ -266,6 +271,46 @@ servers:
         - "Vikunja has no trash or undo — a delete is permanent."
       accepted_by: tmeuze
       accepted_on: 2026-08-16
+
+  # A sandboxed terminal + file browser Open WebUI can hand a model access
+  # to (github.com/open-webui/open-terminal, Apache-2.0). Wired up on the
+  # CLIENT side, not here: Open WebUI's own Admin -> Settings ->
+  # Integrations -> Open Terminal, using this container's URL and API key
+  # — there's no MCP handshake and no registry-driven wiring to speak of,
+  # unlike everything else in this file.
+  #
+  # `dangerous` is not a formality here: a model with this attached can run
+  # arbitrary code and read or write whatever's mounted into it. Two
+  # separate limits keep that from meaning "the whole machine":
+  #   * No Docker socket mount. Open Terminal's own docs offer one
+  #     (`-v /var/run/docker.sock:...`) for letting an agent manage other
+  #     containers, and call it "effectively root access" themselves. Not
+  #     offered here — nothing about this stack needs a model that can
+  #     spin up or tear down its own containers.
+  #   * No filesystem mount into the novak checkout, $NOVAK_HOME, or
+  #     anything holding real data. Left on the image's own default
+  #     scratch space (/home/user) — a model reading its own sandbox is
+  #     the expected use case; a model reading THIS repo or its secrets
+  #     is not, and nothing here grants it that.
+  # Both are choices about what does NOT get added later without the same
+  # scrutiny as turning this on in the first place got.
+  - name: open-terminal
+    image: ghcr.io/open-webui/open-terminal:slim
+    port: 8010
+    env: [OPEN_TERMINAL_API_KEY]
+    enabled: false # flip once you've read the two limits above
+    clients: [open-webui]
+    source:
+      url: https://github.com/open-webui/open-terminal
+      license: Apache-2.0
+    risk:
+      level: dangerous
+      why:
+        - "Runs arbitrary code the model writes — full compute access."
+        - "Reads and writes whatever filesystem it's given, though nothing
+           here mounts this repo, $NOVAK_HOME, or real data into it."
+      # No accepted_by/accepted_on: the reconciler refuses to start this
+      # until a person fills those in, same as ha-mcp below.
 
   # Example of a `dangerous` entry, left disabled. ha-mcp exposes 88+ tools
   # including file access and YAML config editing, and authenticates with a

@@ -183,9 +183,15 @@ servers:
   #     endpoint is open and every bank is readable by anything on the network.
   - name: hindsight-household
     kind: external
-    # EDIT THIS HOST. Open WebUI runs on the VPS, so a .local name it cannot
-    # resolve is the one thing that is guaranteed not to work — use the Mac's
-    # Tailscale name or 100.x address, matching HOST_NAME.
+    # EDIT THIS HOST. This entry's client is home-assistant (below), a
+    # genuinely separate device on the LAN regardless of where Open WebUI
+    # runs — a .local mDNS name is the one thing guaranteed not to resolve
+    # from it. Use the Mac's Tailscale name or 100.x address, matching
+    # HOST_NAME. Left as the literal placeholder here, this passes the
+    # reconciler's syntax check (it's still a valid http:// string) but
+    # gets caught and skipped as unedited — see reconcile.py's
+    # unedited_url(), added after exactly this shipped enabled on a real
+    # deployment for weeks with nobody the wiser.
     url: http://EDIT-ME:8888/mcp/household/
     auth: HINDSIGHT_API_KEY
     enabled: true
@@ -215,9 +221,13 @@ servers:
   # distinct and keep them out of the voice pipeline.
   - name: hindsight-tmeuze
     kind: external
-    # EDIT THIS HOST. Open WebUI runs on the VPS, so a .local name it cannot
-    # resolve is the one thing that is guaranteed not to work — use the Mac's
-    # Tailscale name or 100.x address, matching HOST_NAME.
+    # EDIT THIS HOST. Use the Mac's Tailscale name or 100.x address,
+    # matching HOST_NAME — works regardless of where Open WebUI runs. If
+    # it's in this same compose project (a monolithic deployment), the
+    # docker-internal service name (http://hindsight:8888/mcp/tmeuze/,
+    # same as the console already uses) also works and skips a network
+    # hop; the Tailscale address is the safer default here specifically
+    # because it keeps working if Open WebUI ever moves off-host again.
     url: http://EDIT-ME:8888/mcp/tmeuze/
     auth: HINDSIGHT_API_KEY
     enabled: true

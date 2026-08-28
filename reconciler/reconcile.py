@@ -227,6 +227,23 @@ def missing_vars(server: dict, configured: set[str]) -> list[str]:
     return [v for v in server.get("env") or [] if v not in configured]
 
 
+def unedited_url(server: dict) -> bool:
+    """
+    True if an external entry's url still carries the EDIT-ME placeholder
+    the templates ship with. validate() only checks the url is a
+    syntactically real http(s) string — "http://EDIT-ME:8888/..." passes
+    that check cleanly, so an entry can sit at enabled: true, printed
+    every run as though it were configured, and nothing before this said
+    otherwise. Found live: a real deployment had exactly this, enabled,
+    for weeks.
+
+    A substring check, not the exact-match PLACEHOLDERS set used
+    elsewhere — that set matches a whole .env value; this is one
+    unedited token inside a larger URL.
+    """
+    return "EDIT-ME" in server.get("url", "")
+
+
 def render(servers: list[dict], configured: set[str]) -> dict:
     services = {}
     for s in servers:
@@ -291,7 +308,9 @@ def main() -> int:
     containers = [s for s in enabled if s["kind"] == "container"]
     skipped = [s for s in containers if missing_vars(s, configured)]
     running = [s for s in containers if not missing_vars(s, configured)]
-    external = [s for s in enabled if s["kind"] == "external"]
+    external_all = [s for s in enabled if s["kind"] == "external"]
+    external_skipped = [s for s in external_all if unedited_url(s)]
+    external = [s for s in external_all if not unedited_url(s)]
 
     print(f"running:  {', '.join(s['name'] for s in running) or '(none)'}")
     print(f"disabled: {', '.join(s['name'] for s in disabled) or '(none)'}")
@@ -299,6 +318,11 @@ def main() -> int:
         print(
             f"skipped:  {s['name']} — not configured: "
             f"{', '.join(missing_vars(s, configured))}",
+            file=sys.stderr,
+        )
+    for s in external_skipped:
+        print(
+            f"skipped:  {s['name']} — url still has EDIT-ME: {s['url']}",
             file=sys.stderr,
         )
     for s in external:

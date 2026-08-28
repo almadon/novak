@@ -1060,3 +1060,29 @@ token against `hindsight-household` correctly reports `401`. A made-up
 unreachable Tailscale address correctly reports `unreachable`, and —
 after the `|| true` fix — does so without aborting the rest of the
 entries.
+
+## 25. Open WebUI's session key gets pinned, the same way CONSOLE_AUTH_SECRET is
+
+Confirmed directly: a routine `novak up` recreate of the `open-webui`
+container logged out an active admin session. Cause was
+`docker-compose.yml` never setting `WEBUI_SECRET_KEY`. Open WebUI signs
+its session JWTs with that key and, left unset, generates a random one
+at every container startup — so a restart or recreate doesn't just
+*eventually* expire sessions, it invalidates every one of them
+immediately, since the JWTs on file no longer verify against the new
+key.
+
+Fixed by adding `WEBUI_SECRET_KEY` to `SECRET_VARS` in
+`scripts/lib/vars.sh` and sourcing it from Keychain exactly the way
+`CONSOLE_AUTH_SECRET` already is — generated with `openssl rand -base64
+32`, never edited into `.env` directly. Not added to `CORE_SECRETS`:
+left unset, the stack still starts, `set-in-keychain` gets passed
+through as a literal value, and Open WebUI just logs everyone out on
+every restart, the same degrade-not-block shape as every other
+non-core secret here.
+
+**Verified end to end:** `novak secret set WEBUI_SECRET_KEY --generate`,
+then `novak up`, then `docker exec novak-open-webui-1 sh -c 'echo
+$WEBUI_SECRET_KEY'` — non-empty, and identical across repeated checks
+and after `novak restart open-webui`. A login made before the restart
+was still valid after it.

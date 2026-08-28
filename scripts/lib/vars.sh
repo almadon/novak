@@ -22,6 +22,7 @@ SECRET_VARS=(
   CONSOLE_AUTH_SECRET
   OIDC_CLIENT_SECRET
   OWUI_OIDC_CLIENT_SECRET
+  WEBUI_SECRET_KEY
   HA_MCP_TOKEN
   TINYAUTH_OIDC_CLIENT_SECRET
 )
@@ -68,7 +69,11 @@ CORE_SECRETS=(HINDSIGHT_API_KEY)
 #
 # Anything in SECRET_VARS that is in neither list is internal: we generate it,
 # one container reads it, and nobody ever needs to see it. CONSOLE_AUTH_SECRET
-# signs the console's JWTs and is exactly that.
+# signs the console's JWTs and is exactly that. WEBUI_SECRET_KEY is the same
+# shape for Open WebUI: left unset, it generates its own random key at every
+# container startup, which invalidates every existing session (JWT) on every
+# restart or recreate — pinning it here is what makes logins survive `novak
+# up`/`novak restart open-webui`.
 EXTERNAL_SECRETS=(
   OMLX_API_KEY
   OIDC_CLIENT_SECRET

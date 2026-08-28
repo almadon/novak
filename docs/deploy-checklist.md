@@ -105,6 +105,11 @@ checkouts carry over, and that is the point.
 
       novak secret set HINDSIGHT_API_KEY     # openssl rand -hex 32
       novak secret set OMLX_API_KEY
+      novak secret set WEBUI_SECRET_KEY --generate
+
+      `WEBUI_SECRET_KEY` isn't required to start, but skip it and Open WebUI
+      makes up a random one on every container start, which silently logs
+      everyone out on the next `novak up` or restart.
 
 - [ ] `novak status` again — **Config: ready**.
 - [ ] `novak secret verify` — every secret reads back without a prompt. One

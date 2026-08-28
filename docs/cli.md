@@ -266,7 +266,8 @@ novak secret set HINDSIGHT_API_KEY --generate
 novak secret show HINDSIGHT_API_KEY     # then paste into each client
 ```
 
-**Internal** — `CONSOLE_AUTH_SECRET`, and anything else in neither list.
+**Internal** — `CONSOLE_AUTH_SECRET`, `WEBUI_SECRET_KEY`, and anything else in
+neither list.
 
 One container reads it and nobody else ever needs it. Generate it and never look
 at it. Rotating costs you nothing but the sessions it signed.

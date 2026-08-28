@@ -40,6 +40,11 @@ services:
       WEBUI_URL: "${OWUI_PUBLIC_URL:-http://${HOST_NAME:-mini.local}:${OPENWEBUI_PORT:-3000}}"
       # Keep everything local: no external telemetry-ish integrations.
       ENABLE_OPENAI_API: "true"
+      # Left unset, Open WebUI generates a random key at every container
+      # startup, which signs its session JWTs — so every restart or recreate
+      # (a routine `novak up`, not just an upgrade) silently logs everyone
+      # out. Pin it the same way CONSOLE_AUTH_SECRET is pinned.
+      WEBUI_SECRET_KEY: "${WEBUI_SECRET_KEY}"
       # .env is the source of truth, not Open WebUI's database.
       #
       # By default Open WebUI copies these settings into its DB on first run and

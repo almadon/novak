@@ -11,6 +11,8 @@
 #   novak drift               where this deployment differs from the repo
 #                             (aliases: verify, check)
 #   novak drift --adopt       copy settings the repo added into your .env
+#   novak adopt               git pull, then the above — refuses to pull over
+#                             uncommitted changes or diverged history
 #   novak doctor              check config without starting anything
 #   novak config              list settings and where each value comes from
 #   novak config get KEY
@@ -352,6 +354,66 @@ PYEOF
   dim "  Values are the repo's defaults, with their comments. Backup: $backup"
   dim "  Set one with:  novak config set <KEY> <value>"
   dim "  Secrets among them still need:  novak secret set <KEY>"
+}
+
+# `novak drift --adopt` (above) merges the .env schema only, deliberately —
+# some people want that without touching git. This is the other thing:
+# pull the checkout, then run the same merge, in one command. Requested
+# directly after `novak config set OWUI_INFERENCE_PORT 4000` failed with
+# "Unknown setting" on a deployment that had pulled the repo but never
+# adopted the schema — two steps that are really one for most people, so
+# now there's a command that's actually one.
+cmd_adopt() {
+  need_env
+  bold "Adopt"
+  echo
+
+  if [ ! -d "$REPO_DIR/.git" ]; then
+    red "  $REPO_DIR is not a git checkout — cannot pull."
+    exit 1
+  fi
+
+  # Refuses rather than stashes or discards: the service account's checkout
+  # is also where this session builds and branches from, not a pristine
+  # deploy-only clone, so "uncommitted changes" here can be real work in
+  # progress, not stray drift. Same instinct as security.md's "read before
+  # you overwrite" — an operation that could silently lose something does
+  # not get to guess that it's fine.
+  if [ -n "$(git -C "$REPO_DIR" status --porcelain)" ]; then
+    red "  $REPO_DIR has uncommitted changes — not pulling."
+    dim "  Commit, stash, or discard them first, then run this again."
+    exit 1
+  fi
+
+  local branch
+  branch="$(git -C "$REPO_DIR" branch --show-current)"
+  if [ -z "$branch" ]; then
+    red "  $REPO_DIR is on a detached HEAD — not pulling."
+    dim "  Check out a real branch first."
+    exit 1
+  fi
+
+  bold "Pulling $branch"
+  # --ff-only, not a plain pull: refuses outright rather than creating a
+  # merge commit or silently rebasing when local and remote history have
+  # diverged. A failure here should look like a failure, not like it
+  # quietly did something you'd want to review first.
+  if ! git -C "$REPO_DIR" pull --ff-only; then
+    echo
+    red "  Pull failed — see the git output above. Common causes: no"
+    red "  tracking branch set (a local branch that's never been pushed),"
+    red "  or history that's diverged from the remote. This resolves"
+    red "  neither for you — set an upstream or fix the divergence by hand."
+    exit 1
+  fi
+  echo
+
+  bold "Adopting settings the repo has added"
+  echo
+  drift_adopt
+
+  echo
+  dim "Run 'novak up' to apply any of this."
 }
 
 cmd_drift() {
@@ -899,6 +961,7 @@ cmd_menu() {
     "Registry — MCP servers the reconciler sees"
     "oMLX — apply models and profiles"
     "Stack — up / update / down / restart / logs"
+    "Adopt — pull the repo, then merge the new .env schema"
     "Quit"
   )
   local choice i
@@ -961,7 +1024,8 @@ cmd_menu() {
           *)       tui_run up ;;
         esac
         ;;
-      11|0|"") return 0 ;;
+      11) tui_run adopt ;;
+      12|0|"") return 0 ;;
       *) echo "Not a number on the list."; continue ;;
     esac
     tui_pause || return 0
@@ -973,6 +1037,7 @@ case "${1:-menu}" in
   status)   cmd_status ;;
   ports)    cmd_ports ;;
   drift|verify|check) shift; cmd_drift "$@" ;;
+  adopt)    cmd_adopt ;;
   omlx)     shift; cmd_omlx "$@" ;;
   doctor)   cmd_status ;;   # same checks up.sh runs, without starting anything
   config)   shift; cmd_config "$@" ;;

@@ -3,12 +3,14 @@
 # Start with scripts/up.sh (pulls secrets from Keychain), not bare
 # `docker compose up`.
 #
-# PLACEMENT: this file is written for the mini, which runs oMLX and everything
-# that wants to be near it — Hindsight, the console, and the Wyoming voice
-# services. (Mem0 and its first-party shim were replaced by Hindsight; see
-# decisions #3.) Open WebUI already runs on a separate VPS and reaches oMLX
-# over Tailscale; its service block here is for reference/local testing, not
-# the deployed instance. See docs/architecture.md § Placement.
+# PLACEMENT: this file is written for the mini, which runs oMLX and
+# everything else — Hindsight, the console, Open WebUI, and the Wyoming
+# voice services all run on this same host. (Mem0 and its first-party shim
+# were replaced by Hindsight; see decisions #3.) Corrected 2026-08-27: this
+# used to say Open WebUI runs on a separate VPS, which was an earlier plan
+# and is not this deployment. The only thing off-host is the reverse proxy
+# fronting the portal and Open WebUI, on a LAN-neighboring machine, not a
+# VPS. See docs/architecture.md § Placement.
 
 name: novak
 
@@ -20,7 +22,15 @@ services:
     ports:
       - "${OPENWEBUI_PORT:-3000}:8080"
     environment:
-      OPENAI_API_BASE_URL: "http://host.docker.internal:${OMLX_PORT:-8080}/v1"
+      # Points at oMLX directly by default. Once the router (decision #21)
+      # is configured, set OWUI_INFERENCE_PORT to ${ROUTER_PORT:-4000} to
+      # get the persona injected without any other change here — the
+      # router exposes the same model names (chat, deep, ha-voice) oMLX
+      # does, so nothing about model selection in Open WebUI changes.
+      # Left pointed at oMLX by default rather than switched automatically:
+      # the router is optional and gated behind its own compose profile,
+      # and this line has no way to know whether that profile is active.
+      OPENAI_API_BASE_URL: "http://host.docker.internal:${OWUI_INFERENCE_PORT:-${OMLX_PORT:-8000}}/v1"
       OPENAI_API_KEY: "${OMLX_API_KEY:-none}"
       ENABLE_OLLAMA_API: "false"
       # The address USERS reach this at, which Novak cannot work out: behind a
@@ -260,8 +270,19 @@ services:
       OPENWEBUI_PORT: "${OPENWEBUI_PORT:-3000}"
       CONSOLE_PORT: "${CONSOLE_PORT:-3002}"
     volumes:
-      - ./portal/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./portal/index.html:/srv/portal/index.html:ro
+      # ${REPO_DIR}, not a relative ./portal path: compose resolves a
+      # relative bind against --project-directory, which up.sh and
+      # scripts/novak both set to $NOVAK_HOME, not the checkout. A
+      # relative path here silently binds nothing — Docker creates an
+      # empty directory at the target instead of erroring, which then
+      # fails at the application layer ("Is a directory") rather than at
+      # the compose layer, on the very first real run of this profile.
+      # Both scripts export REPO_DIR for exactly this. Not seeded into
+      # NOVAK_HOME the way registry/mcp-servers.yaml is, on purpose: that
+      # file is meant to be edited per-deployment, this one is read-only
+      # application config that should track a `git pull` immediately.
+      - ${REPO_DIR}/portal/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${REPO_DIR}/portal/index.html:/srv/portal/index.html:ro
 
   # TinyAuth: forward-auth in front of the portal only, checked against
   # Pocket ID's admins.novak group. AGPL-3.0, run unmodified; see
@@ -302,6 +323,51 @@ services:
       TINYAUTH_APPS_PORTAL_CONFIG_DOMAIN: "${PORTAL_APPURL:-}"
     volumes:
       - tinyauth:/data
+
+  # ── Inference router (decision #21) ────────────────────────────────────
+  # Injects Novak's persona once, here, instead of a copy pasted into every
+  # client's own model config. Open WebUI and Home Assistant point their
+  # base URL at this instead of at oMLX directly; nothing else in either
+  # client changes, since the model names below (chat, deep, ha-voice)
+  # match what they already ask for.
+  #
+  # Optional and gated behind a compose profile, same reasoning as the
+  # console and the portal: OMLX_API_KEY is what this needs to reach oMLX,
+  # and a deployment that hasn't set it yet should get a stack that starts
+  # without the router rather than one that refuses to start at all.
+  #
+  # Pinned to the exact digest verified against, not :main-stable — that
+  # tag moves, and the persona-injection mechanism this relies on
+  # (async_pre_call_hook, not LiteLLM's newer CustomPromptManagement API,
+  # which was tried first and silently never fired — see
+  # router/persona_hook.py) was confirmed against this specific build.
+  router:
+    profiles: ["router"]
+    image: ghcr.io/berriai/litellm@sha256:20b5044b619055374061a6d5b7b08754cad75aeabbf82ddf4f69cc0cf80ddaf4
+    restart: unless-stopped
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    ports:
+      - "${ROUTER_PORT:-4000}:4000"
+    environment:
+      OMLX_API_KEY: "${OMLX_API_KEY:-}"
+      # Built here with compose's own ${VAR:-default} interpolation,
+      # already used everywhere else in this file, rather than templated
+      # inside config.yaml: LiteLLM's config only documents whole-field
+      # substitution (os.environ/VARNAME), not interpolation inside a
+      # larger string, confirmed by testing the alternative and having it
+      # silently do nothing useful.
+      OMLX_BASE_URL: "http://host.docker.internal:${OMLX_PORT:-8000}/v1"
+    volumes:
+      # See the portal's identical comment above on why ${REPO_DIR}, not a
+      # relative path — this is the bug that surfaced it: the first real
+      # `novak up` with this profile active failed with a Python
+      # IsADirectoryError on config.yaml, because compose had silently
+      # bound an empty directory instead of the file.
+      - ${REPO_DIR}/router/config.yaml:/app/config.yaml:ro
+      - ${REPO_DIR}/router/persona_hook.py:/app/persona_hook.py:ro
+      - ${REPO_DIR}/prompts:/prompts:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
   open-webui:

@@ -53,6 +53,7 @@ while [ -L "$SOURCE" ]; do
   [[ "$SOURCE" != /* ]] && SOURCE="$LINKDIR/$SOURCE"
 done
 REPO_DIR="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
+export REPO_DIR
 
 if [ ! -f "$REPO_DIR/scripts/lib/vars.sh" ]; then
   echo "✋ Could not locate the Novak checkout from $0" >&2
@@ -476,6 +477,7 @@ cmd_ports() {
   }
 
   row "oMLX (host app)"  "$(envval OMLX_PORT)"
+  row "Router"           "$(envval ROUTER_PORT)"
   row "Console"          "$(envval CONSOLE_PORT)"
   row "Hindsight API"    "$(envval HINDSIGHT_PORT)"
   row "Hindsight UI"     "$(envval HINDSIGHT_UI_PORT)"
@@ -577,12 +579,13 @@ cmd_status() {
 }
 
 compose() {
-  # The console sits behind a compose profile so a missing OIDC secret cannot
-  # stop the rest of the stack. Enable it here so `logs`, `restart`, `down` and
-  # `ps` can still see a console that is already running — none of these create
-  # containers, so this cannot start an unconfigured one. Only up.sh decides
-  # that, and only when its config is complete.
-  local args=(env COMPOSE_PROFILES=console docker compose --project-directory "$NOVAK_HOME" -f "$REPO_DIR/docker-compose.yml")
+  # Every optional service sits behind a compose profile so a missing
+  # secret cannot stop the rest of the stack. All three enabled here so
+  # `logs`, `restart`, `down` and `ps` can still see whichever of them is
+  # already running — none of these create containers, so this cannot
+  # start an unconfigured one. Only up.sh decides that, and only when a
+  # given profile's config is actually complete.
+  local args=(env COMPOSE_PROFILES=console,portal,router docker compose --project-directory "$NOVAK_HOME" -f "$REPO_DIR/docker-compose.yml")
   [ -f "$ENV_FILE" ] && args+=(--env-file "$ENV_FILE")
   [ -f "$NOVAK_HOME/docker-compose.mcp.yml" ] && args+=(-f "$NOVAK_HOME/docker-compose.mcp.yml")
   "${args[@]}" "$@"

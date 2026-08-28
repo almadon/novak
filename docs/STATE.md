@@ -51,30 +51,36 @@ nothing left to say.
   #22 if this reads as a demotion. It isn't one; the two solve different
   problems.
 
+## Built now, out of the order decision #21 itself named
+
+**The inference router exists** (decision #23): `router/` runs LiteLLM in
+front of oMLX, injecting the persona from `prompts/` for `chat`, `deep`,
+and `ha-voice`, transparently. Built on explicit direct instruction to
+build it now, ahead of the persona drift check #21 said should come
+first. That departure is recorded in #23, not silently taken, and the
+reasoning for the original order hasn't changed.
+
+**Only half of what #21 asked for.** Persona uniformity: done, verified
+end to end against the real deployment. Identity travelling with the
+request, and the per-user memory routing it was meant to enable: **not
+built, not started.** The router today does one thing (inject a system
+prompt) and nothing about who is calling.
+
 ## Decided, not built
 
-Three items, not two as the previous version of this file said. The count
-itself had drifted.
+Two items now, not three.
 
-- **Persona push to clients** (decision #18). **Does not exist.** The
-  decision names the shape (`prompts/` as source, an applier per client) and
-  ends with its own "VERIFY before building: neither client's API was
-  exercised." Nobody has exercised them since. If Open WebUI or Home
-  Assistant show Novak's persona today, a person pasted it in by hand; there
-  is no automation and nothing to have "failed."
-- **Client-side persona drift check** (decision #18, the weaker half).
-  Also does not exist. `novak drift` (built, working) checks settings and
-  the registry only. A drift check for whether a client's actual persona
-  still matches `prompts/` would need each client's credentials and has not
-  been written.
-- **Inference routing layer** (decision #21). An OpenAI-compatible router in
-  front of oMLX (most likely LiteLLM) so the persona is injected once for
-  every client and a verified identity travels with the request. Not built.
-
-  **The stated order still holds and still hasn't been followed**: build the
-  persona drift check first, since it's what would tell you whether the
-  router is actually delivering the uniformity it's built for. Nothing above
-  has started on either front.
+- **Persona push to clients** (decision #18's original proposal: per-client
+  copies kept in sync by an applier). Superseded by the router existing at
+  all; not going to be built now that #21 has a working alternative.
+- **Client-side persona drift check** (decision #18's weaker half, decision
+  #21's stated prerequisite for the router). Still does not exist.
+  `novak drift` (built, working) checks settings and the registry only. A
+  check for whether a client's actual persona still matches `prompts/`
+  needs each client's credentials and has not been written, and now that
+  the router is live, this is also the only way to confirm it's actually
+  being used rather than assumed to be, since nothing stops a client from
+  still pointing at oMLX directly.
 
 ## Open VERIFY items
 
@@ -142,3 +148,11 @@ Carried forward, plus what the last few days of work added:
   cookie domain) must be a real hostname with a scheme. A bare Tailscale IP
   (otherwise a perfectly valid way to reach every other service in this
   stack) is refused outright.
+- A relative bind mount in `docker-compose.yml` (`./router/config.yaml`,
+  and the portal's two before this) resolves against `--project-directory`,
+  which `up.sh` and `scripts/novak` both set to `$NOVAK_HOME`, not the
+  checkout. When the source doesn't exist there, Docker silently creates an
+  empty directory rather than erroring, so the failure surfaces later, as
+  an `IsADirectoryError` inside whatever's reading the file, not as a
+  compose error. `REPO_DIR` is now exported by both scripts specifically so
+  new mounts of repo files can use `${REPO_DIR}/...` instead.

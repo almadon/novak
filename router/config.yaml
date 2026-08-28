@@ -1,0 +1,52 @@
+# LiteLLM proxy config. Declarative in the same sense registry/*.yaml is:
+# this file is the source, the router container reads it at start, and
+# there is a real audit trail in git for what any client is actually
+# talking to.
+#
+# KNOWN COUPLING, not automated: litellm_params.model below must match
+# registry/omlx.yaml's current repo + profile name exactly (oMLX exposes
+# "<repo-basename>:<profile>", confirmed live against a running instance —
+# not the bare profile name alone). If omlx.yaml's repo changes, this file
+# goes stale silently: the router keeps serving the OLD model id, oMLX
+# 404s it, and the failure surfaces as "the router is broken" rather than
+# "these two files disagree." A reconciler step that generates this from
+# omlx.yaml would close that gap; not built here — see docs/decisions.md
+# on the inference routing layer for why this was scoped out of the first
+# cut rather than expanded to cover it.
+# OMLX_BASE_URL, not a ${VAR} port substitution inline below: LiteLLM's
+# config.yaml only documents `os.environ/VARNAME` for a whole field value,
+# not shell-style interpolation inside a larger string. docker-compose.yml
+# builds the full URL with its own ${OMLX_PORT:-8000} pattern, already used
+# everywhere else in this repo, and hands it to the container as one
+# variable — LiteLLM never needs to know the port is configurable at all.
+model_list:
+  - model_name: chat
+    litellm_params:
+      model: openai/Qwen3-14B-4bit:chat
+      api_base: os.environ/OMLX_BASE_URL
+      api_key: os.environ/OMLX_API_KEY
+  - model_name: deep
+    litellm_params:
+      model: openai/Qwen3-14B-4bit:deep
+      api_base: os.environ/OMLX_BASE_URL
+      api_key: os.environ/OMLX_API_KEY
+  - model_name: ha-voice
+    litellm_params:
+      model: openai/Qwen3-4B-Instruct-2507-4bit:ha-voice
+      api_base: os.environ/OMLX_BASE_URL
+      api_key: os.environ/OMLX_API_KEY
+
+litellm_settings:
+  # async_pre_call_hook, not LiteLLM's newer CustomPromptManagement /
+  # get_chat_completion_prompt API. That API was tried first, since it's
+  # the one actually documented for this — read its own source
+  # (prompt_management_base.py) to confirm it should have worked with no
+  # per-model config at all, registered a callback exactly per its
+  # reference example, and confirmed the module loaded (a debug print at
+  # import time fired). The method was never invoked: zero calls logged
+  # across repeated real chat completions in this LiteLLM build
+  # (ghcr.io/berriai/litellm:main-stable). async_pre_call_hook is the
+  # older, plainer mechanism used for guardrails and rate limiting
+  # everywhere, and it works — verified the same way, with the same debug
+  # print, which did fire on every request. See router/persona_hook.py.
+  callbacks: persona_hook.persona_injector

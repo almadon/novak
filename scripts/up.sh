@@ -6,6 +6,7 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export REPO_DIR
 
 # Runtime lives outside the checkout. The repo holds definitions; NOVAK_HOME
 # holds this deployment's config, data and generated files — so `git pull`
@@ -75,6 +76,16 @@ done
 for var in "${PORTAL_SECRETS[@]}"; do
   v="${!var:-$(envval "$var")}"
   case "$v" in ""|set-in-keychain|changeme) portal_missing+=("$var") ;; esac
+done
+
+router_missing=()
+for var in "${ROUTER_EDITS[@]}"; do
+  v="$(envval "$var")"
+  case "$v" in ""|EDIT-ME|changeme) router_missing+=("$var") ;; esac
+done
+for var in "${ROUTER_SECRETS[@]}"; do
+  v="${!var:-$(envval "$var")}"
+  case "$v" in ""|set-in-keychain|changeme) router_missing+=("$var") ;; esac
 done
 
 unedited=()
@@ -148,9 +159,9 @@ if [ ! -x "$PY" ] || ! "$PY" -c 'import yaml' 2>/dev/null; then
 fi
 # Compose reads COMPOSE_PROFILES from the environment, and the reconciler is
 # what runs `docker compose up`, so this is all it takes to include or omit
-# either optional profile — no reconciler change, and nothing here needs to
-# know about them beyond this check. Additive (comma-joined) since both can
-# be active at once.
+# any optional profile — no reconciler change, and nothing here needs to
+# know about them beyond this check. Additive (comma-joined) since more
+# than one can be active at once.
 profiles=()
 if [ ${#console_missing[@]} -eq 0 ]; then
   profiles+=(console)
@@ -162,6 +173,12 @@ if [ ${#portal_missing[@]} -eq 0 ]; then
   profiles+=(portal)
 else
   echo "skipped:  portal — not configured: ${portal_missing[*]}" >&2
+  echo "          everything else starts; set those and re-run to add it." >&2
+fi
+if [ ${#router_missing[@]} -eq 0 ]; then
+  profiles+=(router)
+else
+  echo "skipped:  router — not configured: ${router_missing[*]}" >&2
   echo "          everything else starts; set those and re-run to add it." >&2
 fi
 if [ ${#profiles[@]} -gt 0 ]; then

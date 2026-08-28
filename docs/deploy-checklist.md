@@ -341,6 +341,15 @@ Do this deliberately, while you have time to fix what it finds.
       the registry entry already ships enabled for both Open WebUI and Home
       Assistant. See the registry's own comment on why this isn't Open
       WebUI's built-in Web Search toggle instead.
+- [ ] The inference router (decision #21/#23) — injects Novak's persona
+      into every request instead of a copy pasted into each client's own
+      config. Needs only `OMLX_API_KEY` (already set above if oMLX's own
+      auth is on). To switch a client over, point its base URL at
+      `ROUTER_PORT` instead of `OMLX_PORT` — Open WebUI does this via
+      `OWUI_INFERENCE_PORT`; nothing else changes, since the router
+      exposes the same model names. Not switched over automatically:
+      confirm the persona actually shows up (ask it "who are you?") before
+      trusting the switch. See [architecture.md](architecture.md) § Identity.
 - [ ] Tududi — flip its registry entry on once it's running.
 - [ ] Time Machine covers OrbStack volumes and `~/.omlx`.
 - [ ] Check the licences marked VERIFY in [credits.md](credits.md) —

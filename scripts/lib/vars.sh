@@ -39,6 +39,15 @@ CONSOLE_SECRETS=(CONSOLE_AUTH_SECRET OIDC_CLIENT_SECRET)
 PORTAL_EDITS=(PORTAL_APPURL TINYAUTH_OIDC_CLIENT_ID TINYAUTH_OIDC_AUTH_URL
   TINYAUTH_OIDC_TOKEN_URL TINYAUTH_OIDC_USERINFO_URL)
 PORTAL_SECRETS=(TINYAUTH_OIDC_CLIENT_SECRET)
+# The router (decision #21) needs only what oMLX itself already needs —
+# OMLX_API_KEY is already SECRET_VARS/EXTERNAL_SECRETS, not duplicated
+# here. ROUTER_EDITS is empty on purpose, not omitted: OMLX_PORT and
+# ROUTER_PORT both have safe defaults, so nothing about this integration
+# needs a human to type a value in before it can start, only the one
+# secret to exist — but up.sh's gating loop expects the array to exist
+# under set -u, same as every other optional profile.
+ROUTER_EDITS=()
+ROUTER_SECRETS=(OMLX_API_KEY)
 
 # Secrets without which the stack must not start at all.
 CORE_SECRETS=(HINDSIGHT_API_KEY)

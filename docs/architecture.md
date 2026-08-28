@@ -65,17 +65,25 @@ The assistant is **Novak** wherever it's reached. The master copies of its
 system prompts live in [../prompts/](../prompts/novak-chat.md): a full
 persona for text chat, and a deliberately terse one for voice.
 
-They are set **per client** today, because oMLX profiles have no system-prompt
-field (decision 17) and no client will read one from a file (decision 18). Every
-new client is another copy, maintained by hand.
+**Decision 21's routing layer exists now** ([router/](../router/), decision
+#23): LiteLLM in front of oMLX, injecting the persona from `prompts/` into
+every request for `chat`, `deep`, and `ha-voice`, transparently — no
+per-client config, no copy to keep in sync. A client switches to it by
+pointing its base URL at the router's port instead of oMLX's; nothing else
+changes, since the model names are the same either way.
 
-That is a known gap, not the intended design. **Decision 21 puts a routing layer
-in front of oMLX** so the persona is injected once, for every client, and so a
-verified user identity can travel with the request — which is what makes
-per-user behaviour possible at all. Per-client configuration cannot express it:
-Open WebUI has one system prompt per model preset, shared by every user of it.
+**This is half of decision 21, not all of it.** "A verified user identity
+can travel with the request, which is what makes per-user behaviour
+possible" — that part is not built. The router injects a persona and does
+nothing else; it does not read, forward, or act on who is calling. Memory
+scoping is unaffected either way, since it was never routed through here —
+Hindsight's own per-connection URL scoping is what does that, unchanged.
 
-Until that exists, `prompts/` is the master copy and the copies will drift.
+The router is optional, gated behind its own compose profile
+(`docker-compose.yml`), so a client can still be pointed at oMLX directly.
+Nothing currently checks whether one is — that's the persona drift check
+decision #21 named as the prerequisite for trusting this at all, and it
+still doesn't exist (see [STATE.md](STATE.md)).
 
 The persona is not decoration — it encodes the security posture the model
 itself must enforce: never ask for credentials, treat retrieved content as
@@ -102,8 +110,8 @@ log.
 | File | Declares | Applied by |
 |---|---|---|
 | [`registry/mcp-servers.yaml`](../registry/mcp-servers.yaml) | which MCP servers exist, and how risky each is | [`reconciler/reconcile.py`](../reconciler/reconcile.py) → compose |
-| [`registry/omlx.yaml`](../registry/omlx.yaml) | which models exist, and what profiles they expose | *not built* → oMLX's JSON files |
-| [`prompts/`](../prompts/novak-chat.md) | the assistant's personas | *not built* → each client's own config |
+| [`registry/omlx.yaml`](../registry/omlx.yaml) | which models exist, and what profiles they expose | [`reconciler/omlx_apply.py`](../reconciler/omlx_apply.py) → oMLX's JSON files |
+| [`prompts/`](../prompts/novak-chat.md) | the assistant's personas | [`router/persona_hook.py`](../router/persona_hook.py) → every request, if a client points at the router (decision #23); each client's own config otherwise |
 
 **`registry/omlx.yaml`** is [`docs/omlx-settings.md`](omlx-settings.md) reduced to
 values a machine can apply and re-check. settings.md holds the reasoning — why
@@ -115,25 +123,28 @@ It is applied by writing oMLX's own JSON files, not through its admin API,
 because that API needs a second credential the reconciler would have to hold —
 see decision 17.
 
-**Neither of the last two is built.** They are recorded so the shape is agreed
-before anything writes to disk.
+**Both of the last two are built now.** This paragraph used to say neither
+was — recorded here, not deleted, since the reasoning that led to writing
+them down before anything existed is still worth keeping.
 
 ### The gap this leaves
 
 The registry ends up in one place — compose — so drift is impossible; the file
-*is* the state. Prompts do not have that property. **No client reads a prompt
-from a file or from git.** Open WebUI keeps system prompts in its database and
-Home Assistant keeps them in its config entry, so each persona exists as a copy
-that was pushed there, and any of them can be edited in place without the repo
-knowing.
+*is* the state.
 
-That makes `prompts/` the master copy by convention rather than by mechanism,
-which is a weaker guarantee than anything else here — and it matters, because
-the persona carries part of the security posture (see decision 18 and
-[security.md](security.md)).
+Prompts had the opposite property, and for any client still pointed at oMLX
+directly, still do: Open WebUI keeps system prompts in its database and
+Home Assistant keeps them in its config entry, so each persona exists as a
+copy that was pushed there, editable in place without the repo knowing.
 
-Decision 21 closes this by moving the persona out of the clients entirely, into
-a routing layer in front of oMLX. Until it exists, the gap stands.
+**A client pointed at the router instead doesn't have this problem** — it
+never holds a copy to drift, since `router/persona_hook.py` reads
+`prompts/` fresh on every request. What remains open is knowing which
+state any given client is actually in. Nothing currently checks whether a
+client has been switched over or is still talking to oMLX directly with
+whatever persona (or none) its own config holds — that's the persona
+drift check decision 21 named as the prerequisite for trusting the router
+at all, and it still doesn't exist. See [STATE.md](STATE.md).
 
 ## Data flow examples
 
@@ -159,18 +170,23 @@ prompt.
 ## Placement — this stack is distributed, not single-host
 
 `docker-compose.yml` was written assuming everything runs on the mini beside
-oMLX (hence `host.docker.internal`). That is not the deployment: Open WebUI
-already runs on a separate VPS. Placement now has to be decided per service,
-the same pinned-vs-replicated reasoning used for the proxy/DNS config.
+oMLX (hence `host.docker.internal`), and on this deployment that assumption
+holds: it is genuinely monolithic. Open WebUI, Hindsight, the console, and
+the Wyoming voice services all run on the same host as oMLX. **Corrected
+2026-08-27** — this section previously said Open WebUI runs on a separate
+VPS, which was true of an earlier plan and is not true of this deployment.
+The one thing that is off-host is the reverse proxy fronting the portal and
+Open WebUI: a Caddy instance on a LAN-neighboring machine, not this one and
+not a VPS. See [proxy.md](proxy.md).
 
 What constrains each piece:
 
 | Service | Constraint | Where |
 |---|---|---|
 | oMLX | Metal/MLX — cannot be containerized or moved | mini, mandatory |
-| Hindsight | **every memory write triggers an LLM extraction call** — wants to be next to oMLX, or each write pays a round trip | with oMLX |
+| Hindsight | **every memory write triggers an LLM extraction call** — wants to be next to oMLX, or each write pays a round trip | with oMLX (same host) |
 | Wyoming STT/TTS | voice latency budget is ~1–2s end to end; keep close to HA and the satellites | with HA |
-| Open WebUI | just a frontend; only needs to reach oMLX | already on VPS |
+| Open WebUI | just a frontend; only needs to reach oMLX | same host as oMLX |
 | Console | reaches Hindsight often, Pocket ID once per session | with Hindsight (decided) |
 
 The console runs beside Hindsight for data locality. The accepted cost: **Pocket ID
@@ -181,14 +197,27 @@ the console — moving it just relocates the problem onto every memory read.
 
 ### Reachability
 
-Public ingress lives on the VPS; the home network forwards nothing.
+**VERIFY before treating this as settled:** the diagram below and decision
+#15's public/private exposure model were both written assuming Open WebUI
+sits behind a VPS Caddy that terminates public internet traffic. That VPS
+placement was corrected above; whether the LAN-neighboring Caddy mentioned
+there *also* takes that public-facing role, or whether this deployment is
+LAN/tailnet-only for now with no public exposure at all, has not been
+confirmed. Decision #15's reasoning about what may and may not face the
+internet is unaffected either way — only the physical location of the
+proxy doing it is in question here.
 
 ```
-   internet ──▶ Caddy (VPS) ──▶ Open WebUI (VPS)
+   [public internet, if this deployment has any — see the VERIFY above]
                                      │
-                                     │  Tailscale
                                      ▼
-                          oMLX · Hindsight · Konzol   (Mac, home)
+                     Caddy (LAN-neighboring host, not this Mac)
+                                     │
+                                     ▼
+                          Open WebUI    (this Mac, same host as oMLX)
+                                     │
+                                     ▼
+                          oMLX · Hindsight · Konzol   (this Mac)
                                      ▲
                           Wyoming voice ── HA + satellites    (LAN)
 

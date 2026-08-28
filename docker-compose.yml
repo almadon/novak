@@ -33,6 +33,22 @@ services:
       OPENAI_API_BASE_URL: "http://host.docker.internal:${OWUI_INFERENCE_PORT:-${OMLX_PORT:-8000}}/v1"
       OPENAI_API_KEY: "${OMLX_API_KEY:-none}"
       ENABLE_OLLAMA_API: "false"
+      # Router-only: router/config.yaml exposes a `task` model built for
+      # exactly this — Open WebUI's own background calls (title, tags,
+      # follow-ups, autocomplete), routed around persona injection and
+      # whatever weight/thinking cost the active chat model carries.
+      # Measured directly: the same trivial request cost 574 prompt tokens
+      # and 2.13s through `chat` (persona injected) against 15 tokens and
+      # 0.34s through `task` (not in persona_hook.py's PERSONA_MAP).
+      # Blank (the default) leaves Open WebUI's own Task Model setting
+      # alone — correct when the router isn't configured, since `task`
+      # isn't a model name anywhere else. Set OWUI_TASK_MODEL=task once
+      # OWUI_INFERENCE_PORT points at the router. Set here, not left to
+      # the admin UI alone: ENABLE_PERSISTENT_CONFIG=false means a
+      # UI-only change here doesn't survive a restart, the same trap
+      # OPENAI_API_BASE_URL's own comment already documents.
+      TASK_MODEL: "${OWUI_TASK_MODEL:-}"
+      TASK_MODEL_EXTERNAL: "${OWUI_TASK_MODEL:-}"
       # The address USERS reach this at, which Novak cannot work out: behind a
       # reverse proxy it is a public name on another host that this stack never
       # sees. HOST_NAME is how machines here reach each other, and is the wrong

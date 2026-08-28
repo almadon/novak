@@ -19,6 +19,7 @@ SECRET_VARS=(
   TUDUDI_API_TOKEN
   VIKUNJA_API_TOKEN
   BRAVE_API_KEY
+  OPEN_TERMINAL_API_KEY
   CONSOLE_AUTH_SECRET
   OIDC_CLIENT_SECRET
   OWUI_OIDC_CLIENT_SECRET
@@ -85,6 +86,10 @@ EXTERNAL_SECRETS=(
   BRAVE_API_KEY
   TINYAUTH_OIDC_CLIENT_SECRET
 )
-SHARED_SECRETS=(HINDSIGHT_API_KEY)
+# OPEN_TERMINAL_API_KEY is the same shape as HINDSIGHT_API_KEY: we generate
+# it, the container reads it, and a human then has to paste the same value
+# into Open WebUI's Admin -> Settings -> Integrations -> Open Terminal —
+# there's no registry-driven wiring for it, see registry/mcp-servers.yaml.
+SHARED_SECRETS=(HINDSIGHT_API_KEY OPEN_TERMINAL_API_KEY)
 
 PLACEHOLDERS='^(EDIT-ME|set-in-keychain|changeme)$'

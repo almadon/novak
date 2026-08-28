@@ -35,6 +35,23 @@ model_list:
       model: openai/Qwen3-4B-Instruct-2507-4bit:ha-voice
       api_base: os.environ/OMLX_BASE_URL
       api_key: os.environ/OMLX_API_KEY
+  # For Open WebUI's own background calls (title, tags, follow-up
+  # suggestions) — set as its Local Task Model, Admin Settings ->
+  # Interface. Deliberately NOT in persona_hook.py's PERSONA_MAP: a chat
+  # title doesn't need Novak's persona prepended, and by default Open
+  # WebUI's Task Model is "Current Model", which sends these through
+  # whatever the user is actively chatting with. If that's `deep`
+  # (thinking on), every title/tags/follow-up call was paying for a full
+  # reasoning pass AND a persona injection on top of it, for output nobody
+  # reads as a conversation. Reuses ha-voice's oMLX profile rather than a
+  # new one: same reasons apply here — always resident (no TTL wait),
+  # thinking off, short output — and it's already tuned for exactly that
+  # shape of fast, low-creativity completion.
+  - model_name: task
+    litellm_params:
+      model: openai/Qwen3-4B-Instruct-2507-4bit:ha-voice
+      api_base: os.environ/OMLX_BASE_URL
+      api_key: os.environ/OMLX_API_KEY
 
 litellm_settings:
   # async_pre_call_hook, not LiteLLM's newer CustomPromptManagement /

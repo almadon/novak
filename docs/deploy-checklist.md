@@ -344,12 +344,31 @@ Do this deliberately, while you have time to fix what it finds.
 - [ ] The inference router (decision #21/#23) — injects Novak's persona
       into every request instead of a copy pasted into each client's own
       config. Needs only `OMLX_API_KEY` (already set above if oMLX's own
-      auth is on). To switch a client over, point its base URL at
-      `ROUTER_PORT` instead of `OMLX_PORT` — Open WebUI does this via
-      `OWUI_INFERENCE_PORT`; nothing else changes, since the router
-      exposes the same model names. Not switched over automatically:
-      confirm the persona actually shows up (ask it "who are you?") before
-      trusting the switch. See [architecture.md](architecture.md) § Identity.
+      auth is on).
+
+      `OWUI_INFERENCE_PORT` (and every other variable this or a later
+      merge added) is not a line in an existing deployment's `.env` until
+      adopted — `novak drift` only reports that; `config set` refuses any
+      key that isn't already there, and that refusal is what you'll hit if
+      you skip this:
+
+      novak drift --adopt
+      novak config set OWUI_INFERENCE_PORT 4000
+
+      Open WebUI needs only that — same model names, same dropdown, just
+      pointed at the router. **Home Assistant needs more than a port
+      change**: its conversation agent is configured with oMLX's *long*
+      model id (`Qwen3-4B-Instruct-2507-4bit:ha-voice`), and the router
+      only knows the *short* name (`ha-voice`) — set the model field to
+      that, not the long id, and clear the system prompt field you set
+      there under [home-assistant.md](home-assistant.md). Leaving it set
+      doesn't break anything; the router never overrides a client that
+      already sends its own system message, which quietly defeats the
+      point of switching at all.
+
+      Not switched over automatically for either client: confirm the
+      persona actually shows up (ask it "who are you?") before trusting
+      the switch. See [architecture.md](architecture.md) § Identity.
 - [ ] Tududi — flip its registry entry on once it's running.
 - [ ] Time Machine covers OrbStack volumes and `~/.omlx`.
 - [ ] Check the licences marked VERIFY in [credits.md](credits.md) —

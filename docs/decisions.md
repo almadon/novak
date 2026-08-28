@@ -1060,3 +1060,56 @@ token against `hindsight-household` correctly reports `401`. A made-up
 unreachable Tailscale address correctly reports `unreachable`, and —
 after the `|| true` fix — does so without aborting the rest of the
 entries.
+
+## 25. Open Terminal joins the registry as the first `container` entry that isn't MCP
+
+Requested directly, as an explicitly optional, opt-in integration —
+consistent with how everything else in `registry/mcp-servers.yaml` works.
+[Open Webui's Open Terminal](https://github.com/open-webui/open-terminal)
+(Apache-2.0) is a sandboxed terminal and file browser a model can be
+given access to from Open WebUI's own Admin -> Settings -> Integrations.
+
+It doesn't speak MCP. Open WebUI connects to it directly as an
+"Integration," not through the MCP client wiring every other registry
+entry assumes. Checked `reconciler/reconcile.py` before assuming this was
+a problem: `render()` doesn't care what a container speaks, only that it
+has an image, a port, and declared env vars — the "MCP server" framing
+in the registry's header comment was descriptive, not a constraint the
+mechanics actually enforce. Landed as `kind: container` with a comment
+correcting the record, rather than inventing a new `kind` for one entry.
+
+### Two limits chosen deliberately, not defaults left alone
+
+This is `risk: dangerous` by the registry's own definition — it runs
+arbitrary code and reads/writes a filesystem, no reading between the
+lines required. Shipped disabled, no `accepted_by`/`accepted_on`, same
+as `ha-mcp` — the reconciler refuses to start it until a person accepts
+that in the record.
+
+Two things Open Terminal's own docs offer that this entry deliberately
+does not:
+
+- **No Docker socket mount.** Its README documents one for letting an
+  agent manage other containers, and its own words for what that grants
+  are "effectively root access." Nothing about this stack needs a model
+  that can start or stop its own containers, so it isn't offered.
+- **No filesystem mount into anything real.** Left on the image's own
+  default scratch space. A model reading its own sandbox is the
+  intended use; a model reading this repo, `$NOVAK_HOME`, or any secret
+  is not, and nothing here grants that path.
+
+Neither is a technical limitation being worked around — both are
+choices about what doesn't get added later without the same scrutiny
+turning this on in the first place got.
+
+### What was verified before shipping
+
+The registry entry validates and reports `disabled` (correct — it's off
+by default). Test-enabled with a dummy key and a filled-in
+`accepted_by`/`accepted_on` against a scratch `$NOVAK_HOME`, the
+reconciler correctly renders a real `open-terminal-mcp` service (the
+`-mcp` suffix is `render()`'s own hardcoded naming, cosmetically wrong
+for a non-MCP entry, not worth changing for one container), with the
+image, `8010:8000` port mapping, and `OPEN_TERMINAL_API_KEY` passed
+through from the host environment — the same path every other container
+entry already uses, unmodified for this one.

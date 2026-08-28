@@ -29,7 +29,8 @@
 #   novak down                stop, keep data
 #   novak restart [SERVICE]
 #   novak logs [SERVICE]
-#   novak registry            show the MCP registry as the reconciler sees it
+#   novak registry [--check]  show the MCP registry as the reconciler sees it
+#                              (--check also live-probes external entries)
 #   novak omlx apply          apply registry/omlx.yaml (models, profiles, TTLs)
 #
 # Add to PATH: bootstrap.sh does this, at ~/.local/bin/novak (see docs/cli.md
@@ -571,6 +572,69 @@ cmd_ports() {
   fi
 }
 
+cmd_registry() {
+  need_env
+  local out
+  out="$("$NOVAK_HOME/.venv/bin/python" "$REPO_DIR/reconciler/reconcile.py" --dry-run)"
+  printf '%s\n' "$out"
+
+  [ "${1:-}" = "--check" ] || return 0
+
+  # This is deliberately NOT in the reconciler. reconcile.py's own docstring
+  # rules out reading secrets or touching the network — a real check needs
+  # both, so it lives here instead, alongside secret verify and the
+  # checklist's oMLX/Hindsight probes, which already do exactly this.
+  #
+  # A bare GET is not a meaningful auth check: Hindsight answers one
+  # 200 {} unauthenticated, same as authenticated — a handshake response,
+  # not a real call (found directly while debugging the checklist's own
+  # Hindsight check). So anything with a token gets a real MCP `initialize`
+  # call instead — one request, no prior session needed, and confirmed
+  # directly against a live server to actually flip 401 with no/wrong
+  # token and 200 with the right one. tools/list was tried first and
+  # rejected: streamable-HTTP MCP requires session state from a prior
+  # initialize before it will answer anything else (confirmed live: a
+  # bare tools/list gets a 400 "Missing session ID", auth notwithstanding),
+  # and standing up that handshake just to read a status code is more
+  # machinery than this check is worth.
+  echo
+  bold "Live check (external entries)"
+  dim "  A real MCP initialize call when there's a token to try, a bare"
+  dim "  connection otherwise. 401 means reachable but not authenticating —"
+  dim "  a wrong or missing Keychain value, not a dead host."
+  echo
+
+  local line name url authvar token code label
+  while IFS= read -r line; do
+    case "$line" in "external: "*) ;; *) continue ;; esac
+    name="$(sed -E 's/^external: ([a-z0-9-]+).*/\1/' <<<"$line")"
+    url="$(sed -E 's/^external: [a-z0-9-]+ -> ([^ ]+).*/\1/' <<<"$line")"
+    authvar="$(sed -nE 's/.*\[token: ([A-Z_]+)\].*/\1/p' <<<"$line")"
+    token=""
+    [ -n "$authvar" ] && token="$(keychain "$authvar")"
+
+    if [ -n "$token" ]; then
+      code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 4 -X POST \
+        -H "Content-Type: application/json" \
+        -H "Accept: application/json, text/event-stream" \
+        -H "Authorization: Bearer $token" \
+        -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"novak-probe","version":"1.0"}}}' \
+        "$url" 2>/dev/null || true)"
+    else
+      code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 4 "$url" 2>/dev/null || true)"
+    fi
+    code="${code:-000}"
+
+    case "$code" in
+      200) label="$(printf '\033[32m%s\033[0m' 'reachable, authenticating')" ;;
+      401|403) label="$(printf '\033[33m%s\033[0m' "reachable, NOT authenticating — check ${authvar:-its token} in Keychain")" ;;
+      000) label="$(printf '\033[31m%s\033[0m' 'unreachable')" ;;
+      *)   label="$(printf '\033[33m%s\033[0m' "unexpected status $code")" ;;
+    esac
+    printf '  %-22s %s\n' "$name" "$label"
+  done <<<"$out"
+}
+
 cmd_update() {
   need_env
   if ! docker info >/dev/null 2>&1; then
@@ -1012,7 +1076,13 @@ cmd_menu() {
           *)      tui_run secret list ;;
         esac
         ;;
-      8) tui_run registry ;;
+      8)
+        if tui_yn "Live-probe external MCP entries too? (network + Keychain reads)"; then
+          tui_run registry --check
+        else
+          tui_run registry
+        fi
+        ;;
       9) tui_run omlx apply ;;
       10)
         local sub; sub="$(tui_ask "up / update / down / restart / logs" "up")"
@@ -1047,7 +1117,7 @@ case "${1:-menu}" in
   down)     compose down ;;
   restart)  shift; compose restart "$@" ;;
   logs)     shift; compose logs -f --tail=100 "$@" ;;
-  registry) exec "$NOVAK_HOME/.venv/bin/python" "$REPO_DIR/reconciler/reconcile.py" --dry-run ;;
+  registry) shift; cmd_registry "$@" ;;
   -h|--help|help) usage ;;
   *) red "unknown command: $1"; echo; usage; exit 1 ;;
 esac

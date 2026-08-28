@@ -993,3 +993,70 @@ model's underlying repo changes; a generator step alongside
 persona drift check #21 asked for first is still exactly as un-built as
 it was before this — this router does not verify its own claim of
 uniformity, only asserts it.
+
+## 24. `novak registry --check` does the reachability probing the reconciler deliberately doesn't
+
+Prompted directly: a live deployment had two registry entries sitting at
+`enabled: true` with `http://EDIT-ME:8888/...` as their URL for weeks —
+`reconcile.py` only checks that a URL is syntactically real, never that
+it's been edited — and the question that followed was whether the
+reconciler should go further and check reachability, rather than pattern
+match one placeholder string.
+
+It shouldn't, and the reasoning is the same shape as #20's: a meaningful
+reachability check needs the real auth token, since a bare unauthenticated
+request can look identical to an authenticated one (Hindsight answers a
+bare GET with `200 {}` either way — a handshake response, not a real
+call, found directly while building this). Reading that token means
+reading the Keychain, and `reconcile.py`'s own docstring already rules
+that out on purpose: no secrets read, no network touched, no listener,
+declare/apply only. Bolting a live probe onto it wouldn't extend the
+reconciler, it would abandon what makes it safe to run unattended on
+every `novak up`.
+
+### Where it actually landed
+
+`novak registry --check`, in `scripts/novak` — the CLI layer, where
+reading Keychain secrets to test something is already normal
+(`secret verify`, the deployment checklist's oMLX and Hindsight checks).
+Plain `novak registry` is unchanged: fast, local, no network. `--check`
+is opt-in, parses the reconciler's own `external: NAME -> URL [token:
+VAR]` output rather than re-parsing the YAML a second time, and for each
+entry with a token, reads it from the Keychain and sends one real MCP
+call; entries with no token get a bare connection attempt.
+
+The call sent is `initialize`, not `tools/list`. `tools/list` was tried
+first and rejected after testing it live: streamable-HTTP MCP requires
+session state from a prior `initialize` before it will answer anything
+else, so an authenticated `tools/list` with no session returns `400
+Missing session ID` — a false alarm, not a real signal, and standing up
+the two-call handshake just to read a status code was more machinery
+than this was worth. `initialize` needs no prior session and, confirmed
+directly against the real deployment, genuinely flips: `401` with no or
+the wrong token, `200` with the right one. That gives three distinct,
+useful states — `200` really works, `401` reachable but not
+authenticating (a wrong or missing Keychain value, not a dead host), and
+a failed connection is neither.
+
+### The bug this caught in its own first test
+
+The first real test — an intentionally unreachable host — killed the
+whole `--check` run instead of reporting one red line, because
+`code="$(curl ... )"` with no `|| true` is a plain assignment, not a
+condition, and `set -e` treats curl's own non-zero exit (28, timeout) as
+fatal. `cmd_checklist`'s Hindsight check had already hit this exact shape
+once (see its own comment, `scripts/novak`), and this reused the fix
+without reusing the vigilance the first time around — worth noting
+because it's the second time the same bash trap has shipped once and
+been caught on the second write, not the first.
+
+### What was verified, end to end
+
+Against the real deployment: `outline-everything`, `hindsight-household`,
+and `hindsight-tmeuze` all report `200`, genuinely reachable and
+authenticating (the latter two only true after #23's follow-up fixed
+their `EDIT-ME` placeholders to the real Tailscale address). A wrong
+token against `hindsight-household` correctly reports `401`. A made-up
+unreachable Tailscale address correctly reports `unreachable`, and —
+after the `|| true` fix — does so without aborting the rest of the
+entries.

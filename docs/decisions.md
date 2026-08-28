@@ -1061,7 +1061,95 @@ unreachable Tailscale address correctly reports `unreachable`, and —
 after the `|| true` fix — does so without aborting the rest of the
 entries.
 
-## 25. Open Terminal joins the registry as the first `container` entry that isn't MCP
+## 25. The router's `task` model: Open WebUI's background calls get a persona bypass
+
+Reported directly: Open WebUI got noticeably laggier since the router
+went live. Root cause, confirmed rather than guessed at — Open WebUI's
+Task Model setting (Admin Settings -> Interface -> Tasks) defaults to
+"Current Model" for title generation, tag generation, and follow-up
+suggestions, all three on by default. "Current Model" means whatever the
+user is actively chatting with — `chat` or `deep` — which since #23 now
+goes through the router and gets the full persona injected on every
+single call, `persona_hook.py`'s `PERSONA_MAP` making no distinction
+between a real conversational turn and a three-word title nobody reads
+as a conversation.
+
+Measured directly, not estimated: the identical trivial request
+(`"Reply with exactly one word: hello"`) cost 574 prompt tokens and
+2.13s through `chat`, against 15 prompt tokens and 0.34s through the new
+`task` model below — on an already-warm model, so a cold `deep` (idle
+TTL expired, thinking on) paying this same tax would be worse still.
+
+### The fix
+
+`router/config.yaml` gets a fourth `model_name: task`, aliasing the same
+underlying oMLX model and profile `ha-voice` already uses — always
+resident (no TTL wait), thinking off, tuned for short low-creativity
+output, which is exactly the shape title/tag/follow-up generation needs.
+Deliberately **not** added to `persona_hook.py`'s `PERSONA_MAP`, so the
+hook no-ops for it by construction rather than by a special case.
+
+Open WebUI's Local **and** External Task Model (both — its own docs
+don't fully specify which applies to an all-OpenAI-API setup with Ollama
+disabled, and setting both costs nothing) are pointed at `task` in the
+admin UI. That alone doesn't survive a restart: `ENABLE_PERSISTENT_CONFIG`
+is `false` on purpose (`docker-compose.yml`'s own comment explains why —
+this exact instance already lost a config change to a restart once,
+silently, before that flag existed), so `TASK_MODEL` and
+`TASK_MODEL_EXTERNAL` are also set directly in `docker-compose.yml`,
+gated behind a new `OWUI_TASK_MODEL` .env key that defaults to blank —
+correct when the router isn't configured at all, since `task` isn't a
+model name anywhere else in that case.
+
+### What this surfaced, unrelated to the fix itself
+
+Open WebUI has no `WEBUI_SECRET_KEY` pinned anywhere in this stack — it
+generates a random one at container startup when unset, which
+invalidates every existing session on every restart. Confirmed directly:
+recreating the container to apply this very fix logged out the admin
+session that was open to verify it. Flagged as its own follow-up rather
+than folded in here — a session-signing key is an unrelated concern from
+a task-routing one, and conflating them in one change would make either
+harder to revert independently if something about it needed undoing.
+Fixed in #26 below.
+
+### What was verified, end to end
+
+The `task` model shows up in Open WebUI's own model dropdown only after
+a router restart (it caches the model list at page load, not on every
+request — a stale list is expected, not a bug, after adding one).
+`TASK_MODEL`/`TASK_MODEL_EXTERNAL` confirmed set correctly inside the
+running container via `docker exec`, after a real `novak up` recreate,
+not just in the admin UI which alone wouldn't have proven persistence.
+
+## 26. Open WebUI's session key gets pinned, the same way CONSOLE_AUTH_SECRET is
+
+Confirmed directly: a routine `novak up` recreate of the `open-webui`
+container logged out an active admin session — the same symptom #25
+flagged as a follow-up rather than fixing inline.
+`docker-compose.yml` never set `WEBUI_SECRET_KEY`. Open WebUI signs
+its session JWTs with that key and, left unset, generates a random one
+at every container startup — so a restart or recreate doesn't just
+*eventually* expire sessions, it invalidates every one of them
+immediately, since the JWTs on file no longer verify against the new
+key.
+
+Fixed by adding `WEBUI_SECRET_KEY` to `SECRET_VARS` in
+`scripts/lib/vars.sh` and sourcing it from Keychain exactly the way
+`CONSOLE_AUTH_SECRET` already is — generated with `openssl rand -base64
+32`, never edited into `.env` directly. Not added to `CORE_SECRETS`:
+left unset, the stack still starts, `set-in-keychain` gets passed
+through as a literal value, and Open WebUI just logs everyone out on
+every restart, the same degrade-not-block shape as every other
+non-core secret here.
+
+**Verified end to end:** `novak secret set WEBUI_SECRET_KEY --generate`,
+then `novak up`, then `docker exec novak-open-webui-1 sh -c 'echo
+$WEBUI_SECRET_KEY'` — non-empty, and identical across repeated checks
+and after `novak restart open-webui`. A login made before the restart
+was still valid after it.
+
+## 27. Open Terminal joins the registry as the first `container` entry that isn't MCP
 
 Requested directly, as an explicitly optional, opt-in integration —
 consistent with how everything else in `registry/mcp-servers.yaml` works.

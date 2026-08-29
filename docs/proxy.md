@@ -46,7 +46,7 @@ it is.
 | **Hindsight** (8888, 9999) | **No** | Holds every person's memories. Auth is one shared bearer token: no per-user identity, no rate limit, no lockout. Leak it once and there is no revoking it for one caller. Deletes are permanent, so the damage is not only disclosure. |
 | **Konzol** (3002) | **No** | Reconfigures the stack. It writes the registry, and the registry decides what runs. Treat public access to it as equivalent to a shell. |
 | **Wyoming** (10200/10300/10400) | **No** | No authentication of any kind, by protocol design. Anything that reaches the port can speak to your microphones' pipeline. |
-| **Open WebUI** (3000) | Yes — **on the VPS** | The only one built for it: accounts, sessions, its own rate limiting, and it expects strangers to knock. It is public because it earned it, not because it was convenient. |
+| **Open WebUI** (3000) | Yes — **via its own public-facing proxy, on a separate host** | The only one built for it: accounts, sessions, its own rate limiting, and it expects strangers to knock. It is public because it earned it, not because it was convenient. |
 
 ### The test
 
@@ -60,7 +60,7 @@ designed for it**. Concretely, ask of anything you are tempted to expose:
 4. Is it maintained closely enough that you will actually apply its security
    updates?
 
-Anything on the Mac fails at least the first two. That is not a criticism of
+Anything running directly on a service host fails at least the first two. That is not a criticism of
 them; they were written for a trusted network, which is exactly where they are.
 
 ### If you need it from outside
@@ -70,12 +70,13 @@ and you stop needing a decision about exposure at all. Adding a device to the
 tailnet is not a security event in the way opening a port is — you can see who
 is on it, and you can take them off.
 
-**Never port-forward to the Mac**, and be precise about why: the mini forwards
-nothing today, which is what makes it safe for oMLX to bind `0.0.0.0` and be
-reachable across the tailnet. Those two facts are load-bearing together. Add a
-forward and you have not "exposed one port" — you have published a rate-limitless
-inference API, because the bind was already permissive on the assumption nothing
-inbound could arrive.
+**Never port-forward directly to a service host**, and be precise about why:
+the whole point is that it forwards nothing today, which is what makes it
+safe for oMLX to bind `0.0.0.0` and be reachable across the tailnet. Those
+two facts are load-bearing together. Add a forward and you have not
+"exposed one port" — you have published a rate-limitless inference API,
+because the bind was already permissive on the assumption nothing inbound
+could arrive.
 
 ### If you decide to expose something anyway
 
@@ -87,7 +88,7 @@ someone can revisit; a port quietly forwarded is one nobody remembers making.
 ## The shape
 
 ```
-   browser / HA  ──TLS──▶  your internal proxy  ──Tailscale──▶  the Mac
+   browser / HA  ──TLS──▶  your internal proxy  ──Tailscale──▶  the service host
                             (other host)         (WireGuard)
 ```
 
@@ -95,8 +96,9 @@ Both hops are encrypted, and no new infrastructure is added. The last hop
 relies on Tailscale rather than TLS, which is fine — WireGuard is not a weaker
 guarantee than TLS.
 
-**Requirement:** the proxy host and the Mac must both be on the tailnet, and
-the proxy should reach the Mac by its **Tailscale** address, not its LAN
+**Requirement:** the proxy host and whichever host runs a given service must
+both be on the tailnet, and the proxy should reach it by its **Tailscale**
+address, not its LAN
 address. Using the LAN address puts the last hop back in plaintext and undoes
 the point of the exercise.
 
@@ -109,7 +111,15 @@ port forwarding.
 
 ## Caddy
 
-Current setup. Add to the internal instance:
+**Corrected 2026-08-29 for decision #28.** These snippets used to say
+`<mac-ts-ip>` throughout, on the assumption there is exactly one host and
+it's a Mac. Replace `<engine-host-ts-ip>` / `<core-host-ts-ip>` below with
+whichever host actually runs each service — see [engines.md](engines.md)
+and decision #28: oMLX and Novak's core services no longer have to be the
+same machine, and in this household's own deployment, aren't.
+
+Add to the internal instance (a host separate from whatever runs these
+services — see "Which of these may face the internet" above for why):
 
 ```caddy
 (novak-internal) {
@@ -121,26 +131,27 @@ Current setup. Add to the internal instance:
 	}
 }
 
-# Replace <mac-ts-ip> with the Mac's Tailscale address (100.x.y.z), or its
-# MagicDNS name.
+# Only if something still needs oMLX directly — most deployments reach it
+# through the router instead. Points at whichever host runs oMLX; omit
+# entirely if nothing calls it internally.
 omlx.novak.example.tld {
 	import novak-internal
-	reverse_proxy <mac-ts-ip>:8000          # OMLX_PORT — see the note below
+	reverse_proxy <engine-host-ts-ip>:8000          # OMLX_PORT — see the note below
 }
 
 memory.novak.example.tld {
 	import novak-internal
-	reverse_proxy <mac-ts-ip>:8888          # Hindsight: API + MCP at /mcp/<bank>/
+	reverse_proxy <core-host-ts-ip>:8888          # Hindsight: API + MCP at /mcp/<bank>/ — port may differ per deployment
 }
 
 memory-ui.novak.example.tld {
 	import novak-internal
-	reverse_proxy <mac-ts-ip>:9999          # Hindsight's web UI
+	reverse_proxy <core-host-ts-ip>:9999          # Hindsight's web UI — port may differ per deployment
 }
 
 konzol.novak.example.tld {
 	import novak-internal
-	reverse_proxy <mac-ts-ip>:3002          # omit if not running the console
+	reverse_proxy <core-host-ts-ip>:3002          # omit if not running the console; port may differ per deployment
 }
 ```
 
@@ -149,9 +160,12 @@ reach it, proxy included — containers only manage it because OrbStack forwards
 loopback. Change `server.host` in oMLX's own settings before adding the route
 above, and check with `novak ports`: the Tailscale column must read `yes`.
 
-**Open WebUI (3000) is deliberately absent.** It runs on the VPS, where public
-ingress already terminates TLS for it — see decisions #15. Only add a route
-here if you are running it on the Mac for local testing.
+**Open WebUI is deliberately absent from the internal proxy.** It's the one
+service meant to face the public internet (decision #15) — that's a
+*different* proxy, on its own LAN-neighbor host, terminating public
+ingress and pointing at whichever host actually runs Open WebUI now. Only
+add a route for it *here*, on the internal instance, if you're running a
+second copy on the internal network purely for local testing.
 
 Your existing `tlsAutostrap` snippet already handles DNS-01, so these inherit
 it from the zone block.
@@ -172,7 +186,7 @@ http:
     novak-memory:
       loadBalancer:
         servers:
-          - url: "http://<mac-ts-ip>:8888"
+          - url: "http://<core-host-ts-ip>:8888"
 ```
 
 Repeat per service. Novak publishes no Docker labels, because the containers
@@ -210,7 +224,7 @@ still refuses anything that reaches it without the key.
 memory-ha.novak.example.tld {
 	import novak-internal
 	handle @ha {
-		reverse_proxy <mac-ts-ip>:8888 {
+		reverse_proxy <core-host-ts-ip>:8888 {
 			header_up Authorization "Bearer {env.HINDSIGHT_API_KEY}"
 		}
 	}
@@ -243,7 +257,7 @@ household bank uncredentialed. Point Home Assistant at the household bank only
 — never a personal one, for the reason in the deploy checklist: a microphone
 cannot tell who is speaking.
 
-Note the credential now lives on the proxy host as well as in the Mac's
+Note the credential now lives on the proxy host as well as in the service host's
 Keychain. That is a second copy to rotate, and it is the cost of the approach.
 
 **Alternatives considered.** Turning Hindsight's tenant auth off would let HA
@@ -264,13 +278,13 @@ in transit. That's a smaller exposure than it first sounds — it's the same
 network the microphones are already on — but it's real, and nothing in this
 directory fixes it.
 
-## Ports on the Mac
+## Ports on the service host
 
 For this to work, the services must be reachable from the proxy host, so they
 bind on the tailnet rather than localhost. That means **anything on your
 tailnet can reach them directly**, bypassing the proxy and its TLS.
 
-Tailscale ACLs are the tool for that, not firewall rules on the Mac. Worth
+Tailscale ACLs are the tool for that, not firewall rules on the service host. Worth
 setting up if devices you don't fully trust are on the tailnet.
 
 So the tailnet is the real security boundary here — not the proxy, and not the
@@ -279,8 +293,8 @@ connect. Everything in *Which of these may face the internet* above assumes the
 tailnet stays a set of machines you trust, and a phone you lend to a houseguest
 is on it until you remove it.
 
-One more thing this directory does not fix: the last hop from the proxy host to
-the Mac is WireGuard, not TLS. That is not weaker, but it does mean a service
+One more thing this directory does not fix: the last hop from the proxy host to whichever host runs
+the service in question is WireGuard, not TLS. That is not weaker, but it does mean a service
 here never sees a client certificate and cannot tell one tailnet caller from
 another. Everything reaching Hindsight presents the same bearer token no matter
 who is holding it.

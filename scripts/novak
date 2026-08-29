@@ -32,6 +32,8 @@
 #   novak registry [--check]  show the MCP registry as the reconciler sees it
 #                              (--check also live-probes external entries)
 #   novak omlx apply          apply registry/omlx.yaml (models, profiles, TTLs)
+#   novak router apply        apply registry/engines.yaml -> router/config.yaml
+#                              (decision #28; run 'novak restart router' after)
 #
 # Add to PATH: bootstrap.sh does this, at ~/.local/bin/novak (see docs/cli.md
 # for why not /usr/local/bin)
@@ -297,6 +299,21 @@ cmd_omlx() {
         "$NOVAK_HOME/.venv/bin/python" "$REPO_DIR/reconciler/omlx_apply.py" "$@"
       ;;
     *) red "unknown: novak omlx $1"; dim "  novak omlx apply [--dry-run]"; exit 1 ;;
+  esac
+}
+
+# Applies registry/engines.yaml -> router/config.yaml (decision #28). Reads
+# no secrets, same as reconciler/reconcile.py — engines.yaml carries
+# variable NAMES, and LiteLLM resolves os.environ/VARNAME itself inside the
+# router container. Doesn't restart the router; the applier says so.
+cmd_router() {
+  case "${1:-apply}" in
+    apply)
+      shift 2>/dev/null || true
+      NOVAK_HOME="$NOVAK_HOME" \
+        "$NOVAK_HOME/.venv/bin/python" "$REPO_DIR/reconciler/router_apply.py" "$@"
+      ;;
+    *) red "unknown: novak router $1"; dim "  novak router apply [--dry-run]"; exit 1 ;;
   esac
 }
 
@@ -1024,6 +1041,7 @@ cmd_menu() {
     "Secrets — view, set, or verify one"
     "Registry — MCP servers the reconciler sees"
     "oMLX — apply models and profiles"
+    "Router — apply registry/engines.yaml (decision #28)"
     "Stack — up / update / down / restart / logs"
     "Adopt — pull the repo, then merge the new .env schema"
     "Quit"
@@ -1085,6 +1103,10 @@ cmd_menu() {
         ;;
       9) tui_run omlx apply ;;
       10)
+        tui_run router apply
+        dim "  Config changed on disk needs 'novak restart router' to take effect."
+        ;;
+      11)
         local sub; sub="$(tui_ask "up / update / down / restart / logs" "up")"
         case "$sub" in
           update)  tui_run update ;;
@@ -1094,8 +1116,8 @@ cmd_menu() {
           *)       tui_run up ;;
         esac
         ;;
-      11) tui_run adopt ;;
-      12|0|"") return 0 ;;
+      12) tui_run adopt ;;
+      13|0|"") return 0 ;;
       *) echo "Not a number on the list."; continue ;;
     esac
     tui_pause || return 0
@@ -1109,6 +1131,7 @@ case "${1:-menu}" in
   drift|verify|check) shift; cmd_drift "$@" ;;
   adopt)    cmd_adopt ;;
   omlx)     shift; cmd_omlx "$@" ;;
+  router)   shift; cmd_router "$@" ;;
   doctor)   cmd_status ;;   # same checks up.sh runs, without starting anything
   config)   shift; cmd_config "$@" ;;
   secret)   shift; cmd_secret "$@" ;;

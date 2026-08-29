@@ -37,7 +37,8 @@ specifically (checked directly against a real RX 9060 XT): Vulkan
 (`OLLAMA_VULKAN=1`) beats ROCm and needs no `HSA_OVERRIDE_GFX_VERSION`
 workarounds. `OLLAMA_MAX_LOADED_MODELS` / `OLLAMA_NUM_PARALLEL` give the
 same multi-model, multi-user behavior oMLX's own TTL/profile system does,
-natively.
+natively. Full reasoning, real numbers, and the compose file:
+[ollama-settings.md](ollama-settings.md).
 
 Good fit for: a Linux box with a discrete GPU, especially one already
 running other services — no VM, no exclusive GPU ownership required, so the

@@ -1,0 +1,57 @@
+# Declarative inference-engine catalog. Same pattern as
+# registry/mcp-servers.yaml and registry/omlx.yaml, and the same rule
+# applies: this checked-in copy is a STARTING TEMPLATE, not a real
+# deployment's config. `up.sh` copies it into $NOVAK_HOME on first run and
+# it's yours from then on — edit the deployed copy, not this one, once it
+# exists. See headless-operation.md's "Where things live" for why.
+#
+# reconciler/router_apply.py renders whichever copy is live into
+# router/config.yaml. See docs/engines.md for what qualifies as an engine
+# (anything that speaks OpenAI-compatible /v1/chat/completions) and
+# docs/decisions.md #28 for why this exists: Novak stopped assuming one
+# Mac mini runs everything.
+#
+# Schema per engine:
+#   name          required  identifier (a-z0-9-), for humans and error messages
+#   base_url_var  required  .env var holding this engine's reachable URL —
+#                           the router reads it as os.environ/<var> at
+#                           startup, so the VALUE lives in .env, never here
+#   api_key_var   optional  .env/Keychain var holding the API key, if the
+#                           engine has auth on. null means no auth expected.
+#   models        required  list of {role, model}
+#     role   the model_name every client (Open WebUI, Home Assistant,
+#            Hindsight) actually asks for — chat / deep / ha-voice / task
+#            are the ones this stack currently uses. Must be unique across
+#            EVERY engine in this file: two engines both claiming to serve
+#            "chat" is ambiguous, not load-balancing, and the reconciler
+#            refuses it.
+#     model  the engine's OWN id for this model — an oMLX
+#            "<repo-basename>:<profile>" string, an Ollama tag, whatever
+#            that specific engine calls it. Never validated against the
+#            engine itself (this file has no network access, same
+#            invariant reconcile.py holds for MCP servers) — a wrong model
+#            id here surfaces as the engine 404ing at request time, not a
+#            validation error here.
+#
+# The example below is the single-engine, single-host shape most
+# deployments start with — one oMLX host serving every role. See
+# docs/engines.md for a real, working multi-engine example (a second,
+# remote engine on different hardware) once you're ready to add one.
+
+engines:
+  - name: omlx
+    base_url_var: OMLX_BASE_URL
+    api_key_var: OMLX_API_KEY
+    models:
+      - role: ha-voice
+        model: Qwen3-4B-Instruct-2507-4bit:ha-voice
+      - role: chat
+        model: Qwen3-14B-4bit:chat
+      - role: deep
+        model: Qwen3-14B-4bit:deep
+      - role: task
+        # Reuses the always-resident voice model rather than a dedicated
+        # one — see docs/decisions.md #25 for why Open WebUI's own
+        # background calls (title, tags, follow-ups) want a fast,
+        # persona-free model, not whatever's being actively chatted with.
+        model: Qwen3-4B-Instruct-2507-4bit:ha-voice

@@ -43,10 +43,10 @@ it is.
 | Service | Public? | What actually happens |
 |---|---|---|
 | **oMLX** (8000) | **No** | An inference API with no rate limiting and no quotas. A stranger with the key gets your GPU; a stranger without one still costs you every connection's worth of work. Worse, it is one endpoint away from your models and your machine's memory ceiling — the way to take this house down is to ask it to think. |
-| **Hindsight** (8888, 9999) | **No** | Holds every person's memories. Auth is one shared bearer token: no per-user identity, no rate limit, no lockout. Leak it once and there is no revoking it for one caller. Deletes are permanent, so the damage is not only disclosure. |
-| **Konzol** (3002) | **No** | Reconfigures the stack. It writes the registry, and the registry decides what runs. Treat public access to it as equivalent to a shell. |
-| **Wyoming** (10200/10300/10400) | **No** | No authentication of any kind, by protocol design. Anything that reaches the port can speak to your microphones' pipeline. |
-| **Open WebUI** (3000) | Yes — **via its own public-facing proxy, on a separate host** | The only one built for it: accounts, sessions, its own rate limiting, and it expects strangers to knock. It is public because it earned it, not because it was convenient. |
+| **Hindsight** (13403, 13404) | **No** | Holds every person's memories. Auth is one shared bearer token: no per-user identity, no rate limit, no lockout. Leak it once and there is no revoking it for one caller. Deletes are permanent, so the damage is not only disclosure. |
+| **Konzol** (13401) | **No** | Reconfigures the stack. It writes the registry, and the registry decides what runs. Treat public access to it as equivalent to a shell. |
+| **Wyoming** (13406/13405/13407) | **No** | No authentication of any kind, by protocol design. Anything that reaches the port can speak to your microphones' pipeline. |
+| **Open WebUI** (13400) | Yes — **via its own public-facing proxy, on a separate host** | The only one built for it: accounts, sessions, its own rate limiting, and it expects strangers to knock. It is public because it earned it, not because it was convenient. |
 
 ### The test
 
@@ -133,25 +133,31 @@ services — see "Which of these may face the internet" above for why):
 
 # Only if something still needs oMLX directly — most deployments reach it
 # through the router instead. Points at whichever host runs oMLX; omit
-# entirely if nothing calls it internally.
+# entirely if nothing calls it internally. OMLX_PORT is oMLX's own
+# default (8000), separate from the clustered block below — it isn't a
+# Novak-assigned port.
 omlx.novak.example.tld {
 	import novak-internal
 	reverse_proxy <engine-host-ts-ip>:8000          # OMLX_PORT — see the note below
 }
 
+# Ports below match .env.example's clustered default block (decision
+# #31, 13400-13409) — real numbers, not placeholders. If this deployment
+# set its own values instead, use those; a deployment's real .env is
+# always the source of truth over what's written here.
 memory.novak.example.tld {
 	import novak-internal
-	reverse_proxy <core-host-ts-ip>:8888          # Hindsight: API + MCP at /mcp/<bank>/ — port may differ per deployment
+	reverse_proxy <core-host-ts-ip>:13403          # HINDSIGHT_PORT: API + MCP at /mcp/<bank>/
 }
 
 memory-ui.novak.example.tld {
 	import novak-internal
-	reverse_proxy <core-host-ts-ip>:9999          # Hindsight's web UI — port may differ per deployment
+	reverse_proxy <core-host-ts-ip>:13404          # HINDSIGHT_UI_PORT
 }
 
 konzol.novak.example.tld {
 	import novak-internal
-	reverse_proxy <core-host-ts-ip>:3002          # omit if not running the console; port may differ per deployment
+	reverse_proxy <core-host-ts-ip>:13401          # CONSOLE_PORT — omit if not running the console
 }
 ```
 
@@ -186,7 +192,7 @@ http:
     novak-memory:
       loadBalancer:
         servers:
-          - url: "http://<core-host-ts-ip>:8888"
+          - url: "http://<core-host-ts-ip>:13403"
 ```
 
 Repeat per service. Novak publishes no Docker labels, because the containers
@@ -210,7 +216,7 @@ this:
 
 ```
 httpx.HTTPStatusError: Client error '401 Unauthorized'
-  for url 'http://<mac>:8888/mcp/household/'
+  for url 'http://<core-host-ts-ip>:13403/mcp/household/'
 ```
 
 The way through is to let the proxy hold the credential and add it per request.
@@ -224,7 +230,7 @@ still refuses anything that reaches it without the key.
 memory-ha.novak.example.tld {
 	import novak-internal
 	handle @ha {
-		reverse_proxy <core-host-ts-ip>:8888 {
+		reverse_proxy <core-host-ts-ip>:13403 {
 			header_up Authorization "Bearer {env.HINDSIGHT_API_KEY}"
 		}
 	}
@@ -269,8 +275,8 @@ hands.
 
 ## What stays plaintext, and why
 
-**The Wyoming voice services** (whisper 10300, piper 10200, openWakeWord
-10400). Wyoming is a TCP protocol, not HTTP, and the ESPHome satellites that
+**The Wyoming voice services** (whisper 13405, piper 13406, openWakeWord
+13407). Wyoming is a TCP protocol, not HTTP, and the ESPHome satellites that
 speak it can't do TLS to a hostname. Proxying them here would break them.
 
 The honest consequence: someone on your local network could capture voice audio
@@ -362,7 +368,7 @@ documentation:
   Confirmed directly: TinyAuth refuses to start with "ip addresses not
   allowed" against a bare Tailscale IP, and separately with "invalid url,
   must be in format https(s)://host" against a schemeless hostname.
-  `http://mini.local:8199` starts cleanly; `http://100.120.1.110:8199`
+  `http://mini.local:13408` starts cleanly; `http://100.120.1.110:13408`
   does not start at all. If the portal needs to be reachable from off the
   LAN, use your tailnet's MagicDNS name for the node (visible in
   `tailscale status`), not the IP `novak ports` otherwise reports.

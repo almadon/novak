@@ -9,15 +9,29 @@ tomorrow, nothing of value would be lost.
 
 ## Layers
 
-### Inference — oMLX (native macOS app, not containerized)
+### Inference — pluggable engines behind the router
 
-- OpenAI-compatible API, multi-model serving with switching, continuous
-  batching, SSD-tiered KV cache.
-- MLX must run natively for Metal access; everything else is in Docker and
-  reaches it via `host.docker.internal`.
-- Profiles present one loaded model as several virtual models
+Not one fixed backend: any engine that speaks an OpenAI-compatible
+`/v1/chat/completions` is a valid Novak inference engine, chosen per
+deployment (or per model role — nothing stops mixing engines). See
+decision #28 and [engines.md](engines.md) for the full reasoning and the
+current options. Two are documented today:
+
+- **oMLX** — native macOS app (Metal/MLX can't run in a Linux container),
+  multi-model serving with switching, continuous batching, SSD-tiered KV
+  cache. Profiles present one loaded model as several virtual models
   (`ha-voice`, `chat`, `deep`) with different settings at zero RAM cost.
-- See [omlx-settings.md](omlx-settings.md) for the 24GB tuning.
+  See [omlx-settings.md](omlx-settings.md) for the tuning reasoning.
+- **Ollama** — ordinary Linux container, GPU passthrough via
+  `--device=/dev/dri`, no vendor plugin needed for AMD. Vulkan
+  (`OLLAMA_VULKAN=1`) beats ROCm on RDNA4 specifically. Native
+  `OLLAMA_MAX_LOADED_MODELS`/`OLLAMA_NUM_PARALLEL` give the same
+  multi-model/multi-user behavior oMLX's profiles do.
+
+Everything else in this stack (Hindsight, Open WebUI, the console, voice)
+is plain Docker Compose with no platform assumption baked in — inference
+was always the only piece that needed a specific host, and now that's
+explicit rather than assumed.
 
 ### Knowledge — Outline (canonical), via MCP
 
@@ -167,27 +181,43 @@ servers you deliberately add that talk to external APIs (email, utilities)
 — each with its own scoped credential, never proxied through a model
 prompt.
 
-## Placement — this stack is distributed, not single-host
+## Placement — mid-migration, not settled
 
-`docker-compose.yml` was written assuming everything runs on the mini beside
-oMLX (hence `host.docker.internal`), and on this deployment that assumption
-holds: it is genuinely monolithic. Open WebUI, Hindsight, the console, and
-the Wyoming voice services all run on the same host as oMLX. **Corrected
-2026-08-27** — this section previously said Open WebUI runs on a separate
-VPS, which was true of an earlier plan and is not true of this deployment.
-The one thing that is off-host is the reverse proxy fronting the portal and
-Open WebUI: a Caddy instance on a LAN-neighboring machine, not this one and
-not a VPS. See [proxy.md](proxy.md).
+**Corrected 2026-08-29, superseding the previous correction below.** This
+section said the deployment was "genuinely monolithic" on the Mac mini —
+true as of two days earlier, not true of where this household's deployment
+is actually headed. Decision #28 records the real direction: Novak's core
+(Hindsight, Open WebUI, the console, voice) is moving to Spire, an Unraid
+box with an AMD GPU; the Mac mini (Mitochon) becomes a secondary oMLX
+engine rather than the host everything else depends on.
+
+**What's actually true right now, not aspirational:** Ollama is live on
+Spire, verified with real generations (see decision #28). Hindsight, Open
+WebUI, the console, and the Wyoming voice services have **not yet moved**
+— they still run on Mitochon as of this writing. Don't read this section as
+describing a completed migration; it describes a decided direction with one
+piece (inference) actually moved so far.
+
+`docker-compose.yml` still assumes everything sits beside oMLX (hence
+`host.docker.internal`) — that assumption is what the migration work ahead
+needs to remove, not something already handled. See [engines.md](engines.md)
+for the inference-engine side of this, which is further along than the rest.
+
+*(Previous correction, 2026-08-27: this section once said Open WebUI runs on
+a separate VPS — true of an earlier plan, not true of any deployment shape
+described above.)* The reverse proxy fronting the portal and Open WebUI
+remains a separate Caddy instance on a LAN-neighboring machine regardless of
+where core services end up. See [proxy.md](proxy.md).
 
 What constrains each piece:
 
 | Service | Constraint | Where |
 |---|---|---|
-| oMLX | Metal/MLX — cannot be containerized or moved | mini, mandatory |
-| Hindsight | **every memory write triggers an LLM extraction call** — wants to be next to oMLX, or each write pays a round trip | with oMLX (same host) |
+| oMLX | Metal/MLX — cannot be containerized or moved | Mitochon, secondary engine only (decision #28) |
+| Hindsight | **every memory write triggers an LLM extraction call** — wants to be next to whichever engine serves it, or each write pays a round trip | today: with oMLX on Mitochon. Once Hindsight moves to Spire, its `HINDSIGHT_LLM_MODEL`/`HINDSIGHT_LLM_PROVIDER` need to point at Spire's own Ollama, not oMLX — not yet changed |
 | Wyoming STT/TTS | voice latency budget is ~1–2s end to end; keep close to HA and the satellites | with HA |
-| Open WebUI | just a frontend; only needs to reach oMLX | same host as oMLX |
-| Console | reaches Hindsight often, Pocket ID once per session | with Hindsight (decided) |
+| Open WebUI | just a frontend; reaches whichever engine(s) the router points at | today: Mitochon. Moving to Spire doesn't change this — it already only needs the router, wherever that runs |
+| Console | reaches Hindsight often, Pocket ID once per session | with Hindsight, wherever Hindsight ends up |
 
 The console runs beside Hindsight for data locality. The accepted cost: **Pocket ID
 is on a VPS, so a WAN outage prevents logging in to a console that is otherwise

@@ -6,11 +6,16 @@ You talk to it in a browser or out loud through Home Assistant. It remembers
 things about you, can look things up in your notes, and can act on your behalf
 through tools you choose to give it. Nothing you say to it leaves your machines.
 
-> **Status: in testing.** The stack is deployed and running on one Mac mini,
-> and it comes back on its own after a reboot. It has not run unattended for
-> long, has never survived a real power cut, and several documented steps are
-> still marked VERIFY. See [What state is this in?](#what-state-is-this-in)
-> for what is actually confirmed.
+> **Status: in testing, and mid-migration.** Novak has run on a single Mac
+> mini since the start; as of decision #28 it's moving to a multi-host,
+> multi-engine shape instead — core services on a Linux/Docker box, one or
+> more inference engines (oMLX on Apple Silicon, Ollama on Linux/AMD, more
+> possible) chosen per deployment rather than assumed. Neither shape has run
+> unattended for long or survived a real power cut, and several documented
+> steps are still marked VERIFY. See
+> [What state is this in?](#what-state-is-this-in) for what is actually
+> confirmed, and [docs/engines.md](docs/engines.md) for the inference-engine
+> side of the multi-platform work.
 
 **LLM use:** this project is built and maintained with substantial AI
 assistance (Claude Code). Architecture and review are human decisions, and
@@ -26,7 +31,9 @@ authorship in their trailers.
 - **Remember** things about each person, separately. You can read and edit
   those memories, and delete ones you don't want.
 - **Look things up** in your own wiki, task list, and anything else you connect.
-- **Run locally.** The model runs on your Mac. There's no cloud provider in the
+- **Run locally.** The model runs on your own hardware — Apple Silicon or a
+  Linux box with a GPU, see [docs/engines.md](docs/engines.md). There's no
+  cloud provider in the
   loop, so your conversations can't end up in someone's training data.
 
 ## What it isn't

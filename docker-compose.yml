@@ -376,20 +376,28 @@ services:
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     ports:
       - "${ROUTER_PORT:-4000}:4000"
+    # env_file, not an enumerated `environment:` allowlist — the whole point
+    # of registry/engines.yaml (decision #28/#29) is that an engine's
+    # base_url_var/api_key_var can be ANY name, chosen per deployment. A
+    # fixed list here defeats that: it silently caps which engines actually
+    # work to whichever ones someone remembered to add a line for. Found
+    # this the hard way — OLLAMA_LOCAL_BASE_URL wasn't in the old allowlist,
+    # so LiteLLM's os.environ/OLLAMA_LOCAL_BASE_URL resolved empty, and it
+    # silently fell back to calling real OpenAI's API instead of Ollama,
+    # surfacing as an API-key error that had nothing to do with the actual
+    # problem. env_file passes the entire deployed .env through instead,
+    # so any current or future engine variable just works.
+    env_file:
+      - .env
     environment:
-      OMLX_API_KEY: "${OMLX_API_KEY:-}"
-      # Built here with compose's own ${VAR:-default} interpolation,
-      # already used everywhere else in this file, rather than templated
-      # inside config.yaml: LiteLLM's config only documents whole-field
-      # substitution (os.environ/VARNAME), not interpolation inside a
-      # larger string, confirmed by testing the alternative and having it
-      # silently do nothing useful.
+      # Built here with compose's own ${VAR:-default} interpolation, not
+      # passed through raw: this one is COMPUTED from OMLX_PORT, not a
+      # literal .env value, so env_file above can't provide it — and
+      # LiteLLM's config only documents whole-field substitution
+      # (os.environ/VARNAME), not interpolation inside a larger string,
+      # confirmed by testing the alternative and having it silently do
+      # nothing useful.
       OMLX_BASE_URL: "http://host.docker.internal:${OMLX_PORT:-8000}/v1"
-      # A remote engine (decision #28) — unlike OMLX_BASE_URL above, there's
-      # no local port to build this from; it's a full URL naming a
-      # different host (Tailscale hostname/IP), so .env holds the whole
-      # thing rather than compose interpolating a piece of it.
-      OLLAMA_SPIRE_BASE_URL: "${OLLAMA_SPIRE_BASE_URL:-}"
     volumes:
       # config.yaml is the ONE exception to "everything the router needs
       # uses ${REPO_DIR}, not a relative path" (see the portal's identical

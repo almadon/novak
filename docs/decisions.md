@@ -1450,3 +1450,103 @@ values (`http://host.docker.internal:8000/v1` and `:4000/v1`
 respectively) — this was a mechanism change, not a behavior change, and
 that claim was checked, not assumed. A real chat completion through the
 router still returned a real answer afterward.
+
+## 31. The port defaults move to a clustered block, after a real collision
+
+Every service's default port used to be whatever its own upstream
+project happened to pick — 3000, 3002, 4000, 8000, 8199, 8888, 9999,
+10200, 10300, 10400, 3003, scattered across the whole range with no
+relationship to each other.
+
+Standing up Spire surfaced the actual cost of that directly: Hindsight's
+default `8888` collided with an existing, unrelated container on the
+same box (a VPN gateway), which is a coincidence but not a surprising
+one — `8888` is a common enough default elsewhere that this was always
+going to happen to *someone*, on *some* host running more than one
+self-hosted thing, which describes most of the hosts this project asks
+someone to run it on.
+
+### The fix
+
+`.env.example`'s defaults move to a contiguous, uncommon block —
+`13400`-`13409` — one thing to remember, firewall, or document instead
+of ten scattered numbers, and far less likely to collide with whatever
+else a given host already runs. Only the *template's* defaults change;
+an existing deployment's real `.env` already has its own explicit
+values and is untouched regardless of what a fresh clone's `.env.example`
+now says.
+
+**Not a full sweep of every doc that mentions a specific port number.**
+`docker-compose.yml`'s own comments and `docs/proxy.md` — the one just
+handed to this household as real, copy-pasteable Caddy config — are
+updated. `architecture.md`, `cli.md`, `home-assistant.md`,
+`memory-setup.md`, `how-memory-works.md`, `deploy-checklist.md`, and
+`security.md` still cite the old numbers in places. Recorded honestly as
+open, not silently left stale: a real, tracked follow-up, not a claim
+that this decision finished a sweep it didn't attempt.
+
+## 32. `env_file` reads `.env`'s literal text — which is exactly why a secret can't come from it
+
+Decision #29's `env_file` fix worked on Spire and shipped without
+catching what it broke on Mitochon, because Spire's only engine needs no
+secret at all — the bug had nothing to trigger it there.
+
+### What actually happened
+
+Mitochon's `deep` role started returning `litellm.AuthenticationError:
+Incorrect API key provided: set-in-k***hain` — the literal placeholder
+text from `.env`, not a real key. `env_file:` reads a file's on-disk
+lines directly; it has no way to see the real Keychain value `up.sh`
+resolves and exports into its *own* process environment — the exact
+mechanism that already makes `${OMLX_API_KEY:-none}` correctly resolve
+everywhere else in this file, via compose-file interpolation, which is a
+genuinely different substitution pass than what `env_file:` does. A
+secret's `.env` line is deliberately never the real value (that is the
+entire point of Keychain), so `env_file:` can only ever hand the router
+the placeholder for one. Compounding it: the same deployment's registry
+still said `base_url_var: OMLX_BASE_URL`, a name retired by decision #30
+— `os.environ/OMLX_BASE_URL` resolved to nothing, and LiteLLM silently
+called real OpenAI's endpoint with the placeholder as a bearer token,
+which is where the confusing error text came from.
+
+### The fix, and why it isn't a retreat from decision #29
+
+`environment: - OMLX_API_KEY` (bare name, no value) sits alongside
+`env_file: - .env` on the router. Compose's own precedence rule —
+`environment:` wins over `env_file:` for the same key — means this one
+name now comes from the calling process's real, Keychain-resolved
+export instead of the file. Everything else (base URLs, any future
+engine's `base_url_var`) still needs no code change here, which was
+decision #29's actual point and remains true.
+
+**This isn't the allowlist decision #29 removed, reintroduced.** That
+allowlist enumerated *every* variable a future engine might need,
+including ones with no reason to ever be a secret. This enumerates only
+secrets — and a new secret already, unconditionally, requires a line in
+`SECRET_VARS` (`scripts/lib/vars.sh`) before it works anywhere in this
+stack. Requiring a matching line here too is the same existing
+constraint reaching one more place it had a gap, not a new one.
+
+### Also cleaned up while tracing this
+
+Mitochon's own `registry/engines.yaml` still had the mid-session,
+cross-host shape (`omlx-mitochon` for `deep` + `ollama-spire` for
+everything else) from before "Spire runs the entire stack, independent
+of Mitochon" was stated as the actual direction. Reverted to a clean,
+single-engine `omlx` registry, matching what Mitochon's own real role
+now is. Spire's `OLLAMA_LOCAL_BASE_URL` was consolidated into
+`DEFAULT_ENGINE_BASE_URL` (they pointed at the identical value; two
+names for one fact was exactly the sprawl that prompted this whole
+review), and `OLLAMA_SPIRE_BASE_URL` — dead on both hosts once neither
+registry referenced it — removed everywhere, including as a
+household-specific example baked into the checked-in `.env.example`
+template, which a generic instruction about adding a second engine
+replaced.
+
+### What was verified before calling this fixed
+
+All four roles (`chat`, `deep`, `ha-voice`, `task`) re-tested with real
+generations on Mitochon after the fix — not just the one that was
+broken — plus the container's actual `OMLX_API_KEY` env var checked
+directly (`sk-omlx-...`, not the placeholder) before trusting the
+symptom was gone rather than just quieter.

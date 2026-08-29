@@ -20,7 +20,7 @@ services:
     image: ghcr.io/open-webui/open-webui:main
     restart: unless-stopped
     ports:
-      - "${OPENWEBUI_PORT:-3000}:8080"
+      - "${OPENWEBUI_PORT:-13400}:8080"
     environment:
       # Points at DEFAULT_ENGINE_BASE_URL (.env) by default — the one
       # setting every service falls back to unless it has a more specific
@@ -55,7 +55,7 @@ services:
       # reverse proxy it is a public name on another host that this stack never
       # sees. HOST_NAME is how machines here reach each other, and is the wrong
       # answer whenever a proxy is in front.
-      WEBUI_URL: "${OWUI_PUBLIC_URL:-http://${HOST_NAME:-mini.local}:${OPENWEBUI_PORT:-3000}}"
+      WEBUI_URL: "${OWUI_PUBLIC_URL:-http://${HOST_NAME:-mini.local}:${OPENWEBUI_PORT:-13400}}"
       # Keep everything local: no external telemetry-ish integrations.
       ENABLE_OPENAI_API: "true"
       # Left unset, Open WebUI generates a random key at every container
@@ -86,18 +86,18 @@ services:
       #
       # This needs a SECOND Pocket ID client, separate from the console's: the
       # redirect URI differs, so one client cannot serve both.
-      #   http://<HOST_NAME>:3000/oauth/oidc/callback
+      #   http://<HOST_NAME>:13400/oauth/oidc/callback
       OPENID_PROVIDER_URL: "${OWUI_OIDC_ISSUER:-}"
       OAUTH_CLIENT_ID: "${OWUI_OIDC_CLIENT_ID:-}"
       OAUTH_CLIENT_SECRET: "${OWUI_OIDC_CLIENT_SECRET:-}"
       OAUTH_PROVIDER_NAME: "${OWUI_OIDC_PROVIDER_NAME:-Pocket ID}"
       # Pin the callback. Left unset, Open WebUI builds it from the incoming
       # request's Host header — so it becomes whatever name you happened to
-      # type, and http://mini.local:3000/... and http://<tailscale-ip>:3000/...
+      # type, and http://mini.local:13400/... and http://<tailscale-ip>:13400/...
       # are different redirect URIs that BOTH have to be registered with the
       # IdP. Pinning it means one URI to register and the same behaviour from
       # every hostname. Verified in Open WebUI's oauth.py.
-      OPENID_REDIRECT_URI: "${OWUI_OIDC_REDIRECT_URI:-${OWUI_PUBLIC_URL:-http://${HOST_NAME:-mini.local}:${OPENWEBUI_PORT:-3000}}/oauth/oidc/login/callback}"
+      OPENID_REDIRECT_URI: "${OWUI_OIDC_REDIRECT_URI:-${OWUI_PUBLIC_URL:-http://${HOST_NAME:-mini.local}:${OPENWEBUI_PORT:-13400}}/oauth/oidc/login/callback}"
       # Off by default: with signup on, anyone your IdP authenticates gets an
       # account here. Turn it on once the IdP admits only people you mean in.
       ENABLE_OAUTH_SIGNUP: "${OWUI_OIDC_SIGNUP:-false}"
@@ -158,12 +158,12 @@ services:
     image: "${CONSOLE_IMAGE:-ghcr.io/almadon/novak-konzol:latest}"
     restart: unless-stopped
     ports:
-      - "${CONSOLE_PORT:-3002}:3002"
+      - "${CONSOLE_PORT:-13401}:3002"
     environment:
       AUTH_SECRET: "${CONSOLE_AUTH_SECRET}"
       # Same reasoning as OWUI_PUBLIC_URL: if a proxy fronts the console, this
       # must be the name users type, not how machines here reach each other.
-      AUTH_URL: "${KONZOL_PUBLIC_URL:-http://${HOST_NAME:-mini.local}:${CONSOLE_PORT:-3002}}"
+      AUTH_URL: "${KONZOL_PUBLIC_URL:-http://${HOST_NAME:-mini.local}:${CONSOLE_PORT:-13401}}"
       AUTH_TRUST_HOST: "true"
       OIDC_ISSUER: "${OIDC_ISSUER}"
       OIDC_CLIENT_ID: "${OIDC_CLIENT_ID}"
@@ -203,8 +203,8 @@ services:
     image: ghcr.io/vectorize-io/hindsight:latest
     restart: unless-stopped
     ports:
-      - "${HINDSIGHT_PORT:-8888}:8888"   # API + MCP
-      - "${HINDSIGHT_UI_PORT:-9999}:9999" # web UI
+      - "${HINDSIGHT_PORT:-13403}:8888"   # API + MCP
+      - "${HINDSIGHT_UI_PORT:-13404}:9999" # web UI
     environment:
       # Points at DEFAULT_ENGINE_BASE_URL (.env) by default, same as everything else
       # (decision #28). The base-URL variable name is confirmed: Hindsight
@@ -247,7 +247,7 @@ services:
     restart: unless-stopped
     command: --model ${WHISPER_MODEL:-small-int8} --language en
     ports:
-      - "${WHISPER_PORT:-10300}:10300"
+      - "${WHISPER_PORT:-13405}:10300"
     volumes:
       - whisper:/data
 
@@ -256,7 +256,7 @@ services:
     restart: unless-stopped
     command: --voice ${PIPER_VOICE:-en_US-lessac-medium}
     ports:
-      - "${PIPER_PORT:-10200}:10200"
+      - "${PIPER_PORT:-13406}:10200"
     volumes:
       - piper:/data
 
@@ -270,7 +270,7 @@ services:
       --preload-model ${WAKEWORD_MODEL:-hey_novak}
       --custom-model-dir /custom
     ports:
-      - "${OPENWAKEWORD_PORT:-10400}:10400"
+      - "${OPENWAKEWORD_PORT:-13407}:10400"
     volumes:
       - ./wakeword/models:/custom:ro
 
@@ -291,11 +291,11 @@ services:
     image: caddy:2
     restart: unless-stopped
     ports:
-      - "${PORTAL_PORT:-8199}:${PORTAL_PORT:-8199}"
+      - "${PORTAL_PORT:-13408}:${PORTAL_PORT:-13408}"
     environment:
-      PORTAL_PORT: "${PORTAL_PORT:-8199}"
-      OPENWEBUI_PORT: "${OPENWEBUI_PORT:-3000}"
-      CONSOLE_PORT: "${CONSOLE_PORT:-3002}"
+      PORTAL_PORT: "${PORTAL_PORT:-13408}"
+      OPENWEBUI_PORT: "${OPENWEBUI_PORT:-13400}"
+      CONSOLE_PORT: "${CONSOLE_PORT:-13401}"
     volumes:
       # ${REPO_DIR}, not a relative ./portal path: compose resolves a
       # relative bind against --project-directory, which up.sh and
@@ -324,7 +324,7 @@ services:
     image: ghcr.io/tinyauthapp/tinyauth:v5
     restart: unless-stopped
     ports:
-      - "${TINYAUTH_PORT:-3003}:3000"
+      - "${TINYAUTH_PORT:-13409}:3000"
     environment:
       TINYAUTH_APPURL: "${PORTAL_APPURL:-}"
       TINYAUTH_OAUTH_PROVIDERS_POCKETID_NAME: "Pocket ID"
@@ -374,7 +374,7 @@ services:
     restart: unless-stopped
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     ports:
-      - "${ROUTER_PORT:-4000}:4000"
+      - "${ROUTER_PORT:-13402}:4000"
     # env_file, not an enumerated `environment:` allowlist — the whole point
     # of registry/engines.yaml (decision #28/#29) is that an engine's
     # base_url_var/api_key_var can be ANY name, chosen per deployment. A
@@ -396,6 +396,32 @@ services:
     # instead, and has to already be complete in .env.
     env_file:
       - .env
+    # A real bug found deploying to Mitochon after this design otherwise
+    # proved itself on Spire: env_file above reads .env's LITERAL on-disk
+    # text, and a secret's line there is deliberately never the real value
+    # (set-in-keychain is a placeholder — up.sh resolves the actual value
+    # from Keychain and exports it into ITS OWN shell environment, which is
+    # what makes ${OMLX_API_KEY:-none} elsewhere in this file correctly
+    # pick up the real value). env_file has no way to see that export; it
+    # only ever sees the placeholder string on disk. Router got the literal
+    # text "set-in-keychain" as its API key, silently fell back to real
+    # OpenAI's endpoint (empty api_base from the SAME root cause, since
+    # DEFAULT_ENGINE_BASE_URL didn't exist yet under its old name at the
+    # time), and reported a confusing auth error with nothing to do with
+    # the actual problem.
+    #
+    # `environment:` entries take precedence over `env_file` for the same
+    # key, and a BARE name (no `=value`) means "take it from the process
+    # that's running docker compose" — which for `novak up`/`up.sh` already
+    # has the real Keychain value exported. Listed explicitly here because
+    # secrets, unlike base URLs, genuinely can't live as real values in
+    # .env on disk — that's not a limitation of this mechanism, it's the
+    # whole point of Keychain. A future engine with its own NEW secret
+    # needs a line added here, the same as it already needs adding to
+    # SECRET_VARS in scripts/lib/vars.sh — this isn't a new constraint,
+    # it's the existing one, in the one place it was still missing.
+    environment:
+      - OMLX_API_KEY
     volumes:
       # config.yaml is the ONE exception to "everything the router needs
       # uses ${REPO_DIR}, not a relative path" (see the portal's identical

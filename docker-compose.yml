@@ -30,7 +30,14 @@ services:
       # Left pointed at oMLX by default rather than switched automatically:
       # the router is optional and gated behind its own compose profile,
       # and this line has no way to know whether that profile is active.
-      OPENAI_API_BASE_URL: "http://host.docker.internal:${OWUI_INFERENCE_PORT:-${OMLX_PORT:-8000}}/v1"
+      #
+      # OWUI_INFERENCE_BASE_URL (decision #28) overrides all of this with a
+      # full URL when Open WebUI and the router/oMLX are NOT the same host —
+      # host.docker.internal only ever resolves to the LOCAL host's gateway,
+      # so it's structurally unable to reach a remote router. Blank (the
+      # default) falls through to the local-host construction unchanged;
+      # this only matters once Novak core runs somewhere the router doesn't.
+      OPENAI_API_BASE_URL: "${OWUI_INFERENCE_BASE_URL:-http://host.docker.internal:${OWUI_INFERENCE_PORT:-${OMLX_PORT:-8000}}/v1}"
       OPENAI_API_KEY: "${OMLX_API_KEY:-none}"
       ENABLE_OLLAMA_API: "false"
       # Router-only: router/config.yaml exposes a `task` model built for

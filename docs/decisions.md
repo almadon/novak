@@ -1388,10 +1388,17 @@ just a dry-run render. `task`'s response carries 17 prompt tokens,
 confirming persona injection is still correctly bypassed for it exactly
 as decision #25 intended, unaffected by which engine now serves it.
 
-## 30. `OMLX_BASE_URL` is a real `.env` value now, not a `host.docker.internal` construction
+## 30. `DEFAULT_ENGINE_BASE_URL` is a real `.env` value now, not a `host.docker.internal` construction
 
 Two problems, raised directly while actually standing up Spire's own
 deployment, both pointing at the same fix.
+
+(Named `OMLX_BASE_URL` for about twenty minutes before this was written
+down — caught before Spire's own deployment locked it in: a variable
+meaning "the default engine, whatever it is" named after one specific
+engine is exactly the kind of thing that reads fine on the machine that
+has that engine and actively misleads on the one that doesn't, which
+Spire — no oMLX at all — was standing right there to prove.)
 
 **`host.docker.internal` isn't something to build behavior around by
 default.** It needs Docker's `host-gateway` `extra_hosts` entry to work
@@ -1406,7 +1413,7 @@ interpolation rather than a fact you could read in one place.
 **Most configuration should live in `.env`, not in compose interpolation
 logic.** `OWUI_INFERENCE_BASE_URL` and `HINDSIGHT_LLM_BASE_URL`, added
 earlier this same session to handle a remote router, were themselves a
-symptom: they existed only because the *default* (`OMLX_BASE_URL`, in
+symptom: they existed only because the *default* (`DEFAULT_ENGINE_BASE_URL`, in
 effect) wasn't itself a plain value — it was a port number
 (`OWUI_INFERENCE_PORT`) glued to `host.docker.internal` inside the
 compose file. Fixing the override without fixing the default underneath
@@ -1414,7 +1421,7 @@ it would have left two mechanisms doing the same job.
 
 ### The fix
 
-`OMLX_BASE_URL` is now a real, complete URL, set directly in `.env`
+`DEFAULT_ENGINE_BASE_URL` is now a real, complete URL, set directly in `.env`
 (default `http://host.docker.internal:8000/v1` — right for the common
 single-host case, same as always, just no longer built at compose-parse
 time). Open WebUI, Hindsight, and the router all fall back to it
@@ -1423,10 +1430,10 @@ alongside it — this project's own README still says "in testing," and
 carrying two mechanisms for the same setting past the point one of them
 is clearly worse serves no one. `OWUI_INFERENCE_BASE_URL` and
 `HINDSIGHT_LLM_BASE_URL` remain, now as genuine overrides *of*
-`OMLX_BASE_URL` rather than overrides of a `host.docker.internal`
+`DEFAULT_ENGINE_BASE_URL` rather than overrides of a `host.docker.internal`
 construction — the same variables, a cleaner reason to have them.
 
-The router's own `OMLX_BASE_URL` entry in `docker-compose.yml` was
+The router's own `DEFAULT_ENGINE_BASE_URL` entry in `docker-compose.yml` was
 deleted rather than simplified: decision #29's `env_file` fix (this same
 session) already passes the whole `.env` through to the router
 container, so a value that's now a plain `.env` literal needs no

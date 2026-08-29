@@ -22,17 +22,17 @@ services:
     ports:
       - "${OPENWEBUI_PORT:-3000}:8080"
     environment:
-      # Points at OMLX_BASE_URL (.env) by default — the one setting every
-      # service falls back to unless it has a more specific override
-      # (decision #28). Set OWUI_INFERENCE_BASE_URL instead once the
-      # router (decision #21) is configured, to get the persona injected —
-      # the router exposes the same model names (chat, deep, ha-voice)
-      # oMLX does, so nothing about model selection in Open WebUI changes.
-      # Left pointed at OMLX_BASE_URL by default rather than switched
-      # automatically: the router is optional and gated behind its own
-      # compose profile, and this line has no way to know whether that
-      # profile is active.
-      OPENAI_API_BASE_URL: "${OWUI_INFERENCE_BASE_URL:-${OMLX_BASE_URL}}"
+      # Points at DEFAULT_ENGINE_BASE_URL (.env) by default — the one
+      # setting every service falls back to unless it has a more specific
+      # override (decision #28/#30). Set OWUI_INFERENCE_BASE_URL instead
+      # once the router (decision #21) is configured, to get the persona
+      # injected — the router exposes the same model names (chat, deep,
+      # ha-voice) oMLX does, so nothing about model selection in Open
+      # WebUI changes. Left pointed at DEFAULT_ENGINE_BASE_URL by default
+      # rather than switched automatically: the router is optional and
+      # gated behind its own compose profile, and this line has no way to
+      # know whether that profile is active.
+      OPENAI_API_BASE_URL: "${OWUI_INFERENCE_BASE_URL:-${DEFAULT_ENGINE_BASE_URL}}"
       OPENAI_API_KEY: "${OMLX_API_KEY:-none}"
       ENABLE_OLLAMA_API: "false"
       # Router-only: router/config.yaml exposes a `task` model built for
@@ -206,7 +206,7 @@ services:
       - "${HINDSIGHT_PORT:-8888}:8888"   # API + MCP
       - "${HINDSIGHT_UI_PORT:-9999}:9999" # web UI
     environment:
-      # Points at OMLX_BASE_URL (.env) by default, same as everything else
+      # Points at DEFAULT_ENGINE_BASE_URL (.env) by default, same as everything else
       # (decision #28). The base-URL variable name is confirmed: Hindsight
       # logs
       #   OpenAI-compatible client initialized: base_url=<the resolved URL>
@@ -215,11 +215,11 @@ services:
       # model (gpt-4o-mini) because no model name is set here; see
       # docs/STATE.md.
       HINDSIGHT_API_LLM_PROVIDER: "${HINDSIGHT_LLM_PROVIDER:-openai}"
-      # HINDSIGHT_LLM_BASE_URL overrides OMLX_BASE_URL above — most often
+      # HINDSIGHT_LLM_BASE_URL overrides DEFAULT_ENGINE_BASE_URL above — most often
       # to point extraction at the router's `task` model instead of an
       # engine directly (see .env.example). Blank means Hindsight uses
-      # OMLX_BASE_URL, same as everything else.
-      HINDSIGHT_API_LLM_BASE_URL: "${HINDSIGHT_LLM_BASE_URL:-${OMLX_BASE_URL}}"
+      # DEFAULT_ENGINE_BASE_URL, same as everything else.
+      HINDSIGHT_API_LLM_BASE_URL: "${HINDSIGHT_LLM_BASE_URL:-${DEFAULT_ENGINE_BASE_URL}}"
       HINDSIGHT_API_LLM_API_KEY: "${OMLX_API_KEY:-none}"
       # Without this Hindsight asks for its own default, gpt-4o-mini, which a
       # local server will never have — startup verification fails with "Model
@@ -386,7 +386,7 @@ services:
     # surfacing as an API-key error that had nothing to do with the actual
     # problem. env_file passes the entire deployed .env through instead,
     # so any current or future engine variable just works.
-    # OMLX_BASE_URL is a real, complete .env value now (decision #28), so
+    # DEFAULT_ENGINE_BASE_URL is a real, complete .env value now (decision #28), so
     # env_file below already provides it raw — no environment: override
     # needed here. LiteLLM's config only documents whole-field
     # substitution (os.environ/VARNAME) for values like this, not

@@ -76,7 +76,7 @@ model_list:
       api_key: os.environ/OMLX_API_KEY
 ```
 
-(Illustrative — the actual `OMLX_BASE_URL`/`OMLX_API_KEY` wiring in this
+(Illustrative — the actual `DEFAULT_ENGINE_BASE_URL`/`OMLX_API_KEY` wiring in this
 repo's `docker-compose.yml` and `.env.example` hasn't been generalized to a
 multi-host, multi-engine registry yet. See "Not built yet" below.)
 

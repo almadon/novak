@@ -22,22 +22,17 @@ services:
     ports:
       - "${OPENWEBUI_PORT:-3000}:8080"
     environment:
-      # Points at oMLX directly by default. Once the router (decision #21)
-      # is configured, set OWUI_INFERENCE_PORT to ${ROUTER_PORT:-4000} to
-      # get the persona injected without any other change here — the
-      # router exposes the same model names (chat, deep, ha-voice) oMLX
-      # does, so nothing about model selection in Open WebUI changes.
-      # Left pointed at oMLX by default rather than switched automatically:
-      # the router is optional and gated behind its own compose profile,
-      # and this line has no way to know whether that profile is active.
-      #
-      # OWUI_INFERENCE_BASE_URL (decision #28) overrides all of this with a
-      # full URL when Open WebUI and the router/oMLX are NOT the same host —
-      # host.docker.internal only ever resolves to the LOCAL host's gateway,
-      # so it's structurally unable to reach a remote router. Blank (the
-      # default) falls through to the local-host construction unchanged;
-      # this only matters once Novak core runs somewhere the router doesn't.
-      OPENAI_API_BASE_URL: "${OWUI_INFERENCE_BASE_URL:-http://host.docker.internal:${OWUI_INFERENCE_PORT:-${OMLX_PORT:-8000}}/v1}"
+      # Points at OMLX_BASE_URL (.env) by default — the one setting every
+      # service falls back to unless it has a more specific override
+      # (decision #28). Set OWUI_INFERENCE_BASE_URL instead once the
+      # router (decision #21) is configured, to get the persona injected —
+      # the router exposes the same model names (chat, deep, ha-voice)
+      # oMLX does, so nothing about model selection in Open WebUI changes.
+      # Left pointed at OMLX_BASE_URL by default rather than switched
+      # automatically: the router is optional and gated behind its own
+      # compose profile, and this line has no way to know whether that
+      # profile is active.
+      OPENAI_API_BASE_URL: "${OWUI_INFERENCE_BASE_URL:-${OMLX_BASE_URL}}"
       OPENAI_API_KEY: "${OMLX_API_KEY:-none}"
       ENABLE_OLLAMA_API: "false"
       # Router-only: router/config.yaml exposes a `task` model built for
@@ -50,8 +45,8 @@ services:
       # Blank (the default) leaves Open WebUI's own Task Model setting
       # alone — correct when the router isn't configured, since `task`
       # isn't a model name anywhere else. Set OWUI_TASK_MODEL=task once
-      # OWUI_INFERENCE_PORT points at the router. Set here, not left to
-      # the admin UI alone: ENABLE_PERSISTENT_CONFIG=false means a
+      # OWUI_INFERENCE_BASE_URL points at the router. Set here, not left
+      # to the admin UI alone: ENABLE_PERSISTENT_CONFIG=false means a
       # UI-only change here doesn't survive a restart, the same trap
       # OPENAI_API_BASE_URL's own comment already documents.
       TASK_MODEL: "${OWUI_TASK_MODEL:-}"
@@ -211,16 +206,20 @@ services:
       - "${HINDSIGHT_PORT:-8888}:8888"   # API + MCP
       - "${HINDSIGHT_UI_PORT:-9999}:9999" # web UI
     environment:
-      # Inference goes to oMLX, not a cloud provider. The base-URL variable
-      # name is confirmed: Hindsight logs
-      #   OpenAI-compatible client initialized: base_url=http://host.docker.internal:8000/v1
-      # on startup, so extraction really does stay on this machine.
-      #
-      # Note the default below is 8080 but oMLX serves 8000 — set OMLX_PORT.
-      # Hindsight still asks for its own default model (gpt-4o-mini) because
-      # no model name is set here; see docs/STATE.md.
+      # Points at OMLX_BASE_URL (.env) by default, same as everything else
+      # (decision #28). The base-URL variable name is confirmed: Hindsight
+      # logs
+      #   OpenAI-compatible client initialized: base_url=<the resolved URL>
+      # on startup, so it's easy to check extraction is actually reaching
+      # where you think it is. Hindsight still asks for its own default
+      # model (gpt-4o-mini) because no model name is set here; see
+      # docs/STATE.md.
       HINDSIGHT_API_LLM_PROVIDER: "${HINDSIGHT_LLM_PROVIDER:-openai}"
-      HINDSIGHT_API_LLM_BASE_URL: "http://host.docker.internal:${OMLX_PORT:-8080}/v1"
+      # HINDSIGHT_LLM_BASE_URL overrides OMLX_BASE_URL above — most often
+      # to point extraction at the router's `task` model instead of an
+      # engine directly (see .env.example). Blank means Hindsight uses
+      # OMLX_BASE_URL, same as everything else.
+      HINDSIGHT_API_LLM_BASE_URL: "${HINDSIGHT_LLM_BASE_URL:-${OMLX_BASE_URL}}"
       HINDSIGHT_API_LLM_API_KEY: "${OMLX_API_KEY:-none}"
       # Without this Hindsight asks for its own default, gpt-4o-mini, which a
       # local server will never have — startup verification fails with "Model
@@ -387,17 +386,16 @@ services:
     # surfacing as an API-key error that had nothing to do with the actual
     # problem. env_file passes the entire deployed .env through instead,
     # so any current or future engine variable just works.
+    # OMLX_BASE_URL is a real, complete .env value now (decision #28), so
+    # env_file below already provides it raw — no environment: override
+    # needed here. LiteLLM's config only documents whole-field
+    # substitution (os.environ/VARNAME) for values like this, not
+    # interpolation inside a larger string, confirmed by testing the
+    # alternative and having it silently do nothing useful — which is
+    # exactly why this can't be a port glued onto a URL fragment here
+    # instead, and has to already be complete in .env.
     env_file:
       - .env
-    environment:
-      # Built here with compose's own ${VAR:-default} interpolation, not
-      # passed through raw: this one is COMPUTED from OMLX_PORT, not a
-      # literal .env value, so env_file above can't provide it — and
-      # LiteLLM's config only documents whole-field substitution
-      # (os.environ/VARNAME), not interpolation inside a larger string,
-      # confirmed by testing the alternative and having it silently do
-      # nothing useful.
-      OMLX_BASE_URL: "http://host.docker.internal:${OMLX_PORT:-8000}/v1"
     volumes:
       # config.yaml is the ONE exception to "everything the router needs
       # uses ${REPO_DIR}, not a relative path" (see the portal's identical

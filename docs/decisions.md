@@ -1201,3 +1201,118 @@ for a non-MCP entry, not worth changing for one container), with the
 image, `8010:8000` port mapping, and `OPEN_TERMINAL_API_KEY` passed
 through from the host environment — the same path every other container
 entry already uses, unmodified for this one.
+
+## 28. Novak becomes multi-platform: Mitochon (Mac) stays fully supported, Spire (Unraid/RDNA4) becomes the primary reference deployment
+
+This is the pivot everything up to #27 was, unknowingly, already built to
+survive. Recorded here as a deliberate decision because it is one — not a
+drift nobody wrote down.
+
+### What actually changed
+
+The household is moving its day-to-day Novak deployment onto Spire, an
+Unraid box already running a dozen other services, freshly given an AMD
+Radeon RX 9060 XT (RDNA4). Mitochon — the Mac mini every prior decision
+in this file assumed — goes back to being a regular, always-on computer.
+It keeps oMLX as a secondary inference engine other clients can point at
+deliberately (Open WebUI's own model config, or a future Novak router
+entry), but it is no longer the host anything in this stack depends on
+being up.
+
+**Nothing already built for Mitochon is deleted or deprecated.** Novak
+was a single-platform project pretending to be general; this makes it
+actually general. `docker-compose.yml`, `registry/omlx.yaml`,
+`omlx-settings.md`, `headless-operation.md` — every one of them stays,
+intact, as one complete, real deployment path. What changes is that it
+stops being *the* path and becomes *a* path, chosen at setup rather than
+assumed by the code.
+
+### Why this was less work than it sounds
+
+Checked before assuming a rewrite was needed: almost nothing about
+Hindsight, Open WebUI, the console, or the Wyoming voice services is
+macOS-specific. They're plain containers. The *only* piece of Novak that
+ever genuinely needed to be a Mac was oMLX itself — a native app because
+Metal/MLX can't run in a Linux container. Once that's understood,
+"Novak on Linux" was never really the hard problem; "oMLX specifically
+needs a Mac" is a fact about one engine, not about the whole stack.
+
+That reframes the whole architecture cleanly:
+
+- **Novak core** (Hindsight, Open WebUI, the console, voice, the
+  registry/reconciler pattern, the router) — a Docker Compose stack that
+  runs on any real Docker host. Spire, tonight, proved this directly:
+  everything that isn't inference is ordinary containers on ordinary
+  Linux.
+- **Inference engines** — pluggable, behind the router, each on whatever
+  host actually suits it. oMLX/Mitochon (macOS, Metal) and
+  Ollama/Spire (Linux, Vulkan/RDNA4) are the first two, documented as
+  parallel siblings, not a primary and a workaround.
+
+The router (#21/#23) already had the right shape for this by accident:
+`router/config.yaml`'s `api_base` is just an OpenAI-compatible endpoint,
+with no assumption baked in about what serves it. It needed no rework at
+all for this pivot — the pieces that did were the ones that had never
+been asked to be portable: `bootstrap.sh`, the registry's oMLX-specific
+assumptions, and every doc that said "your Mac" where it meant "your
+inference host."
+
+### What Mitochon's reduced role actually retires
+
+`headless-operation.md`'s entire FileVault/JetKVM/unattended-recovery
+apparatus existed to solve one problem: a host that MUST come back up on
+its own after a power cut, because everything depends on it. That
+problem is Spire's now, and Spire is a Linux server — it doesn't have
+any of the constraints that apparatus exists to work around (no
+WindowServer-requires-a-login-session, no per-account OrbStack
+isolation, none of it). Mitochon, once it's a "regular computer,"
+doesn't need FileVault-unlock-via-KVM either — if it's off or asleep,
+oMLX just isn't available as a secondary engine until someone's using
+the machine anyway, which is a fine, low-stakes failure mode for
+something optional.
+
+**Not deleting `headless-operation.md`.** It stays as exactly what it
+always was — real, hard-won, and correct for anyone who *does* want
+oMLX/Mitochon to be their primary, always-up engine, which is a
+completely legitimate choice for someone without a spare Linux box.
+It's just no longer the assumed path in this household's own deployment,
+and the docs need to stop reading as if it were the only one.
+
+### What this asks of the setup scripts and docs going forward
+
+Not built yet — this decision records the shape, not the finished
+implementation:
+
+- `bootstrap.sh` (and the `novak` CLI more broadly) need a real "which
+  platform, which engine" choice at setup time, instead of assuming
+  macOS + OrbStack + oMLX throughout.
+- Each engine gets its own settings doc, sibling to `omlx-settings.md`
+  — Spire's Ollama/RDNA4 setup needs the same kind of "here's the real
+  reasoning for these numbers" treatment `omlx-settings.md` already
+  gives the Mac path, not a paragraph bolted onto an existing doc.
+- `README.md` and `docs/architecture.md` currently read as if "your Mac"
+  and "Novak's inference host" are the same sentence. They need to stop
+  saying that.
+
+### What was verified before recording this as settled, not aspirational
+
+Real, on Spire, tonight: GPU passthrough into Docker with a plain
+`--device=/dev/dri`, no vendor plugin needed; Ollama detecting the 9060
+XT correctly via Vulkan (`RADV GFX1200`); real generations on `qwen3:4b`
+(94.8 tok/s) and `qwen3:14b` (32.6 tok/s), both fitting entirely in the
+card's 15.9GB VRAM. Qwen3.8-27B does not fit (confirmed via `ollama ps`
+showing a genuine 12%/88% CPU/GPU split even in isolation, ~10 tok/s) —
+recorded honestly as the reason it stays on Mitochon/oMLX rather than
+forced onto hardware that doesn't fit it well.
+
+### What would justify revisiting
+
+Getting real speed out of Qwen3.8-27B on Spire specifically would mean
+running raw `llama-server` with native MTP speculative decoding
+(`--spec-type draft-mtp`) instead of Ollama — confirmed directly that
+Ollama's own MTP support exists only on its MLX runner today, not the
+Vulkan/AMD backend. That's real, documented, and deliberately not done:
+it would mean a second inference engine's worth of lifecycle and
+multi-model complexity to speed up exactly one model, when Mitochon
+already serves it acceptably. Revisit if Qwen3.8-27B specifically
+becomes important enough to justify that.

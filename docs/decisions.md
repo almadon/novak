@@ -1316,3 +1316,74 @@ it would mean a second inference engine's worth of lifecycle and
 multi-model complexity to speed up exactly one model, when Mitochon
 already serves it acceptably. Revisit if Qwen3.8-27B specifically
 becomes important enough to justify that.
+
+## 29. `registry/engines.yaml` + `reconciler/router_apply.py`: the multi-engine setup script decision #28 named as still missing
+
+Decision #28 recorded the direction and named the gap plainly: hand-editing
+`router/config.yaml` to add a second engine "is the real next piece of
+code, not just docs." This is that piece.
+
+### The mechanism
+
+Same shape as `registry/mcp-servers.yaml` and `registry/omlx.yaml`: a
+declarative file, a dumb reconciler, git as the audit log. Each engine
+declares a `base_url_var`/`api_key_var` (variable *names* — no secret is
+ever read here, same invariant `reconcile.py` holds) and a list of
+`{role, model}` pairs. `router_apply.py` validates it (a role claimed by
+two engines is refused outright — ambiguous routing, not load-balancing)
+and renders `router/config.yaml`'s `model_list`. It does not restart the
+router; same reasoning `novak omlx apply` already uses for not silently
+restarting oMLX — a visible, separate `novak restart router` step.
+
+### The bug this design caught in itself before it shipped
+
+`router/config.yaml` was, until this decision, a tracked repo file *and*
+needed to become a per-deployment generated artifact — genuinely
+incompatible. A real deployment running `novak router apply` would dirty
+a tracked file with household-specific model IDs on every run. Fixed by
+treating it exactly like `docker-compose.mcp.yml` already is: pure
+generated output in `$NOVAK_HOME` (`router-config.yaml`), gitignored,
+never in the checkout. `docker-compose.yml`'s router mount changed from
+`${REPO_DIR}/router/config.yaml` to a relative `./router-config.yaml`,
+resolving against `--project-directory` the same way `./registry`
+already does. The checked-in `registry/engines.yaml` is now a genuine
+generic template (single oMLX engine, matching how a fresh deployment
+actually starts) — the real, household-specific multi-engine config
+lives only in `$NOVAK_HOME`'s deployed copy, same rule
+`headless-operation.md` already states for `mcp-servers.yaml`.
+
+### Two real bugs found running this end to end, neither in the new code
+
+Testing every model role through the actual router (not assumed working
+from the dry-run render) surfaced both:
+
+- **`qwen3:14b` on Spire returned "does not support chat"** despite
+  `ollama list` showing it present and a real generation having worked
+  on it hours earlier. Root cause: pulling it and the Qwen3.8-27B model
+  concurrently earlier that session raced on Ollama's blob/manifest
+  store, leaving the server's in-memory model-capability cache stale.
+  Fixed with `ollama rm` + a clean re-pull, **then a container restart**
+  — the first restart (before the re-pull) wasn't enough, since it
+  restarted against the still-corrupted manifest.
+- **`deep` pointed at Qwen3.8-27B on oMLX, which was never actually
+  downloaded there.** All of that model's testing this session happened
+  on Spire/Ollama; nothing had put it in oMLX at all. oMLX correctly
+  404'd it — the router mechanism worked exactly right, the registry
+  entry was simply wrong. Fixed by pointing `deep` at the existing,
+  working `Qwen3-14B-4bit:deep` profile as an honest interim, with a
+  comment recording that Qwen3.8-27B-on-oMLX is a real, separate,
+  not-yet-done task — not silently reverted without a record of why.
+
+Neither bug was in `router_apply.py` or the registry schema. Both were
+caught specifically *because* every role was tested against the real
+running router, not just validated against the schema and assumed
+correct from there.
+
+### What was verified before calling this done
+
+All four model roles (`chat`, `deep`, `ha-voice`, `task`) return real
+200 responses through the actual router, hitting both engines
+(`omlx-mitochon` for `deep`, `ollama-spire` for the other three) — not
+just a dry-run render. `task`'s response carries 17 prompt tokens,
+confirming persona injection is still correctly bypassed for it exactly
+as decision #25 intended, unaffected by which engine now serves it.

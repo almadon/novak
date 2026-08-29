@@ -378,13 +378,24 @@ services:
       # larger string, confirmed by testing the alternative and having it
       # silently do nothing useful.
       OMLX_BASE_URL: "http://host.docker.internal:${OMLX_PORT:-8000}/v1"
+      # A remote engine (decision #28) — unlike OMLX_BASE_URL above, there's
+      # no local port to build this from; it's a full URL naming a
+      # different host (Tailscale hostname/IP), so .env holds the whole
+      # thing rather than compose interpolating a piece of it.
+      OLLAMA_SPIRE_BASE_URL: "${OLLAMA_SPIRE_BASE_URL:-}"
     volumes:
-      # See the portal's identical comment above on why ${REPO_DIR}, not a
-      # relative path — this is the bug that surfaced it: the first real
-      # `novak up` with this profile active failed with a Python
-      # IsADirectoryError on config.yaml, because compose had silently
-      # bound an empty directory instead of the file.
-      - ${REPO_DIR}/router/config.yaml:/app/config.yaml:ro
+      # config.yaml is the ONE exception to "everything the router needs
+      # uses ${REPO_DIR}, not a relative path" (see the portal's identical
+      # comment above, and the IsADirectoryError bug that established the
+      # rule). It's deliberate here: since decision #28, config.yaml is
+      # GENERATED per deployment by reconciler/router_apply.py from
+      # registry/engines.yaml — which engine serves which model differs
+      # by household, so it can't be a checked-in repo file the way
+      # persona_hook.py and prompts/ correctly still are. A relative path
+      # resolves against --project-directory ($NOVAK_HOME), landing it
+      # beside the registry rather than in the checkout — same reasoning
+      # as docker-compose.mcp.yml being generated there, never in git.
+      - ./router-config.yaml:/app/config.yaml:ro
       - ${REPO_DIR}/router/persona_hook.py:/app/persona_hook.py:ro
       - ${REPO_DIR}/prompts:/prompts:ro
     extra_hosts:

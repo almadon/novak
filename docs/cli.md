@@ -47,6 +47,7 @@ in, not a replacement for scripting against these.
 | `novak registry` | what the reconciler thinks it should start |
 | `novak drift` | where this deployment differs from the repo (aliases: `verify`, `check`) |
 | `novak omlx apply` | apply `registry/omlx.yaml` — models, profiles, TTLs |
+| `novak router apply` | apply `registry/engines.yaml` -> `router/config.yaml` (decision #28); needs `novak restart router` after |
 
 ---
 
@@ -375,6 +376,19 @@ The Tailscale column asks the system daemon by its socket. On macOS a bare
 novak omlx apply            # apply registry/omlx.yaml
 novak omlx apply --dry-run  # show what would change
 ```
+
+## Inference engines (decision #28)
+
+```bash
+novak router apply            # apply registry/engines.yaml -> router/config.yaml
+novak router apply --dry-run  # show what would change
+novak restart router          # required after — LiteLLM reads config.yaml
+                               # at container start, not on a hot reload
+```
+
+See [engines.md](engines.md) for what qualifies as an engine and
+[ollama-settings.md](ollama-settings.md) / [omlx-settings.md](omlx-settings.md)
+for the two documented today.
 
 Writes oMLX's own JSON files rather than calling its admin API, which would need
 a second credential — decision 17. Because oMLX keeps this state in memory and

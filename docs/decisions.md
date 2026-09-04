@@ -1550,3 +1550,76 @@ generations on Mitochon after the fix — not just the one that was
 broken — plus the container's actual `OMLX_API_KEY` env var checked
 directly (`sk-omlx-...`, not the placeholder) before trusting the
 symptom was gone rather than just quieter.
+
+## 33. Storage reorg on Spire, and Ollama folds into docker-compose.yml as a profile-gated service
+
+Follow-up to decision #28/#31, once Spire was confirmed as the primary,
+sole-host deployment (Mitochon taken down as a server, kept only for
+oMLX development). Two separate but related changes, both requested
+together:
+
+### The storage split
+
+Novak's compose manifests, `.env`, and Compose Manager's own project
+state stay exactly where they were — `/mnt/cache/appdata/stacks/Novak/`
+— since Compose Manager's `projectDirectory` is always derived from
+wherever the compose file itself lives (confirmed by reading
+`Util.php`'s `StackInfo::buildComposeArgs()` directly), so moving the
+manifests would mean re-registering the whole project.
+
+Everything else Novak owns — config the reconciler writes
+(`registry/`, `router-config.yaml`, `wakeword/`), and (as of this
+decision) service databases, media, and model weights — moves to
+`/mnt/teracache/Novak/{config,data,models}`. Config already done: moved
+physically, with a symlink left at the old path inside the stacks
+directory, so nothing that reads `./registry` or `./router-config.yaml`
+(relative to `--project-directory`) needed to change at all.
+
+The service data directories (Hindsight's Postgres, Open WebUI's
+`webui.db`/uploads/vector DB, Whisper/Piper's model caches) use a new
+`${SERVICE_DATA_DIR:-namedvolume}` pattern instead: unset, a service
+keeps using its existing Docker-managed named volume (Mitochon's
+default, and any other single-disk deployment's); set to a real host
+path, Compose treats it as a bind mount instead — no other code
+difference, since Compose decides bind-mount-vs-named-volume purely
+from whether the volume's source string matches a declared top-level
+`volumes:` key. `OWUI_DATA_DIR`, `HINDSIGHT_DATA_DIR`, `WHISPER_DATA_DIR`,
+`PIPER_DATA_DIR`, `OLLAMA_DATA_DIR` were added to `.env.example`, all
+blank by default — a zero-risk no-op for any deployment that never sets
+them.
+
+### Ollama joins docker-compose.yml
+
+Previously a standalone Compose Manager project on Spire
+(`/mnt/teracache/appdata/Ollama/`), set up ad hoc while decision #28 was
+first being verified and never folded back in — flagged directly by the
+user mid-session ("there is also an 'ollama' container seemingly
+standalone... it is not custom, but it is still a part of the
+compose/stack regardless"). Folded in now as a new `ollama` service,
+gated behind its own `profiles: ["ollama"]` — same pattern as
+`router`/`console`/`portal` — so a host running oMLX (Mitochon) never
+starts a second, unused inference engine, and nothing changes for a
+deployment that doesn't opt in.
+
+Settings replicated exactly from the standalone project's real,
+working config (`/dev/dri`+`/dev/kfd` passthrough, `OLLAMA_VULKAN=1`,
+`OLLAMA_MAX_LOADED_MODELS=2`, `OLLAMA_NUM_PARALLEL=4`,
+`OLLAMA_KEEP_ALIVE=20m`), each now overridable via `.env` rather than
+hardcoded, matching every other service in this file. Its data volume
+uses the same `${OLLAMA_DATA_DIR:-ollama}` pattern as the storage
+split above — pointed at `/mnt/teracache/Novak/models/ollama` on
+Spire once the actual model data is moved there from the old
+standalone project's directory.
+
+### What this doesn't cover yet
+
+This decision covers the `docker-compose.yml`/`.env.example` mechanism
+only. Still open, tracked as follow-up work, not claimed done here:
+actually moving Hindsight's/Open WebUI's/Whisper's/Piper's live data
+into the new bind-mount paths (higher-risk, real production-adjacent
+data, done with the same helper-container backup/restore pattern
+already proven during the Mitochon→Spire Open WebUI migration);
+actually moving Ollama's model weights and decommissioning the old
+standalone project; pulling and benchmarking a smaller Qwen3.8-27B
+quant (`UD-IQ4_XS`, 13.3GB) to replace the current `UD-Q4_K_M` (17GB,
+confirmed not fitting Spire's 15.9GB VRAM).

@@ -1,16 +1,23 @@
-# Novak stack. oMLX runs natively on the host (Metal/MLX cannot run in
-# Docker); everything here reaches it via host.docker.internal.
-# Start with scripts/up.sh (pulls secrets from Keychain), not bare
-# `docker compose up`.
+# Novak stack. This one file supports two different hosts, gated behind
+# compose profiles and .env, not two different files (decision #28):
+#   - Apple Silicon: oMLX runs natively on the host (Metal/MLX cannot run
+#     in Docker), reached via host.docker.internal. The `ollama` service
+#     stays off (no profile) on this shape.
+#   - Linux + GPU: the `ollama` profile runs the engine in-stack instead;
+#     see docs/ollama-settings.md. Spire (Unraid, RDNA4/Vulkan) is the
+#     reference deployment as of decision #33 and is where most active
+#     development now happens; Mitochon (the Mac) stays supported for oMLX
+#     work.
+# Start with scripts/up.sh on macOS (pulls secrets from Keychain); on
+# Unraid, apply via Compose Manager against real .env values (no Keychain
+# on that platform yet — see decision #33 and the still-open bootstrap-unraid
+# roadmap item). Either way, don't run bare `docker compose up` on macOS.
 #
-# PLACEMENT: this file is written for the mini, which runs oMLX and
-# everything else — Hindsight, the console, Open WebUI, and the Wyoming
-# voice services all run on this same host. (Mem0 and its first-party shim
-# were replaced by Hindsight; see decisions #3.) Corrected 2026-08-27: this
-# used to say Open WebUI runs on a separate VPS, which was an earlier plan
-# and is not this deployment. The only thing off-host is the reverse proxy
-# fronting the portal and Open WebUI, on a LAN-neighboring machine, not a
-# VPS. See docs/architecture.md § Placement.
+# PLACEMENT: everything in this file — Hindsight, the console, Open WebUI,
+# the Wyoming voice services, and (where enabled) Ollama — runs on ONE
+# host. The only thing off-host is the reverse proxy fronting the portal
+# and Open WebUI, on a LAN-neighboring machine. See docs/architecture.md §
+# Placement.
 
 name: novak
 
@@ -127,7 +134,13 @@ services:
       ENABLE_OAUTH_GROUP_MANAGEMENT: "${OWUI_OIDC_GROUP_MANAGEMENT:-true}"
       OAUTH_GROUP_CLAIM: "${OWUI_OIDC_GROUP_CLAIM:-groups}"
     volumes:
-      - open-webui:/app/backend/data
+      # ${OWUI_DATA_DIR:-open-webui} resolves to a bind mount when set (a
+      # real host path — e.g. Spire's teracache split, decision #33) or the
+      # named volume below when unset (Mitochon's default, unchanged).
+      # Compose decides bind-mount vs. named-volume purely from whether the
+      # source string matches a key under top-level `volumes:` — no other
+      # code path needed for one image to support both deployment shapes.
+      - ${OWUI_DATA_DIR:-open-webui}:/app/backend/data
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -237,7 +250,8 @@ services:
       HINDSIGHT_API_TENANT_EXTENSION: "hindsight_api.extensions.builtin.tenant:ApiKeyTenantExtension"
       HINDSIGHT_API_TENANT_API_KEY: "${HINDSIGHT_API_KEY}"
     volumes:
-      - hindsight:/home/hindsight/.pg0
+      # See OWUI_DATA_DIR's comment above — same pattern.
+      - ${HINDSIGHT_DATA_DIR:-hindsight}:/home/hindsight/.pg0
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -249,7 +263,7 @@ services:
     ports:
       - "${WHISPER_PORT:-13405}:10300"
     volumes:
-      - whisper:/data
+      - ${WHISPER_DATA_DIR:-whisper}:/data
 
   piper:
     image: rhasspy/wyoming-piper:latest
@@ -258,7 +272,7 @@ services:
     ports:
       - "${PIPER_PORT:-13406}:10200"
     volumes:
-      - piper:/data
+      - ${PIPER_DATA_DIR:-piper}:/data
 
   # Server-side wake word detection ("hey novak"). Only used by Wyoming
   # satellites — HA Voice PE detects on-device with microWakeWord instead.
@@ -440,9 +454,49 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  # ── Ollama (Linux/GPU engine) ──────────────────────────────────────────
+  # Optional sibling to oMLX (decision #28/#33): oMLX only runs on Apple
+  # Silicon (Metal/MLX cannot run in Docker, hence it living on the host
+  # rather than here at all). This is the equivalent for a Linux host with
+  # a GPU — Spire, RDNA4 via Vulkan, is the reference deployment. Gated
+  # behind its own profile so a host with no GPU, or one already running
+  # oMLX, never starts a second, unused inference engine by default.
+  #
+  # Point registry/engines.yaml's base_url_var at
+  # http://ollama:11434/v1 (in-network) or http://<host>:${OLLAMA_PORT}/v1
+  # (from outside) once this profile is enabled. See docs/ollama-settings.md.
+  ollama:
+    profiles: ["ollama"]
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    devices:
+      # RDNA4/RDNA3-class AMD GPU passthrough (Vulkan or ROCm). Harmless to
+      # list on a host without these nodes — Ollama falls back to CPU-only
+      # if they don't resolve, rather than refusing to start (verified on
+      # Spire before this device list existed there at all).
+      - /dev/dri:/dev/dri
+      - /dev/kfd:/dev/kfd
+    environment:
+      # Vulkan beat ROCm on RDNA4 outright in real benchmarking (RADV
+      # GFX1200, decision #33) — no HSA_OVERRIDE_GFX_VERSION hacks needed.
+      # A ROCm-only card should set OLLAMA_VULKAN=0 here via .env.
+      OLLAMA_VULKAN: "${OLLAMA_VULKAN:-1}"
+      OLLAMA_MAX_LOADED_MODELS: "${OLLAMA_MAX_LOADED_MODELS:-2}"
+      OLLAMA_NUM_PARALLEL: "${OLLAMA_NUM_PARALLEL:-4}"
+      OLLAMA_KEEP_ALIVE: "${OLLAMA_KEEP_ALIVE:-20m}"
+    volumes:
+      # See OWUI_DATA_DIR's comment above — same pattern. Model weights are
+      # large enough that most real deployments will want this pointed at
+      # bulk storage (e.g. Spire's teracache), not appdata/Docker's own
+      # volume root.
+      - ${OLLAMA_DATA_DIR:-ollama}:/root/.ollama
+
 volumes:
   open-webui:
   hindsight:
   whisper:
   piper:
   tinyauth:
+  ollama:

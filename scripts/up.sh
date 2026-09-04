@@ -1,17 +1,31 @@
 #!/usr/bin/env bash
-# Start (or update) the stack. Secrets are read from macOS Keychain items
-# named "novak/<VAR>" when present; otherwise values from .env apply.
-# Add a secret with:
-#   security add-generic-password -s "novak/OUTLINE_EVERYTHING_API_KEY" -a novak -w
+# Start (or update) the stack. Secrets come from scripts/lib/secrets.sh —
+# macOS Keychain items named "novak/<VAR>" on Darwin, real values directly
+# in .env on Linux (no OS keychain to use headlessly there). Add one with
+# `novak secret set <VAR>` on either platform; see that file for the
+# underlying mechanism and why the two platforms differ.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export REPO_DIR
 
+PLATFORM="$(uname -s)"
+
 # Runtime lives outside the checkout. The repo holds definitions; NOVAK_HOME
 # holds this deployment's config, data and generated files — so `git pull`
 # never fights a running stack, and the checkout stays clean.
-NOVAK_HOME="${NOVAK_HOME:-$HOME/.novak}"
+if [ -z "${NOVAK_HOME:-}" ]; then
+  if [ "$PLATFORM" = "Darwin" ]; then
+    NOVAK_HOME="$HOME/.novak"
+  elif [ -f /boot/config/novak/novak_home ]; then
+    NOVAK_HOME="$(cat /boot/config/novak/novak_home)"
+  else
+    echo "✋ NOVAK_HOME is not set, and no /boot/config/novak/novak_home marker" >&2
+    echo "   exists to default it from. Run scripts/bootstrap-unraid.sh once," >&2
+    echo "   or export NOVAK_HOME explicitly." >&2
+    exit 1
+  fi
+fi
 
 # Seed on first run. Existing files are never overwritten: your config and your
 # registry belong to you once created.
@@ -26,18 +40,25 @@ if [ ! -f "$NOVAK_HOME/registry/mcp-servers.yaml" ]; then
 fi
 
 cd "$NOVAK_HOME"
+ENV_FILE="$NOVAK_HOME/.env"
 
 # Every secret the stack needs. Anything listed here that is missing from both
-# Keychain and .env will fall back to the .env.example placeholder, which is
-# why the check below exists — a console running with AUTH_SECRET=changeme is
-# worse than one that refuses to start.
+# the secret store and .env will fall back to the .env.example placeholder,
+# which is why the check below exists — a console running with
+# AUTH_SECRET=changeme is worse than one that refuses to start.
 # shellcheck source=lib/vars.sh
 source "$REPO_DIR/scripts/lib/vars.sh"
+# shellcheck source=lib/secrets.sh
+source "$REPO_DIR/scripts/lib/secrets.sh"
 
 for var in "${SECRET_VARS[@]}"; do
-  if val=$(security find-generic-password -s "novak/${var}" -w 2>/dev/null); then
+  if val="$(secret_get "$var")" && [ -n "$val" ]; then
     export "${var}=${val}"
-    echo "🔑 ${var}: loaded from Keychain"
+    if [ "$PLATFORM" = "Darwin" ]; then
+      echo "🔑 ${var}: loaded from Keychain"
+    else
+      echo "🔑 ${var}: loaded from ${ENV_FILE}"
+    fi
   fi
 done
 
@@ -117,13 +138,20 @@ for var in "${REQUIRED_SECRETS[@]}"; do
 done
 if [ ${#missing[@]} -gt 0 ]; then
   echo "" >&2
-  echo "✋ These secrets were not found in the Keychain:" >&2
-  for var in "${missing[@]}"; do
-    echo "     security add-generic-password -s \"novak/${var}\" -a $(whoami) -w" >&2
-  done
-  echo "" >&2
-  echo "   Run those as $(whoami) — the login keychain is per-user, so items" >&2
-  echo "   added under another account are invisible here." >&2
+  if [ "$PLATFORM" = "Darwin" ]; then
+    echo "✋ These secrets were not found in the Keychain:" >&2
+    for var in "${missing[@]}"; do
+      echo "     security add-generic-password -s \"novak/${var}\" -a $(whoami) -w" >&2
+    done
+    echo "" >&2
+    echo "   Run those as $(whoami) — the login keychain is per-user, so items" >&2
+    echo "   added under another account are invisible here." >&2
+  else
+    echo "✋ These secrets are not set:" >&2
+    for var in "${missing[@]}"; do
+      echo "     novak secret set ${var}" >&2
+    done
+  fi
   echo "" >&2
   exit 1
 fi
@@ -139,8 +167,13 @@ PY="$VENV/bin/python3"
 if [ ! -x "$PY" ] || ! "$PY" -c 'import yaml' 2>/dev/null; then
   SYS_PY=$(command -v python3 || true)
   if [ -z "$SYS_PY" ]; then
-    echo "✋ python3 not found. Install Xcode command line tools:" >&2
-    echo "     xcode-select --install" >&2
+    if [ "$PLATFORM" = "Darwin" ]; then
+      echo "✋ python3 not found. Install Xcode command line tools:" >&2
+      echo "     xcode-select --install" >&2
+    else
+      echo "✋ python3 not found. Unraid ships it at /usr/bin/python3 —" >&2
+      echo "   check PATH, or install a Python plugin via Community Applications." >&2
+    fi
     exit 1
   fi
   echo "🐍 preparing $VENV (one-off)"

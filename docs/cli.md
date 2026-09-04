@@ -21,6 +21,36 @@ Run with no arguments and it opens an interactive menu instead of printing
 still works exactly as shown when typed directly; the menu is a second way
 in, not a replacement for scripting against these.
 
+## Unraid (decision #35)
+
+Every command in this reference works the same way on Unraid — same
+`novak adopt`, same `novak drift`, same `novak status`. Two things differ,
+both because the platform genuinely has no equivalent, not by choice:
+
+- **Where it's linked from.** `scripts/bootstrap-unraid.sh` (run once, as
+  root, after cloning the repo) symlinks it at `/usr/local/bin/novak` and
+  adds a line to `/boot/config/go` to re-create that symlink on every boot
+  — required on Unraid specifically, since `/usr/local/bin` sits on a
+  RAM-based overlay rebuilt from the flash image at each boot, unlike a
+  normal Linux root filesystem. It also writes `NOVAK_HOME` to
+  `/boot/config/novak/novak_home`, since `$HOME` (`/root`) is not a safe
+  default the way it is on macOS — Unraid's Compose Manager plugin always
+  derives its own project directory from wherever `docker-compose.yml`
+  lives, so `NOVAK_HOME` has to be that exact path.
+- **Where secrets live.** No OS keychain exists to use headlessly on
+  Unraid — there's no logged-in desktop session to unlock one. `novak
+  secret set` writes the real value directly into `.env` instead (protected
+  by file permissions, 600, checked by `novak secret verify`) rather than
+  the macOS Keychain. This is a genuinely lower security bar, not a
+  disguised equivalent — see [`scripts/lib/secrets.sh`](../scripts/lib/secrets.sh)
+  for the reasoning. Every other command that touches a secret (`config`,
+  `status`, `omlx apply`'s `OMLX_API_KEY` read, the checklist's live probes)
+  goes through the same abstraction and needs no per-platform handling.
+
+`novak omlx apply` refuses outright on Linux (oMLX is Apple Silicon only);
+everything else — including `novak router apply` for Ollama/engines.yaml —
+works identically on both platforms.
+
 ---
 
 ## At a glance

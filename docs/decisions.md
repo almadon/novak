@@ -1665,3 +1665,100 @@ process runs it.
   applied against a real HA instance on this host.
 - **`novak` CLI support for Unraid** — see decision #35, started the
   same session this was recorded.
+
+## 35. `novak` CLI works on Unraid — same commands, two platform-specific parts
+
+Decision #28 made Spire the primary deployment; every real config change
+against it this session before now went through raw SSH commands and
+Compose Manager, never `novak` itself, because the CLI hard-depended on
+macOS's Keychain (`security`) everywhere it touched a secret. Named as an
+explicit open item in that decision's follow-up audit, and asked for
+directly: "Implementing `novak` cli in Unraid would be a great move. It
+must follow the same principles - eg. `novak adopt` pulls from git and
+merges new codebase, etc."
+
+**The design constraint that mattered most: one CLI, not two.** A separate
+`novak-unraid` script would drift from `scripts/novak` the moment either
+one changed — exactly the sprawl this whole project keeps refusing (see
+#6, #29). So `scripts/novak` itself became platform-aware
+(`PLATFORM="$(uname -s)"`), and the two genuinely-different pieces were
+pulled into their own file, `scripts/lib/secrets.sh`, sourced by both
+`scripts/novak` and `scripts/up.sh`:
+
+- **Secret storage.** Darwin keeps using the Keychain exactly as before.
+  Linux has no OS keychain to use headlessly — Unraid never has a
+  logged-in desktop session to unlock one — so `secret_set`/`secret_get`
+  read and write the real value directly in `.env` there instead, which is
+  already what Spire's actual deployed `.env` does today (confirmed by
+  reading it directly: `OMLX_API_KEY`, `HINDSIGHT_API_KEY`, etc. are real
+  values, not placeholders). This is a genuinely LOWER security bar than
+  Keychain — said so in the file, not disguised as an equivalent — traded
+  for something that works unattended on a platform with no per-user
+  session at all. File permissions (600, enforced by `secret_set` on every
+  write) are what stands in for Keychain's OS-level encryption; there's no
+  second factor. `novak secret verify` gained a Linux-specific permissions
+  check (`secret_permcheck`) as the closest equivalent to Darwin's
+  "would this hang an unattended boot" check, since a plain file read
+  can't hang the way a Keychain auth dialog can.
+- **Where the CLI is linked from, and `NOVAK_HOME`'s default.** Confirmed
+  directly on Spire before writing this: Unraid's `/` and `/usr` are a
+  RAM-based overlay rebuilt from the flash image (`/boot`) on every boot —
+  `mount` shows `rootfs` and an `overlay`, and nothing outside `/boot` or
+  `/mnt` survives a reboot. `/usr/local/bin/novak` would vanish at the next
+  one unless something re-creates it, so `scripts/bootstrap-unraid.sh`
+  (new, root-only, no admin/service-account split the way macOS's
+  bootstrap.sh/bootstrap-admin.sh needs — Unraid has exactly one real
+  admin account) adds a line to `/boot/config/go` that does exactly that.
+  `NOVAK_HOME` can't default to `$HOME` (`/root`) the way it does on macOS
+  either: Compose Manager's `projectDirectory` is always derived from
+  wherever `docker-compose.yml` itself lives (confirmed earlier this
+  session by reading its `Util.php` directly), so `NOVAK_HOME` has to be
+  that exact path — bootstrap-unraid.sh asks once and persists the answer
+  to `/boot/config/novak/novak_home`; `scripts/novak` and `up.sh` both read
+  it from there when the environment variable isn't set.
+
+### Smaller platform seams, same pattern throughout: detect, don't guess
+
+- Tailscale's control socket is at a different path on Unraid
+  (`/var/run/tailscale/tailscaled.sock`, confirmed directly) than macOS
+  (`/var/run/tailscaled.socket`) — `novak ports` checks both.
+- The OrbStack per-account-VM ownership check in `novak ports` is
+  Darwin-only; Unraid runs one Docker daemon as root for the whole host,
+  so there's no per-account split to misdiagnose.
+- `novak omlx apply` refuses outright on Linux with a pointer to
+  `novak router apply` instead — Metal/MLX cannot run there at all
+  (decision #28), so pretending otherwise would just produce a confusing
+  failure two layers down instead of a clear one here.
+- The checklist's Phase 1 (admin setup) and Phase 10 (unattended
+  operation) needed real Unraid-specific checks, not macOS ones run
+  uselessly: array auto-start (`/boot/config/disk.cfg`) instead of
+  FileVault/`pmset`, and Compose Manager's own per-project `autostart`
+  file plus the `/boot/config/go` persistence line instead of a
+  LaunchAgent. Phase 4's model check now hits `DEFAULT_ENGINE_BASE_URL`'s
+  `/v1/models` on Linux instead of `OMLX_PORT` — confirmed directly that
+  Ollama serves the identical OpenAI-compatible shape oMLX does, so the
+  existing parsing logic needed no changes, just a different URL.
+- `compose()` (the function every `novak` subcommand funnels through)
+  reads Compose Manager's own `profiles` file on Linux when present,
+  rather than a second hardcoded profile list that could drift from what
+  Compose Manager itself believes is active.
+
+### What this deliberately does NOT do
+
+`novak adopt`, `novak drift`, `novak config`, and the reconciler applier
+commands (`omlx apply` aside) needed **no changes at all** — they were
+already OS-agnostic (git, python3, plain file edits), which is exactly
+what "same principles" meant in practice: the platform-specific work was
+entirely in secret storage and host wiring, not in the actual behaviour
+those commands provide. `bootstrap-unraid.sh` does not attempt to
+register the Compose Manager project itself — that's a one-time,
+UI-driven step better done deliberately (Docker tab -> Compose Manager ->
+Add New Stack -> Indirect Config File) than guessed at by a script running
+unattended against a real host's plugin state.
+
+Not yet done, tracked as follow-up: run bootstrap-unraid.sh for real on
+Spire and verify every command end to end (this decision records the
+design and the code, not a live-tested deployment); decide whether
+`scripts/reset.sh`'s destructive-operation guards need a Linux path at
+all, given Spire's real data now genuinely matters (unlike the
+"development phase, no production data" framing decision #28 opened with).

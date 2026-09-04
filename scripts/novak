@@ -17,7 +17,9 @@
 #   novak config              list settings and where each value comes from
 #   novak config get KEY
 #   novak config set KEY VAL  edit .env in place, preserving comments
-#   novak secret set KEY      store a secret in the Keychain (prompts, no echo)
+#   novak secret set KEY      store a secret (prompts, no echo). macOS Keychain,
+#                             or a real .env value on Linux — no OS keychain
+#                             there; see scripts/lib/secrets.sh
 #   novak secret set KEY --generate
 #                             generate one and store it, never displaying it.
 #                             Refused for secrets another system owns.
@@ -39,13 +41,20 @@
 # for why not /usr/local/bin)
 set -euo pipefail
 
-# Same defensive PATH as scripts/launch-stack.sh. This is reached through a
-# symlink in ~/.local/bin, so it runs under whatever environment the caller
-# had — cron, a LaunchAgent, or a login shell that never sourced Homebrew.
-# `tailscale` in particular lives only in /opt/homebrew/bin, and when it is
-# absent `novak ports` reports no Tailscale address on a machine that is
-# perfectly online — indistinguishable from the real thing.
-export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.orbstack/bin:$PATH"
+PLATFORM="$(uname -s)"
+
+if [ "$PLATFORM" = "Darwin" ]; then
+  # Same defensive PATH as scripts/launch-stack.sh. This is reached through a
+  # symlink in ~/.local/bin, so it runs under whatever environment the caller
+  # had — cron, a LaunchAgent, or a login shell that never sourced Homebrew.
+  # `tailscale` in particular lives only in /opt/homebrew/bin, and when it is
+  # absent `novak ports` reports no Tailscale address on a machine that is
+  # perfectly online — indistinguishable from the real thing.
+  export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.orbstack/bin:$PATH"
+fi
+# Linux (Unraid): docker, git, python3 and tailscale all ship on PATH
+# already (verified directly on Spire, Unraid 7.3.2) — no per-account
+# package manager to route around, no defensive prepend needed.
 
 # Resolve symlinks before locating the repo. This script is meant to be linked
 # into PATH, and BASH_SOURCE is then the LINK's path — computing the repo from
@@ -67,9 +76,27 @@ if [ ! -f "$REPO_DIR/scripts/lib/vars.sh" ]; then
   echo "   checkout:  ln -sf /path/to/novak/scripts/novak ~/.local/bin/novak" >&2
   exit 1
 fi
-NOVAK_HOME="${NOVAK_HOME:-$HOME/.novak}"
+if [ -z "${NOVAK_HOME:-}" ]; then
+  if [ "$PLATFORM" = "Darwin" ]; then
+    NOVAK_HOME="$HOME/.novak"
+  elif [ -f /boot/config/novak/novak_home ]; then
+    # Unraid: $HOME (/root) is not a safe default the way it is on macOS —
+    # Compose Manager's own projectDirectory is always wherever
+    # docker-compose.yml lives (confirmed by reading its Util.php directly),
+    # so NOVAK_HOME has to be that exact path, not a guess. bootstrap-unraid.sh
+    # writes it once, here, to the flash boot device — the one place on this
+    # platform that actually survives a reboot.
+    NOVAK_HOME="$(cat /boot/config/novak/novak_home)"
+  else
+    echo "✋ NOVAK_HOME is not set, and no /boot/config/novak/novak_home marker" >&2
+    echo "   exists to default it from. Run scripts/bootstrap-unraid.sh once," >&2
+    echo "   or export NOVAK_HOME explicitly." >&2
+    exit 1
+  fi
+fi
 ENV_FILE="$NOVAK_HOME/.env"
 source "$REPO_DIR/scripts/lib/vars.sh"
+source "$REPO_DIR/scripts/lib/secrets.sh"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 dim()  { printf '\033[2m%s\033[0m\n' "$*"; }
@@ -78,6 +105,7 @@ grn()  { printf '\033[32m%s\033[0m\n' "$*"; }
 ylw()  { printf '\033[33m%s\033[0m\n' "$*"; }
 
 usage() { awk 'NR>1 && /^#/ {sub(/^# ?/,""); print; next} NR>1 {exit}' "$0"; }
+docker_hint() { [ "$PLATFORM" = "Darwin" ] && echo "is OrbStack running?" || echo "check 'docker info' directly."; }
 
 need_env() {
   [ -f "$ENV_FILE" ] || { red "No config at $ENV_FILE — run 'novak up' once to seed it."; exit 1; }
@@ -92,7 +120,11 @@ secret_kind() {
   else echo "internal"; fi
 }
 envval()    { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true ; }
-keychain()  { security find-generic-password -s "novak/${1}" -w 2>/dev/null || true; }
+# secret_get/secret_set/etc. come from scripts/lib/secrets.sh — Keychain on
+# Darwin, plain .env values on Linux. `keychain` stays as the call-site name
+# used everywhere below (aliased, not duplicated) so this diff is what it
+# looks like: the storage moved, nothing else did.
+keychain()  { secret_get "$1"; }
 
 cmd_config() {
   need_env
@@ -105,10 +137,11 @@ cmd_config() {
       while IFS='=' read -r key val; do
         [[ "$key" =~ ^[A-Z] ]] || continue
         if is_secret "$key"; then
+          local src; src="keychain"; [ "$PLATFORM" = "Darwin" ] || src="secret"
           if [ -n "$(keychain "$key")" ]; then
-            printf '  %-30s %-10s %s\n' "$key" "keychain" "$(grn set)"
+            printf '  %-30s %-10s %s\n' "$key" "$src" "$(grn set)"
           else
-            printf '  %-30s %-10s %s\n' "$key" "keychain" "$(red MISSING)"
+            printf '  %-30s %-10s %s\n' "$key" "$src" "$(red MISSING)"
           fi
         elif [[ "$val" =~ $PLACEHOLDERS ]]; then
           printf '  %-30s %-10s %s\n' "$key" ".env" "$(red 'NEEDS EDITING')"
@@ -142,15 +175,21 @@ cmd_config() {
 cmd_secret() {
   case "${1:-list}" in
     list)
-      bold "Secrets   (macOS Keychain, account $(whoami))"
+      bold "Secrets   ($(secrets_backend_label))"
       echo
       local v
       for v in "${SECRET_VARS[@]}"; do
-        if [ -n "$(keychain "$v")" ]; then printf '  %-30s %s\n' "$v" "$(grn present)"
+        if [ -n "$(secret_get "$v")" ]; then printf '  %-30s %s\n' "$v" "$(grn present)"
         else printf '  %-30s %s\n' "$v" "$(red missing)"; fi
       done
       echo
-      dim "  The login keychain is per-user — these are $(whoami)'s."
+      if [ "$PLATFORM" = "Darwin" ]; then
+        dim "  The login keychain is per-user — these are $(whoami)'s."
+      else
+        dim "  Linux has no OS keychain to use headlessly, so these are real"
+        dim "  values in $ENV_FILE, not placeholders — protect the file, not an"
+        dim "  account. 'novak secret verify' also checks its permissions."
+      fi
       ;;
     set)
       [ $# -ge 2 ] || { red "usage: novak secret set KEY [--generate]"; exit 1; }
@@ -176,39 +215,22 @@ cmd_secret() {
           dim "  there, then:  novak secret set $key"
           exit 1
         fi
-        command -v openssl >/dev/null 2>&1 || { red "openssl not found — cannot generate."; exit 1; }
-        security delete-generic-password -s "novak/$key" >/dev/null 2>&1 || true
-        # Fed on stdin twice: `security -w` with no value prompts for the
-        # password AND a confirmation, so a single line stores an empty item
-        # and reports success. Verified — one line gives "passwords don't
-        # match" and a zero-length secret.
-        #
-        # stdin rather than -w "$value" so the secret never appears in the
-        # process list.
-        local gen; gen="$(openssl rand -hex 32)"
-        if ! printf '%s\n%s\n' "$gen" "$gen" |
-             security add-generic-password -s "novak/$key" -a "$(whoami)" \
-               -T /usr/bin/security -w >/dev/null 2>&1; then
-          red "Could not store the generated value in the Keychain."; exit 1
+        if ! secret_generate "$key"; then
+          red "Could not generate and store $key."; exit 1
         fi
-        # Trust nothing: confirm what came back is what went in, because the
-        # failure mode above stored an empty value and still looked fine.
-        if [ "$(keychain "$key")" != "$gen" ]; then
-          red "$key did not store correctly — the Keychain returned a different value."
-          exit 1
-        fi
-        unset gen
         grn "$key generated and stored. The value was not displayed."
       else
-        security delete-generic-password -s "novak/$key" >/dev/null 2>&1 || true
-        # -w with no argument prompts without echoing.
-        # -T /usr/bin/security pre-authorises the tool that reads this back.
-        # Without it macOS raises a GUI authorisation dialog on first read,
-        # which on an unattended boot hangs rather than failing — the stack
-        # simply never starts. See `novak secret verify`.
-        security add-generic-password -s "novak/$key" -a "$(whoami)" \
-          -T /usr/bin/security -w
-        grn "$key stored in the Keychain."
+        # Read without echo either way — a secret typed at a terminal should
+        # never be visible over someone's shoulder, on any platform.
+        local val
+        read -rsp "$key: " val; echo
+        if [ -z "$val" ]; then red "Empty value — not storing."; exit 1; fi
+        if ! secret_set "$key" "$val"; then
+          red "Could not store $key."; exit 1
+        fi
+        unset val
+        if [ "$PLATFORM" = "Darwin" ]; then grn "$key stored in the Keychain."
+        else grn "$key stored in $ENV_FILE."; fi
       fi
 
       if is_shared "$key"; then
@@ -223,9 +245,9 @@ cmd_secret() {
     show)
       [ $# -ge 2 ] || { red "usage: novak secret show KEY"; exit 1; }
       is_secret "$2" || { red "'$2' isn't a known secret."; exit 1; }
-      local val; val="$(keychain "$2")"
+      local val; val="$(secret_get "$2")"
       if [ -z "$val" ]; then
-        red "$2 is not in the Keychain."
+        red "$2 is not set."
         # Suggesting --generate for an externally-owned secret would send the
         # reader straight into a refusal.
         if is_external "$2"; then dim "  Copy it from the system that owns it, then:  novak secret set $2"
@@ -242,34 +264,48 @@ cmd_secret() {
     verify)
       bold "Unattended readability"
       echo
-      dim "  Reads each secret the way up.sh does, with a timeout. A hang means"
-      dim "  macOS wants an authorisation dialog — which on a headless boot"
-      dim "  nothing will ever click, so the stack waits forever instead of"
-      dim "  failing."
-      echo
-      local v out rc failed=0
-      for v in "${SECRET_VARS[@]}"; do
-        # Capture status separately: `if x="$(...)"; rc=$?; then` tests the
-        # assignment, which always succeeds, and reports everything as fine.
-        out="$(perl -e 'alarm 5; exec @ARGV' security find-generic-password \
-                -s "novak/$v" -w 2>/dev/null)" && rc=0 || rc=$?
-        if [ "$rc" -eq 0 ] && [ -n "$out" ]; then
-          printf '  %-30s %s\n' "$v" "$(grn 'reads cleanly')"
-        elif [ "$rc" -eq 142 ] || [ "$rc" -eq 14 ]; then
-          printf '  %-30s %s\n' "$v" "$(red 'HANGS — would block boot')"; failed=1
-        else
-          printf '  %-30s %s\n' "$v" "$(dim 'not set')"
-        fi
-      done
-      unset out
-      echo
-      if [ "$failed" -eq 1 ]; then
-        red "  Re-add the hanging items with 'novak secret set <NAME>' — this CLI"
-        red "  pre-authorises the reader; a hand-run 'security' call does not."
+      if [ "$PLATFORM" = "Darwin" ]; then
+        dim "  Reads each secret the way up.sh does, with a timeout. A hang means"
+        dim "  macOS wants an authorisation dialog — which on a headless boot"
+        dim "  nothing will ever click, so the stack waits forever instead of"
+        dim "  failing."
       else
-        dim "  This proves nothing about a LOCKED keychain. The login keychain"
-        dim "  unlocks when this account logs in, so unattended boot depends on"
-        dim "  the session starting at all — see docs/headless-operation.md."
+        dim "  Linux has nothing that can hang the way a Keychain auth dialog"
+        dim "  can — this just confirms each secret has a real value, and that"
+        dim "  $ENV_FILE itself is actually locked down (600), since that file"
+        dim "  IS the store here."
+      fi
+      echo
+      local v state failed=0
+      for v in "${SECRET_VARS[@]}"; do
+        state="$(secret_verify "$v")"
+        case "$state" in
+          clean)  printf '  %-30s %s\n' "$v" "$(grn 'reads cleanly')" ;;
+          hangs)  printf '  %-30s %s\n' "$v" "$(red 'HANGS — would block boot')"; failed=1 ;;
+          *)      printf '  %-30s %s\n' "$v" "$(dim 'not set')" ;;
+        esac
+      done
+      echo
+      if [ "$PLATFORM" != "Darwin" ]; then
+        local perm; perm="$(secret_permcheck)"
+        if [ "$perm" = "ok" ]; then
+          grn "  $ENV_FILE permissions: ok"
+        else
+          red "  $ENV_FILE permissions: $perm — fix with: chmod 600 $ENV_FILE"
+          failed=1
+        fi
+      fi
+      if [ "$failed" -eq 1 ]; then
+        if [ "$PLATFORM" = "Darwin" ]; then
+          red "  Re-add the hanging items with 'novak secret set <NAME>' — this CLI"
+          red "  pre-authorises the reader; a hand-run 'security' call does not."
+        fi
+      else
+        if [ "$PLATFORM" = "Darwin" ]; then
+          dim "  This proves nothing about a LOCKED keychain. The login keychain"
+          dim "  unlocks when this account logs in, so unattended boot depends on"
+          dim "  the session starting at all — see docs/headless-operation.md."
+        fi
       fi
       ;;
     *) red "unknown: novak secret $1"; exit 1 ;;
@@ -289,6 +325,11 @@ cmd_secret() {
 # Applies registry/omlx.yaml. Kept separate from `up` because it can restart
 # oMLX, though only when something actually differs — see reconciler/omlx_apply.py.
 cmd_omlx() {
+  if [ "$PLATFORM" != "Darwin" ]; then
+    red "oMLX is Apple Silicon only (Metal/MLX cannot run on Linux)."
+    dim "  For an Ollama/Linux engine, use: novak router apply"
+    exit 1
+  fi
   case "${1:-apply}" in
     apply)
       shift 2>/dev/null || true
@@ -533,7 +574,12 @@ cmd_ports() {
   # running, and the sandboxed App Store build answers "NeedsLogin" even while
   # the system daemon underneath is up and holding the tailnet address. On a
   # headless install the daemon is always the one that matters.
+  #
+  # The socket path itself differs by platform — confirmed directly on
+  # Spire (Unraid's Tailscale plugin): /var/run/tailscale/tailscaled.sock,
+  # not macOS's /var/run/tailscaled.socket.
   local ts_sock=/var/run/tailscaled.socket
+  [ "$PLATFORM" = "Linux" ] && ts_sock=/var/run/tailscale/tailscaled.sock
   local ts
   if [ -S "$ts_sock" ]; then
     ts="$(tailscale --socket="$ts_sock" ip -4 2>/dev/null | head -1 || true)"
@@ -572,20 +618,26 @@ cmd_ports() {
   echo
   if [ -z "$ts" ]; then ylw "  No Tailscale address — is it running and logged in?"; fi
 
-  # Containers are per-user on macOS: each account runs its own OrbStack VM.
-  # Seeing none here while services respond means they belong to another user.
   if docker info >/dev/null 2>&1; then
     local n; n="$(docker ps -q 2>/dev/null | wc -l | tr -d ' ')"
-    local owner; owner="$(ps -axo user,comm 2>/dev/null | awk '/OrbStack/ && !/awk/ {print $1; exit}')"
     echo "  Containers visible to $(whoami): $n"
-    if [ "$n" = "0" ] && [ -n "$owner" ] && [ "$owner" != "$(whoami)" ]; then
-      red "  OrbStack is running as '$owner', not $(whoami)."
-      dim "  Each macOS account has its own OrbStack VM and socket, so the"
-      dim "  containers started by that account are invisible here. Run the stack"
-      dim "  from one account consistently — for a service install, that is $(whoami)."
+    # Containers are per-user on macOS: each account runs its own OrbStack VM,
+    # so seeing none while services respond usually means a different account
+    # owns them. Unraid runs one Docker daemon as root for the whole host —
+    # no per-account split to misdiagnose here.
+    if [ "$PLATFORM" = "Darwin" ] && [ "$n" = "0" ]; then
+      local owner; owner="$(ps -axo user,comm 2>/dev/null | awk '/OrbStack/ && !/awk/ {print $1; exit}')"
+      if [ -n "$owner" ] && [ "$owner" != "$(whoami)" ]; then
+        red "  OrbStack is running as '$owner', not $(whoami)."
+        dim "  Each macOS account has its own OrbStack VM and socket, so the"
+        dim "  containers started by that account are invisible here. Run the stack"
+        dim "  from one account consistently — for a service install, that is $(whoami)."
+      fi
     fi
-  else
+  elif [ "$PLATFORM" = "Darwin" ]; then
     ylw "  Docker is not responding — start OrbStack in THIS account."
+  else
+    ylw "  Docker is not responding."
   fi
 }
 
@@ -618,7 +670,7 @@ cmd_registry() {
   bold "Live check (external entries)"
   dim "  A real MCP initialize call when there's a token to try, a bare"
   dim "  connection otherwise. 401 means reachable but not authenticating —"
-  dim "  a wrong or missing Keychain value, not a dead host."
+  dim "  a wrong or missing secret value, not a dead host."
   echo
 
   local line name url authvar token code label
@@ -644,7 +696,7 @@ cmd_registry() {
 
     case "$code" in
       200) label="$(printf '\033[32m%s\033[0m' 'reachable, authenticating')" ;;
-      401|403) label="$(printf '\033[33m%s\033[0m' "reachable, NOT authenticating — check ${authvar:-its token} in Keychain")" ;;
+      401|403) label="$(printf '\033[33m%s\033[0m' "reachable, NOT authenticating — check ${authvar:-its token} (novak secret show)")" ;;
       000) label="$(printf '\033[31m%s\033[0m' 'unreachable')" ;;
       *)   label="$(printf '\033[33m%s\033[0m' "unexpected status $code")" ;;
     esac
@@ -655,7 +707,7 @@ cmd_registry() {
 cmd_update() {
   need_env
   if ! docker info >/dev/null 2>&1; then
-    red "Docker isn't responding — is OrbStack running?"
+    red "Docker isn't responding — $(docker_hint)"
     exit 1
   fi
   # Every image in docker-compose.yml is unpinned (:latest, :main) on purpose
@@ -717,18 +769,29 @@ cmd_status() {
     bold "Containers"
     compose ps --format '  {{.Name}}\t{{.State}}\t{{.Status}}' 2>/dev/null | sed 's/\t/  /g' || dim "  none running"
   else
-    ylw "  Docker isn't responding — is OrbStack running?"
+    ylw "  Docker isn't responding — $(docker_hint)"
   fi
 }
 
 compose() {
   # Every optional service sits behind a compose profile so a missing
-  # secret cannot stop the rest of the stack. All three enabled here so
-  # `logs`, `restart`, `down` and `ps` can still see whichever of them is
-  # already running — none of these create containers, so this cannot
-  # start an unconfigured one. Only up.sh decides that, and only when a
-  # given profile's config is actually complete.
-  local args=(env COMPOSE_PROFILES=console,portal,router docker compose --project-directory "$NOVAK_HOME" -f "$REPO_DIR/docker-compose.yml")
+  # secret cannot stop the rest of the stack. All of them enabled here so
+  # `logs`, `restart`, `down` and `ps` can still see whichever is already
+  # running — none of these create containers, so this cannot start an
+  # unconfigured one. Only up.sh decides that, and only when a given
+  # profile's config is actually complete.
+  local all_profiles="console,portal,router,ollama"
+  if [ "$PLATFORM" != "Darwin" ] && [ -f "$NOVAK_HOME/profiles" ]; then
+    # On Unraid, Compose Manager's own `profiles` file (a JSON array,
+    # written by its UI/CLI) already says which profiles this deployment
+    # actually runs — reuse it rather than keep a second, separately
+    # maintained list here that could drift from what Compose Manager
+    # itself believes is active.
+    local from_cm
+    from_cm="$(python3 -c "import json,sys; print(','.join(json.load(open(sys.argv[1]))))" "$NOVAK_HOME/profiles" 2>/dev/null || true)"
+    [ -n "$from_cm" ] && all_profiles="$from_cm"
+  fi
+  local args=(env COMPOSE_PROFILES="$all_profiles" docker compose --project-directory "$NOVAK_HOME" -f "$REPO_DIR/docker-compose.yml")
   [ -f "$ENV_FILE" ] && args+=(--env-file "$ENV_FILE")
   [ -f "$NOVAK_HOME/docker-compose.mcp.yml" ] && args+=(-f "$NOVAK_HOME/docker-compose.mcp.yml")
   "${args[@]}" "$@"
@@ -904,15 +967,30 @@ cmd_checklist() {
   echo
 
   bold "Phase 1 — Admin setup"
-  if sudo -n fdesetup list 2>/dev/null | grep -q "^$(whoami),"; then
-    grn "  novak can unlock FileVault at boot"
+  if [ "$PLATFORM" = "Darwin" ]; then
+    if sudo -n fdesetup list 2>/dev/null | grep -q "^$(whoami),"; then
+      grn "  novak can unlock FileVault at boot"
+    else
+      ylw "  Could not confirm — run manually: sudo fdesetup list"
+    fi
+    if pmset -g 2>/dev/null | grep -qE "autorestart\s*1"; then
+      grn "  autorestart is on"
+    else
+      red "  autorestart is off — the Mac won't power back on after an outage"
+    fi
   else
-    ylw "  Could not confirm — run manually: sudo fdesetup list"
-  fi
-  if pmset -g 2>/dev/null | grep -qE "autorestart\s*1"; then
-    grn "  autorestart is on"
-  else
-    red "  autorestart is off — the Mac won't power back on after an outage"
+    if [ "$(id -u)" = "0" ]; then
+      grn "  running as root — Unraid's normal, only real admin account"
+    else
+      red "  not running as root — Unraid has no equivalent of sudo for this;"
+      dim "  re-run as root."
+    fi
+    if grep -qE '^startArray="yes"' /boot/config/disk.cfg 2>/dev/null; then
+      grn "  array is set to auto-start"
+    else
+      red "  array auto-start looks off — Settings -> Disk Settings in the"
+      dim "  Unraid webUI, or the stack won't come back after a power cycle."
+    fi
   fi
   tui_pause
 
@@ -925,7 +1003,7 @@ cmd_checklist() {
   if docker info >/dev/null 2>&1; then
     grn "  Docker is responding in this account"
   else
-    red "  Docker isn't responding — is OrbStack running as $(whoami)?"
+    red "  Docker isn't responding — $(docker_hint)"
   fi
   tui_pause
 
@@ -941,31 +1019,42 @@ cmd_checklist() {
   # a legitimate zero-match response (no models loaded, or unauthorized),
   # which killed the ENTIRE script here, not just this one check. Both
   # reproduced directly against the running oMLX before being fixed.
-  local omlx_port omlx_key omlx_body
-  omlx_port="$(envval OMLX_PORT)"
-  omlx_key="$(keychain OMLX_API_KEY)"
-  if [ -n "$omlx_port" ]; then
-    omlx_body="$(curl -sf --max-time 3 \
-      ${omlx_key:+-H "Authorization: Bearer $omlx_key"} \
-      "http://127.0.0.1:${omlx_port}/v1/models" 2>/dev/null || true)"
-    if [ -z "$omlx_body" ]; then
-      ylw "  Could not reach oMLX on port ${omlx_port}, or the request was refused"
-      dim "  (missing/incorrect OMLX_API_KEY is the usual reason once it's running)"
+  local engine_url engine_key engine_body engine_label
+  if [ "$PLATFORM" = "Darwin" ]; then
+    engine_label="oMLX"
+    local omlx_port; omlx_port="$(envval OMLX_PORT)"
+    [ -n "$omlx_port" ] && engine_url="http://127.0.0.1:${omlx_port}/v1/models"
+    engine_key="$(keychain OMLX_API_KEY)"
+  else
+    # Ollama (or whatever DEFAULT_ENGINE_BASE_URL points at) exposes the
+    # same OpenAI-compatible /v1/models shape — confirmed directly against
+    # Spire's real Ollama. Reuse the same check rather than a second one.
+    engine_label="the default engine"
+    local base; base="$(envval DEFAULT_ENGINE_BASE_URL)"
+    [ -n "$base" ] && engine_url="${base%/}/models"
+  fi
+  if [ -n "${engine_url:-}" ]; then
+    engine_body="$(curl -sf --max-time 3 \
+      ${engine_key:+-H "Authorization: Bearer $engine_key"} \
+      "$engine_url" 2>/dev/null || true)"
+    if [ -z "$engine_body" ]; then
+      ylw "  Could not reach $engine_label at $engine_url, or the request was refused"
+      dim "  (a missing/incorrect API key is the usual reason once it's running)"
     else
       local model_count
       # `grep -o | wc -l` is the right count; the `|| true` on grep alone,
       # inside its own group, is what's needed — pipefail cares about EVERY
       # stage, and grep exits 1 on a legitimate zero-match line, which would
       # otherwise fail the whole assignment before wc -l ever runs.
-      model_count="$({ grep -o '"id"' <<<"$omlx_body" || true; } | wc -l | tr -d ' ')"
+      model_count="$({ grep -o '"id"' <<<"$engine_body" || true; } | wc -l | tr -d ' ')"
       if [ "${model_count:-0}" -gt 0 ]; then
-        grn "  oMLX is serving ${model_count} model(s)"
+        grn "  $engine_label is serving ${model_count} model(s)"
       else
-        red "  oMLX answered but /v1/models looks empty — no model loaded"
+        red "  $engine_label answered but /v1/models looks empty — no model loaded"
       fi
     fi
   else
-    ylw "  OMLX_PORT is not set — skipping"
+    ylw "  Engine URL not configured — skipping"
   fi
   tui_yn "Have you set personas per client from prompts/ (decision #18 — no automation does this yet)" \
     && grn "  noted" || dim "  reminder: still manual, see docs/STATE.md"
@@ -1014,11 +1103,36 @@ cmd_checklist() {
   tui_pause
 
   bold "Phase 10 — Unattended operation"
-  if launchctl list 2>/dev/null | grep -q "one.a64.novak.stack"; then
-    grn "  LaunchAgent is loaded"
+  if [ "$PLATFORM" = "Darwin" ]; then
+    if launchctl list 2>/dev/null | grep -q "one.a64.novak.stack"; then
+      grn "  LaunchAgent is loaded"
+    else
+      red "  LaunchAgent is NOT loaded — containers won't return after a reboot"
+      dim "  launchctl load ~/Library/LaunchAgents/one.a64.novak.stack.plist"
+    fi
   else
-    red "  LaunchAgent is NOT loaded — containers won't return after a reboot"
-    dim "  launchctl load ~/Library/LaunchAgents/one.a64.novak.stack.plist"
+    # Two separate things have to both be true here: Compose Manager itself
+    # has to bring this project's containers back after a reboot (its own
+    # `autostart` file, sitting inside NOVAK_HOME since it stores per-project
+    # state there directly — confirmed by reading Util.php), and the `novak`
+    # symlink itself has to survive the reboot, which nothing outside /boot
+    # does on this platform (/ and /usr are RAM-based, rebuilt from the
+    # flash image every boot) — hence bootstrap-unraid.sh's /boot/config/go
+    # line, checked separately below.
+    if [ "$(cat "$NOVAK_HOME/autostart" 2>/dev/null || true)" = "true" ]; then
+      grn "  Compose Manager autostart is on for this project"
+    else
+      red "  Compose Manager autostart is NOT on — containers won't return"
+      dim "  after a reboot. Toggle it on this project in the Compose Manager"
+      dim "  UI, or: echo true > $NOVAK_HOME/autostart"
+    fi
+    if grep -q "novak" /boot/config/go 2>/dev/null; then
+      grn "  novak CLI symlink persists across reboots (/boot/config/go)"
+    else
+      red "  novak CLI symlink is NOT persisted — it will vanish on next"
+      dim "  reboot (/usr/local/bin is RAM-based on Unraid). Re-run"
+      dim "  scripts/bootstrap-unraid.sh, which adds the /boot/config/go line."
+    fi
   fi
   tui_pause
 
@@ -1095,7 +1209,7 @@ cmd_menu() {
         esac
         ;;
       8)
-        if tui_yn "Live-probe external MCP entries too? (network + Keychain reads)"; then
+        if tui_yn "Live-probe external MCP entries too? (network + secret reads)"; then
           tui_run registry --check
         else
           tui_run registry

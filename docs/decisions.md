@@ -1611,15 +1611,57 @@ split above — pointed at `/mnt/teracache/Novak/models/ollama` on
 Spire once the actual model data is moved there from the old
 standalone project's directory.
 
-### What this doesn't cover yet
+### What was completed as follow-up, same day
 
-This decision covers the `docker-compose.yml`/`.env.example` mechanism
-only. Still open, tracked as follow-up work, not claimed done here:
-actually moving Hindsight's/Open WebUI's/Whisper's/Piper's live data
-into the new bind-mount paths (higher-risk, real production-adjacent
-data, done with the same helper-container backup/restore pattern
-already proven during the Mitochon→Spire Open WebUI migration);
-actually moving Ollama's model weights and decommissioning the old
-standalone project; pulling and benchmarking a smaller Qwen3.8-27B
-quant (`UD-IQ4_XS`, 13.3GB) to replace the current `UD-Q4_K_M` (17GB,
-confirmed not fitting Spire's 15.9GB VRAM).
+All four items this decision originally left open are now done and
+verified: Hindsight's/Open WebUI's/Whisper's/Piper's live data moved
+into the new bind-mount paths via the helper-container pattern (real
+data confirmed intact — 244 Open WebUI chats, Hindsight responding
+healthy — before the old `novak_*` named volumes were deleted); Ollama's
+model weights moved and the old standalone project decommissioned;
+`UD-IQ4_XS` pulled, confirmed 100% GPU-resident (`ollama ps`, no CPU
+offload) at 19.43 tok/s versus the old `UD-Q4_K_M`'s ~10 tok/s on a
+12%/88% split, and set live as the `deep` role, verified end to end
+through the router. See [ollama-settings.md](ollama-settings.md) for
+the numbers.
+
+## 34. Portal/TinyAuth stay off on Spire — the VPS already does this job
+
+The `portal` compose profile bundles Caddy (the single-page tabs
+frontend) and TinyAuth (forward-auth gating it) together, since Caddy's
+own `Caddyfile` hard-codes `forward_auth tinyauth:3000` — there's no
+state where one runs without the other today.
+
+Spire doesn't need its own copy: the user's public VPS already runs
+TinyAuth for this purpose. Rather than leave Caddy running with a
+forward-auth backend that doesn't exist (a 502 on every request, not a
+graceful "auth not configured" state), the whole `portal` profile was
+turned off on Spire — Compose Manager's `profiles` file there no longer
+lists it, and the running `caddy`/`tinyauth` containers were stopped and
+removed. Nothing in `docker-compose.yml` itself changed; both services
+stay defined and gated behind `profiles: ["portal"]` exactly as before,
+for any deployment that does want a local instance.
+
+If a future need arises to run the portal's Caddy on Spire without a
+*local* TinyAuth (e.g. gated by the VPS's TinyAuth instead, over
+Tailscale), that needs `tinyauth` split into its own profile and the
+Caddyfile's `forward_auth` target changed — not attempted here, since it
+wasn't asked for and changes the actual trust boundary, not just which
+process runs it.
+
+### Also recorded this round, not yet acted on
+
+- **Coral TPU (`/dev/apex_0`) is reserved for Frigate**, not attempted
+  for LLM inference (confirmed earlier, decision #28's investigation,
+  that it's architecturally incapable of that anyway). Frigate isn't
+  deployed yet.
+- **Frigate ⨯ Ollama integration** wanted once Frigate exists — likely
+  Frigate's own generative-AI description feature pointed at Ollama's
+  OpenAI-compatible endpoint, or a registry entry once that's real
+  rather than aspirational. Not designed yet.
+- **Home Assistant is not set up on Spire at all yet.** Named as a next
+  step, not started. `docs/home-assistant.md` describes wiring the
+  Wyoming voice services and the router to HA; none of it has been
+  applied against a real HA instance on this host.
+- **`novak` CLI support for Unraid** — see decision #35, started the
+  same session this was recorded.

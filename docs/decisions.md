@@ -1833,3 +1833,67 @@ poller). Normal whole-host cold start, not a Novak-caused problem.
 Unraid's reboot test is done; macOS's (Mitochon, or any future Mac
 deployment) is not — still an open item, and now the more clearly
 asymmetric one.
+
+## 38. Open WebUI's own Builtin Tools/Memory capabilities were silently defeating the router's persona injection
+
+Found live, through the actual Open WebUI chat UI (not a curl test) — the
+first time this had been exercised that way since the router went live.
+Every prior "does the persona work" check in this project was a direct
+`curl` against the router, which bypasses Open WebUI's own per-model
+settings entirely and had never caught this.
+
+**Symptom:** asking `chat` "who are you?" through Open WebUI's web UI got
+"I am Qwen, a large language model developed by Alibaba Cloud" — not
+Novak's persona — and unrelated follow-up turns produced bizarre
+tool-agent framing ("Could you clarify what you'd like to test — creating
+a task checklist, updating a note, scheduling an automation..."). The
+identical question sent directly to the router via `curl` correctly
+returned "I am Novak, a private assistant...". Same model, same router,
+same registry — different result depending on the caller.
+
+**Root cause:** each of the four router-backed model presets in Open
+WebUI (`chat`, `ha-voice`, `task`, `deep`) had two per-model capabilities
+switched on — **Builtin Tools** (Open WebUI's own agentic tool suite:
+Task Management, Automations, Calendar, Notes, and a dozen more, none of
+them wired to anything real in this deployment) and **Memory** (Open
+WebUI's own experimental personalization feature, unrelated to Hindsight).
+Either one causes Open WebUI's backend to construct and send a synthetic
+`role: system` message ahead of the user's own — and `persona_hook.py`'s
+`async_pre_call_hook` (decision #21) trusts *any* client-sent system
+message over its own default, by design, so it silently skipped injecting
+Novak's persona for every single Open WebUI request. The garbled
+tool-framing responses are the model reacting to the injected tool
+definitions from Builtin Tools, not the persona.
+
+**Not established whether this is new** (a behaviour change in the Open
+WebUI image `novak update` just pulled, v0.11.3) **or always latent**
+(these capabilities may have defaulted on since the models were first
+created in Open WebUI, simply never exercised through the real chat UI
+before). Worth noting for anyone debugging this again: don't assume a
+`curl` test against the router proves anything about what Open WebUI
+itself actually sends.
+
+**Fix:** disabled both "Builtin Tools" and "Memory" capabilities on all
+four model presets (Admin Settings → Models → each model → Capabilities),
+plus the global Personalization → Memory toggle. Verified via a genuinely
+fresh conversation (not a continuation of an already-poisoned thread —
+tried that first and it kept replaying the old tool-framing from
+conversation history regardless of the settings fix) for both `chat` and
+`deep`: both now correctly answer as Novak.
+
+**persona_hook.py's own trust-the-client rule was NOT changed.** It's
+still correct — a real debugging session sending its own system message
+deliberately should override the default, same reasoning as when it was
+written. The actual bug was Open WebUI silently manufacturing a system
+message the user never asked for, not the router trusting one that was
+sent on purpose.
+
+### What this means going forward
+
+Any new model preset added in Open WebUI that's meant to go through the
+router (a new role in `registry/engines.yaml`, or a manually added Open
+WebUI model pointed at the router) needs these two capabilities turned
+off by hand — nothing in this repo enforces it automatically, since it's
+an Open WebUI-side setting the reconciler has no reach into. Worth
+checking after any `novak update` that pulls a new Open WebUI image, in
+case a future version changes these defaults again.

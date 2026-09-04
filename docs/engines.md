@@ -103,3 +103,17 @@ OpenAI-compatible `/v1/chat/completions` qualifies — vLLM, a raw
 hardware in question. Give it its own settings doc (sibling to
 `omlx-settings.md` and this one), point a `router/config.yaml` entry at it,
 and it's a real Novak engine — no code in the router itself changes.
+
+## A real gotcha when adding a model to Open WebUI (decision #38)
+
+Every model preset Open WebUI creates for a router role has two
+capabilities — **Builtin Tools** and **Memory** — that must be turned off
+by hand (Admin Settings → Models → that model → Capabilities). Found the
+hard way, live through the actual chat UI: either one makes Open WebUI's
+backend construct its own `role: system` message ahead of the user's, and
+`persona_hook.py` (decision #21) trusts any client-sent system message
+over its own default — so the persona silently never gets injected, and
+the model answers as its bare self ("I am Qwen...") with Open WebUI's own
+tool-agent framing leaking through instead. A `curl` straight at the
+router will not catch this; it bypasses Open WebUI's per-model settings
+entirely. See decision #38 for the full symptom and fix.

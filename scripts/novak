@@ -36,6 +36,8 @@
 #   novak omlx apply          apply registry/omlx.yaml (models, profiles, TTLs)
 #   novak router apply        apply registry/engines.yaml -> router/config.yaml
 #                              (decision #28; run 'novak restart router' after)
+#   novak checklist           phase-by-phase deploy-checklist.md walk-through
+#   novak guided-setup        prompt for whatever's still unconfigured
 #
 # Add to PATH: bootstrap.sh does this, at ~/.local/bin/novak (see docs/cli.md
 # for why not /usr/local/bin)
@@ -1260,6 +1262,8 @@ case "${1:-menu}" in
   omlx)     shift; cmd_omlx "$@" ;;
   router)   shift; cmd_router "$@" ;;
   doctor)   cmd_status ;;   # same checks up.sh runs, without starting anything
+  checklist) cmd_checklist ;;
+  guided-setup) cmd_guided_setup ;;
   config)   shift; cmd_config "$@" ;;
   secret)   shift; cmd_secret "$@" ;;
   up)       exec "$REPO_DIR/scripts/up.sh" ;;

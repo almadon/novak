@@ -87,20 +87,29 @@ someone can revisit; a port quietly forwarded is one nobody remembers making.
 
 ## The shape
 
+Two variants, same idea. Which one applies depends on whether your internal
+proxy runs on the same host as the services or a different one — both are
+"an internal proxy you already run," this doc doesn't assume which.
+
 ```
-   browser / HA  ──TLS──▶  your internal proxy  ──Tailscale──▶  the service host
-                            (other host)         (WireGuard)
+   browser / HA  ──TLS──▶  internal proxy  ──Tailscale──▶  the service host
+                            (a DIFFERENT host)  (WireGuard)
+
+   browser / HA  ──TLS──▶  internal proxy, same host as the services
+                            (loopback — no second hop needed at all)
 ```
 
-Both hops are encrypted, and no new infrastructure is added. The last hop
-relies on Tailscale rather than TLS, which is fine — WireGuard is not a weaker
-guarantee than TLS.
+**Different host:** the proxy host and whichever host runs a given service
+must both be on the tailnet, and the proxy should reach it by its
+**Tailscale** address, not its LAN address. Using the LAN address puts the
+last hop back in plaintext and undoes the point of the exercise.
 
-**Requirement:** the proxy host and whichever host runs a given service must
-both be on the tailnet, and the proxy should reach it by its **Tailscale**
-address, not its LAN
-address. Using the LAN address puts the last hop back in plaintext and undoes
-the point of the exercise.
+**Same host (the household's current real shape, decision #33/#36):** when
+the proxy and every service it fronts live on one box — Spire, in this
+deployment, replacing the earlier plan of a separate proxy host — there is
+no second hop to secure. Point `reverse_proxy` at `localhost:<port>` (or
+`127.0.0.1`) instead of a Tailscale address. The Tailscale requirement above
+only applies when the proxy is genuinely elsewhere.
 
 ## Certificates
 
@@ -111,15 +120,18 @@ port forwarding.
 
 ## Caddy
 
-**Corrected 2026-08-29 for decision #28.** These snippets used to say
-`<mac-ts-ip>` throughout, on the assumption there is exactly one host and
-it's a Mac. Replace `<engine-host-ts-ip>` / `<core-host-ts-ip>` below with
-whichever host actually runs each service — see [engines.md](engines.md)
-and decision #28: oMLX and Novak's core services no longer have to be the
-same machine, and in this household's own deployment, aren't.
+**Corrected for decision #36 (this household's real, current shape):** the
+internal proxy now runs ON Spire itself — the same box as the services it
+fronts — replacing the earlier plan of a separate always-on proxy host (and
+replacing Mitochon's former role once it stopped running as a server,
+decision #33). `localhost` addresses below, not Tailscale hops — see "The
+shape" above for why that's correct here. A deployment that keeps its proxy
+on a genuinely separate host should use that host's Tailscale address
+instead — the placeholder form is kept in a comment for that case.
 
-Add to the internal instance (a host separate from whatever runs these
-services — see "Which of these may face the internet" above for why):
+Add to Spire's own Caddy instance (a separate Caddyfile/site block from
+Novak's own containers — this proxy is still not something `docker-compose.yml`
+runs, except for the portal's narrower one):
 
 ```caddy
 (novak-internal) {
@@ -132,46 +144,67 @@ services — see "Which of these may face the internet" above for why):
 }
 
 # Only if something still needs oMLX directly — most deployments reach it
-# through the router instead. Points at whichever host runs oMLX; omit
-# entirely if nothing calls it internally. OMLX_PORT is oMLX's own
-# default (8000), separate from the clustered block below — it isn't a
-# Novak-assigned port.
-omlx.novak.example.tld {
-	import novak-internal
-	reverse_proxy <engine-host-ts-ip>:8000          # OMLX_PORT — see the note below
-}
+# through the router instead, and this deployment runs Ollama, not oMLX,
+# so this block doesn't apply here at all; kept for a mixed/oMLX deployment.
+# Replace <engine-host-ts-ip> with that host's Tailscale address if oMLX
+# runs elsewhere; omit entirely if nothing calls it internally.
+# omlx.nov.a64.one {
+# 	import novak-internal
+# 	reverse_proxy <engine-host-ts-ip>:8000          # OMLX_PORT
+# }
 
 # Ports below match .env.example's clustered default block (decision
 # #31, 13400-13409) — real numbers, not placeholders. If this deployment
 # set its own values instead, use those; a deployment's real .env is
-# always the source of truth over what's written here.
-memory.novak.example.tld {
+# always the source of truth over what's written here. localhost, since
+# the proxy and the services are the same host (Spire) — see "The shape".
+memory.nov.a64.one {
 	import novak-internal
-	reverse_proxy <core-host-ts-ip>:13403          # HINDSIGHT_PORT: API + MCP at /mcp/<bank>/
+	reverse_proxy localhost:13403          # HINDSIGHT_PORT: API + MCP at /mcp/<bank>/
 }
 
-memory-ui.novak.example.tld {
+memory-ui.nov.a64.one {
 	import novak-internal
-	reverse_proxy <core-host-ts-ip>:13404          # HINDSIGHT_UI_PORT
+	reverse_proxy localhost:13404          # HINDSIGHT_UI_PORT
 }
 
-konzol.novak.example.tld {
+konzol.nov.a64.one {
 	import novak-internal
-	reverse_proxy <core-host-ts-ip>:13401          # CONSOLE_PORT — omit if not running the console
+	reverse_proxy localhost:13401          # CONSOLE_PORT — omit if not running the console
+}
+
+ollama.nov.a64.one {
+	import novak-internal
+	reverse_proxy localhost:11434          # OLLAMA_PORT — only if something needs it directly
 }
 ```
 
-**oMLX ships bound to `127.0.0.1`.** On that default nothing off the machine can
-reach it, proxy included — containers only manage it because OrbStack forwards
-loopback. Change `server.host` in oMLX's own settings before adding the route
-above, and check with `novak ports`: the Tailscale column must read `yes`.
+**Everything above is Tailscale/LAN-only by DNS, not by anything Caddy
+itself enforces.** Point `memory.nov.a64.one` etc. at Spire's **Tailscale**
+IP (or a LAN-only A record, if you're not exposing this zone publicly at
+all) — never at a publicly-routable address, or "internal" stops being
+true the moment someone off your tailnet resolves the name. This is the
+same DNS-to-private-address pattern decision #16 always described; only the
+host running it changed.
 
-**Open WebUI is deliberately absent from the internal proxy.** It's the one
-service meant to face the public internet (decision #15) — that's a
-*different* proxy, on its own LAN-neighbor host, terminating public
-ingress and pointing at whichever host actually runs Open WebUI now. Only
-add a route for it *here*, on the internal instance, if you're running a
-second copy on the internal network purely for local testing.
+**Open WebUI is deliberately absent from this internal proxy.** It's the
+one service meant to face the public internet (decision #15) — that
+still goes through the **separate, public-facing** proxy (the LAN-neighbor
+host with 80/443 forwarded), which now points at Spire instead of wherever
+it pointed before:
+
+```caddy
+# On the PUBLIC proxy (LAN-neighbor host, forwarded 80/443) — not the
+# internal instance above. Update the upstream target only; everything
+# else about that Caddy instance (its own TLS, its own exposure) is
+# unchanged by Spire replacing whatever host ran Open WebUI before.
+chat.a64.one {
+	reverse_proxy <spire-ts-ip>:13400          # OPENWEBUI_PORT
+}
+```
+
+Only add a route for Open WebUI on the *internal* instance if you're
+running a second copy purely for local testing.
 
 Your existing `tlsAutostrap` snippet already handles DNS-01, so these inherit
 it from the zone block.
@@ -337,6 +370,21 @@ access control beyond the shared tenant API key (see
 [security.md](security.md)), and putting it a click away from Open WebUI
 makes it too easy to open by habit rather than by intent. Add a tab if
 that trade-off is one you want.
+
+### This is not "another TinyAuth instance" in the redundant sense
+
+If you already run TinyAuth somewhere else (e.g. on a VPS, gating whatever
+sits behind that host's own public Caddy), this one isn't a duplicate of
+it — it protects something structurally different. This instance is wired
+directly into the portal's own Caddy (`forward_auth tinyauth:3000`) and
+gates *only* the portal page; it cannot be pointed at a remote TinyAuth
+without rewriting that Caddyfile, and a remote TinyAuth can't gate this
+page without its own forward-auth hop back to wherever the portal runs.
+Open WebUI and Konzol both already have their own independent Pocket ID
+logins — this TinyAuth was never in either of those paths; it only decides
+who even sees the tabs-page shell in front of them. Run it only once you
+actually want that shell; there's no security reason to run it "just in
+case" alongside a TinyAuth that protects something else entirely.
 
 ### Why TinyAuth
 

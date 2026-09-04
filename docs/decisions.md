@@ -1762,3 +1762,47 @@ design and the code, not a live-tested deployment); decide whether
 `scripts/reset.sh`'s destructive-operation guards need a Linux path at
 all, given Spire's real data now genuinely matters (unlike the
 "development phase, no production data" framing decision #28 opened with).
+
+## 36. The internal proxy moves onto Spire itself, replacing a separate host
+
+Decision #16 always assumed the internal (TLS-on-LAN) proxy ran on "another
+host" — concretely, Mitochon, before it stopped running as a server
+(decision #33). With Mitochon gone, that role needed a new home. Rather
+than stand up a fourth machine, it moves onto Spire itself: the same box
+already running every service it would front.
+
+**This is a genuine simplification, not just a relocation.** Decision #16's
+design required the proxy host and the service host to both be on the
+tailnet, reaching each other over a WireGuard hop specifically so that
+LAN traffic to the proxy got TLS without a plaintext hop across the LAN to
+the actual service. When the proxy and the service are the same machine,
+that hop doesn't exist to secure — `reverse_proxy localhost:<port>` is
+correct and simpler than a Tailscale address, and [proxy.md](proxy.md)'s
+"The shape" section now documents both cases rather than assuming the
+separate-host one.
+
+**Public exposure for Open WebUI is unaffected in shape, only in target.**
+The public-facing proxy (LAN-neighbor host, ports 80/443 forwarded,
+decision #15) still does that job — only its upstream changes, from
+whichever host used to run Open WebUI to Spire's own
+`OPENWEBUI_PORT` (13400). Decision #15's actual reasoning (Open WebUI
+earns public reach by being built for it; nothing else does) is untouched.
+
+**TinyAuth is not part of this.** The user runs TinyAuth on their VPS
+already, gating whatever sits behind that host's own Caddy, and asked
+whether Spire's own TinyAuth (portal profile, decision #22/#34) duplicates
+it. It doesn't: Spire's instance is wired directly into the portal's own
+Caddy (`forward_auth tinyauth:3000`) and gates only that one page — Open
+WebUI and Konzol both already have independent Pocket ID logins that never
+route through it. The two TinyAuth instances, if both ever run, protect
+different applications; there is no redundancy to resolve by consolidating
+them, and no requirement to run Spire's copy at all until the portal
+itself is actually wanted. See proxy.md's portal section for the fuller
+answer, recorded there since that's where this question will come up
+again.
+
+**Domain used in examples**: `nov.a64.one` for the internal (Tailscale/
+LAN-only) zone, illustrative — not a commitment to that exact name, just
+what proxy.md's Caddy snippets now show instead of the generic
+`novak.example.tld` placeholder, since a concrete example is easier to
+adapt correctly than an abstract one.

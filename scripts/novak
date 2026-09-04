@@ -588,7 +588,20 @@ cmd_ports() {
   fi
   printf '  %-22s %-7s %-12s %s\n' "SERVICE" "PORT" "LOCALHOST" "${ts:-TAILSCALE}"
 
-  probe() { nc -z -w 2 "$1" "$2" >/dev/null 2>&1; }
+  # nc ships on macOS by default but NOT on stock Unraid (confirmed
+  # directly on Spire — `command -v nc` finds nothing there), which without
+  # a fallback made every single port report unreachable regardless of
+  # whether the service behind it was actually up. bash's own /dev/tcp
+  # pseudo-device needs nothing extra and is built into bash itself
+  # (present since well before either platform's shipped bash), so it's
+  # the fallback rather than a second external dependency.
+  probe() {
+    if command -v nc >/dev/null 2>&1; then
+      nc -z -w 2 "$1" "$2" >/dev/null 2>&1
+    else
+      timeout 2 bash -c ": >/dev/tcp/$1/$2" >/dev/null 2>&1
+    fi
+  }
 
   row() {
     local label="$1" port="$2" l t

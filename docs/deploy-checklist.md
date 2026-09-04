@@ -280,9 +280,10 @@ on either platform.
 
 ## Phase 11 — The test that counts
 
-Do this deliberately, while you have time to fix what it finds. **Neither
-platform's reference deployment has been through this yet** — tracked
-explicitly as open, not assumed fine because the design says it should be.
+Do this deliberately, while you have time to fix what it finds. **Unraid's
+reference deployment (Spire) passed this for real** (decision #37): a
+clean reboot, all 8 containers back unaided, no manual step. **macOS's has
+not been through this yet** — still tracked as open there.
 
 | | macOS | Unraid |
 |---|---|---|

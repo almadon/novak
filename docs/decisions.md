@@ -1806,3 +1806,30 @@ LAN-only) zone, illustrative — not a commitment to that exact name, just
 what proxy.md's Caddy snippets now show instead of the generic
 `novak.example.tld` placeholder, since a concrete example is easier to
 adapt correctly than an abstract one.
+
+## 37. Spire survived a real reboot — the checklist's Phase 11, actually run
+
+Decision #35's follow-up list and the deploy checklist's own Phase 11 both
+named a deliberate power-cycle test as the one thing that had to actually
+happen, not just be checked for. A clean Unraid reboot (user-initiated,
+not simulated) gave a real answer: all 8 `novak-*` containers came back
+unaided — no manual `novak up`, no Compose Manager click. Confirms the
+`autostart` fix (set during the earlier storage-reorg session, decision
+#33's follow-up) genuinely works, not just that the setting was correctly
+toggled.
+
+**CPU load immediately after boot was checked directly, not assumed
+benign**, since a user report of "CPU is getting hit hard" earlier this
+project (during the original container-recreation cold start) turned out
+to be real and expected — worth re-checking rather than reflexively
+reassuring. This time: `uptime`'s load average was already declining
+(2.43 → 1.82 → 1.67 across a few minutes of checking), `docker stats`
+showed every `novak-*` container under 1% CPU, and the actual top
+consumers were Unraid's own infrastructure settling in — `dockerd`
+(bringing up ~25 containers across the whole host, most unrelated to
+Novak), the webGUI's `php-fpm`, and `radeontop` (Unraid's own GPU-stats
+poller). Normal whole-host cold start, not a Novak-caused problem.
+
+Unraid's reboot test is done; macOS's (Mitochon, or any future Mac
+deployment) is not — still an open item, and now the more clearly
+asymmetric one.

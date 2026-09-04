@@ -184,7 +184,7 @@ Honest inventory:
 |---|---|
 | The design and the reasoning | Settled, written down |
 | macOS/oMLX deployment | Run for months, real daily use |
-| Linux/Unraid/Ollama deployment | Run daily as the primary household deployment (decision #33) since late Aug 2026; not yet through a deliberate reboot/power-cut test |
+| Linux/Unraid/Ollama deployment | Run daily as the primary household deployment (decision #33) since late Aug 2026; survived a real reboot (decision #37) — all 8 containers came back unaided, no manual step |
 | The `novak` CLI on Unraid | Built and tested end to end this cycle (decision #35) — `status`, `secret`, `drift`, `adopt`, `ports`, `router apply`, `checklist` all verified against a real host |
 | The web console | Scaffolding, **never run** |
 | Everything else | Other people's software, configured but untested here |

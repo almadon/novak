@@ -181,43 +181,43 @@ servers you deliberately add that talk to external APIs (email, utilities)
 — each with its own scoped credential, never proxied through a model
 prompt.
 
-## Placement — mid-migration, not settled
+## Placement — Spire is the primary, sole-host deployment
 
-**Corrected 2026-08-29, superseding the previous correction below.** This
-section said the deployment was "genuinely monolithic" on the Mac mini —
-true as of two days earlier, not true of where this household's deployment
-is actually headed. Decision #28 records the real direction: Novak's core
-(Hindsight, Open WebUI, the console, voice) is moving to Spire, an Unraid
-box with an AMD GPU; the Mac mini (Mitochon) becomes a secondary oMLX
-engine rather than the host everything else depends on.
+**Corrected 2026-09-04, superseding the previous correction below.** The
+migration decision #28 recorded is now complete, not aspirational:
+Hindsight, Open WebUI, the console, the Wyoming voice services, and Ollama
+all run together on Spire (Unraid, AMD RDNA4 GPU). Mitochon (the Mac mini)
+has been taken down as a server and is kept only for oMLX development —
+Novak's household deployment has no dependency on it running.
 
-**What's actually true right now, not aspirational:** Ollama is live on
-Spire, verified with real generations (see decision #28). Hindsight, Open
-WebUI, the console, and the Wyoming voice services have **not yet moved**
-— they still run on Mitochon as of this writing. Don't read this section as
-describing a completed migration; it describes a decided direction with one
-piece (inference) actually moved so far.
+`docker-compose.yml` reflects this: it is one file supporting both host
+shapes (oMLX-on-host for Apple Silicon, the in-stack `ollama` service
+behind its own compose profile for Linux+GPU), not a file written for one
+specific machine (decision #33). Storage also split on Spire per decision
+#33: compose manifests and `.env` stay under Unraid's appdata path (where
+Compose Manager expects them); databases, media, and model weights live
+under `/mnt/teracache/Novak/{data,models,config}` on bulk storage instead.
 
-`docker-compose.yml` still assumes everything sits beside oMLX (hence
-`host.docker.internal`) — that assumption is what the migration work ahead
-needs to remove, not something already handled. See [engines.md](engines.md)
-for the inference-engine side of this, which is further along than the rest.
+See [engines.md](engines.md) for the inference-engine side of this, and
+[ollama-settings.md](ollama-settings.md) for what's actually running.
 
 *(Previous correction, 2026-08-27: this section once said Open WebUI runs on
 a separate VPS — true of an earlier plan, not true of any deployment shape
 described above.)* The reverse proxy fronting the portal and Open WebUI
-remains a separate Caddy instance on a LAN-neighboring machine regardless of
-where core services end up. See [proxy.md](proxy.md).
+remains a separate Caddy instance on a LAN-neighboring machine — see
+[proxy.md](proxy.md).
 
-What constrains each piece:
+What constrains each piece, now that everything but oMLX is co-located on
+one host:
 
 | Service | Constraint | Where |
 |---|---|---|
-| oMLX | Metal/MLX — cannot be containerized or moved | Mitochon, secondary engine only (decision #28) |
-| Hindsight | **every memory write triggers an LLM extraction call** — wants to be next to whichever engine serves it, or each write pays a round trip | today: with oMLX on Mitochon. Once Hindsight moves to Spire, its `HINDSIGHT_LLM_MODEL`/`HINDSIGHT_LLM_PROVIDER` need to point at Spire's own Ollama, not oMLX — not yet changed |
-| Wyoming STT/TTS | voice latency budget is ~1–2s end to end; keep close to HA and the satellites | with HA |
-| Open WebUI | just a frontend; reaches whichever engine(s) the router points at | today: Mitochon. Moving to Spire doesn't change this — it already only needs the router, wherever that runs |
-| Console | reaches Hindsight often, Pocket ID once per session | with Hindsight, wherever Hindsight ends up |
+| oMLX | Metal/MLX — cannot be containerized or moved | Mitochon, kept for development only, not depended on in production |
+| Ollama | needs a GPU worth using | Spire (RDNA4/Vulkan) — the household's real `deep`/`chat`/`ha-voice` engine now |
+| Hindsight | every memory write triggers an LLM extraction call — wants to be next to whichever engine serves it | Spire, pointed at Spire's own Ollama (`HINDSIGHT_LLM_MODEL`/`HINDSIGHT_LLM_PROVIDER`), not oMLX |
+| Wyoming STT/TTS | voice latency budget is ~1–2s end to end; keep close to HA and the satellites | Spire, same LAN as HA |
+| Open WebUI | just a frontend; reaches whichever engine(s) the router points at | Spire |
+| Console | reaches Hindsight often, Pocket ID once per session | Spire, with Hindsight |
 
 The console runs beside Hindsight for data locality. The accepted cost: **Pocket ID
 is on a VPS, so a WAN outage prevents logging in to a console that is otherwise

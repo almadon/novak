@@ -25,23 +25,26 @@ at the end for the raw numbers this reasoning rests on.
 |---|---|---|---|
 | Voice / quick tools | `qwen3:4b` (`qwen3:4b-instruct-2507-q4` is the closer match to oMLX's own voice model if you want the exact same weights) | Fully resident, ~2.5GB | **94.8 tok/s** |
 | Main chat | `qwen3:14b` | Fully resident, ~9.3GB | **32.6 tok/s** |
-| Deep / hard questions | *Not this card* — see below | — | — |
+| Deep / hard questions | `hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS` | Fully resident, ~14GB | **19.43 tok/s** |
 
-**Qwen3.8-27B does not fit this GPU.** Confirmed directly, not assumed:
-`hf.co/unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M` is ~17GB against a 15.9GB VRAM
-ceiling. `ollama ps` shows a genuine 12%/88% CPU/GPU layer split **even
-with the entire card free** — this isn't a contention artifact from other
-loaded models, it's a real fit problem. Eval rate there was ~10 tok/s,
-roughly a third of what simple size-scaling from the 14B would predict,
-which is the CPU-offloaded layers dragging the whole batch down. Per
-decision #28, this model stays on oMLX/Mitochon instead — matching the
-model to hardware that actually fits it, not forcing one card to do
-everything.
+**`UD-Q4_K_M` (17GB) does not fit this GPU** — confirmed directly, not
+assumed: `ollama ps` showed a genuine 12%/88% CPU/GPU layer split even
+with the entire card free, and eval rate was ~10 tok/s, roughly a third
+of what simple size-scaling from the 14B would predict (the CPU-offloaded
+layers dragging the whole batch down).
 
-**A smaller quant might fit and hasn't been tested**: `Qwen3.8-27B-UD-Q4_K_S.gguf`
-or `-IQ4_XS` are both smaller than the `Q4_K_M` measured above. Worth
-trying if you want a `deep`-class model on this card specifically, before
-concluding the answer is permanently "use the other engine."
+**`UD-IQ4_XS` (14GB) fits, and is now the `deep`-role model on Spire**
+(decision #33) — replacing oMLX/Mitochon for this role. `ollama ps`
+confirms `100% GPU`, no CPU offload at all. Eval rate roughly doubled
+versus the ill-fitting `Q4_K_M` (19.43 vs. ~10 tok/s), and — the more
+consequential number for a memory-constrained card — it no longer
+competes with other loaded models for the CPU-offload penalty at all,
+since none of its layers ever land on CPU. File size was HEAD-verified
+against HuggingFace's `resolve/main/` content-length (following the Xet
+CDN redirect — the bare URL's own Content-Length is a small JSON
+redirect body, not the file) before pulling: 14,252,845,984 bytes
+(~13.3 GiB), not assumed from the `api/models` listing, which doesn't
+reliably expose per-file sizes for this repo.
 
 ### The model's own naming quirk to know about
 
@@ -69,48 +72,35 @@ justify revisiting."
 
 ## Storage
 
-Model weights live on `/mnt/teracache/appdata/Ollama/data` (an Unraid
-pool with ample free space at the time this was set up), not the smaller
-`/mnt/cache` NVMe pool most of Spire's other appdata uses — deliberately
-asked about before choosing, since a 27B-class model's ~17GB alone would
-have eaten most of `/mnt/cache`'s free space. Check actual free space on
-whichever pool you point at before committing; this isn't a fixed rule,
-just what fit at the time.
+Model weights live on `/mnt/teracache/Novak/models/ollama` — moved there
+from the original `/mnt/teracache/appdata/Ollama/data` as part of decision
+#33's storage reorg, same pool (a fast rename, not a copy), just under the
+shared `Novak/` structure instead of a standalone appdata directory.
 
-## Applying this today: by hand, not a `novak` command
+## Applying this today: `docker-compose.yml`, gated behind a profile
 
-**Unlike oMLX, there is no `novak ollama apply` (or equivalent) yet.**
-Everything above was applied directly — a `docker-compose.yml` written
-by hand and registered with Unraid's Compose Manager plugin, models
-pulled with `docker exec ollama ollama pull <tag>`. This is the real gap
-`engines.md` names as the setup-script work still ahead: a declarative,
-`registry/omlx.yaml`-style file for Ollama models, applied and
-drift-checked the same way, doesn't exist. Until it does, changes here
-need to be made and recorded by hand — including updating this doc when
-they are.
+**As of decision #33, Ollama is folded into the shared `docker-compose.yml`**
+as a service gated behind `profiles: ["ollama"]` — no more standalone
+Compose Manager project. Enable it by adding `"ollama"` to the stack's
+active profiles (Compose Manager's `profiles` file, or `COMPOSE_PROFILES`)
+and setting `OLLAMA_DATA_DIR` in `.env` to wherever the model weights
+should live. Models themselves are still pulled by hand —
+`docker exec <ollama-container> ollama pull <tag>` — since the
+declarative, `registry/omlx.yaml`-style setup script for Ollama models
+that `engines.md` names as still-missing work doesn't exist yet. Until it
+does, model changes need to be made and recorded by hand — including
+updating this doc when they are.
 
-The compose file, for reference (adjust the volume path to wherever you
-actually have room):
+The relevant `.env` block, for reference (see `.env.example` for the full,
+commented version):
 
-```yaml
-services:
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
-    restart: unless-stopped
-    network_mode: bridge
-    ports:
-      - 11434:11434
-    devices:
-      - /dev/dri:/dev/dri
-      - /dev/kfd:/dev/kfd
-    volumes:
-      - /mnt/teracache/appdata/Ollama/data:/root/.ollama
-    environment:
-      - OLLAMA_VULKAN=1
-      - OLLAMA_MAX_LOADED_MODELS=2
-      - OLLAMA_NUM_PARALLEL=4
-      - OLLAMA_KEEP_ALIVE=20m
+```
+OLLAMA_PORT=11434
+OLLAMA_VULKAN=1
+OLLAMA_MAX_LOADED_MODELS=2
+OLLAMA_NUM_PARALLEL=4
+OLLAMA_KEEP_ALIVE=20m
+OLLAMA_DATA_DIR=/mnt/teracache/Novak/models/ollama
 ```
 
 ## What was actually measured
@@ -120,9 +110,10 @@ not synthetic benchmarks, run directly against this hardware
 (AMD Radeon RX 9060 XT, 16GB, RDNA4/`gfx1201`, Vulkan backend):
 
 ```
-qwen3:4b                                 eval rate: 94.80 tokens/s
-qwen3:14b                                eval rate: 32.60 tokens/s
+qwen3:4b                                  eval rate: 94.80 tokens/s
+qwen3:14b                                 eval rate: 32.60 tokens/s
 hf.co/unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M  eval rate: 10.15 tokens/s (12%/88% CPU/GPU split)
+hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS  eval rate: 19.43 tokens/s (100% GPU, decision #33)
 ```
 
 Re-measure rather than trust these on different hardware, a different

@@ -45,7 +45,7 @@ it is.
 | **oMLX** (8000) | **No** | An inference API with no rate limiting and no quotas. A stranger with the key gets your GPU; a stranger without one still costs you every connection's worth of work. Worse, it is one endpoint away from your models and your machine's memory ceiling — the way to take this house down is to ask it to think. |
 | **Hindsight** (13403, 13404) | **No** | Holds every person's memories. Auth is one shared bearer token: no per-user identity, no rate limit, no lockout. Leak it once and there is no revoking it for one caller. Deletes are permanent, so the damage is not only disclosure. |
 | **Konzol** (13401) | **No** | Reconfigures the stack. It writes the registry, and the registry decides what runs. Treat public access to it as equivalent to a shell. |
-| **Wyoming** (13406/13405/13407) | **No** | No authentication of any kind, by protocol design. Anything that reaches the port can speak to your microphones' pipeline. |
+| **Wyoming wake word** (13407) | **No** | No authentication of any kind, by protocol design. Anything that reaches the port can speak to your microphones' pipeline. STT/TTS (whisper/piper) moved to Home Assistant's own native add-ons, decision #39 — not part of this stack's exposure surface anymore. |
 | **Open WebUI** (13400) | Yes — **via its own public-facing proxy, on a separate host** | The only one built for it: accounts, sessions, its own rate limiting, and it expects strangers to knock. It is public because it earned it, not because it was convenient. |
 
 ### The test
@@ -308,9 +308,11 @@ hands.
 
 ## What stays plaintext, and why
 
-**The Wyoming voice services** (whisper 13405, piper 13406, openWakeWord
-13407). Wyoming is a TCP protocol, not HTTP, and the ESPHome satellites that
-speak it can't do TLS to a hostname. Proxying them here would break them.
+**Wyoming wake word detection** (openWakeWord, 13407 — STT/TTS moved to
+Home Assistant's own native add-ons, decision #39, and aren't part of this
+stack anymore). Wyoming is a TCP protocol, not HTTP, and the ESPHome
+satellites that speak it can't do TLS to a hostname. Proxying it here
+would break them.
 
 The honest consequence: someone on your local network could capture voice audio
 in transit. That's a smaller exposure than it first sounds — it's the same

@@ -1897,3 +1897,98 @@ off by hand — nothing in this repo enforces it automatically, since it's
 an Open WebUI-side setting the reconciler has no reach into. Worth
 checking after any `novak update` that pulls a new Open WebUI image, in
 case a future version changes these defaults again.
+
+## 39. Novak's own whisper/piper containers decommissioned in favor of Home Assistant's native add-ons
+
+Home Assistant setup work turned up that every real deployment of this
+stack ends up running on hardware separate from HA itself (a real Home
+Assistant Yellow, this household's case), reaching Novak's engines over
+the LAN/tailnet for the conversation agent only — never for STT/TTS. HA
+already ships its own Whisper and Piper add-ons, installable straight
+from its own Add-on Store, using the exact same underlying models this
+stack's own containers ran (`faster-whisper` at `auto`, Piper voice
+`en_US-lessac-medium`). Running a second copy of the same thing, reached
+over the network instead of installed locally on the HA host, added a
+hop and a second place to keep the model choice in sync for zero
+benefit.
+
+**Decision:** stop running `whisper`/`piper` as Novak containers; use
+HA's own native add-ons instead. `openwakeword` is kept — HA has no
+native equivalent for server-side wake word detection on Wyoming
+satellites (Voice PE does wake word on-device instead, a different
+mechanism entirely, see [wakeword.md](wakeword.md)).
+
+**Done:** stopped the `novak-whisper-1`/`novak-piper-1` containers on
+Spire; removed the `whisper`/`piper` service blocks and their named
+volumes from [docker-compose.yml](../docker-compose.yml); removed their
+env vars (`WHISPER_PORT`, `PIPER_PORT`, `WHISPER_MODEL`, `PIPER_VOICE`,
+`WHISPER_DATA_DIR`, `PIPER_DATA_DIR`) from
+[.env.example](../.env.example); updated the exposure notes in
+[proxy.md](proxy.md) and the voice section of
+[deploy-checklist.md](deploy-checklist.md); rewrote
+[home-assistant.md](home-assistant.md)'s STT/TTS section to point at HA's
+add-ons instead of a Wyoming integration aimed at this stack.
+
+**Not yet done:** `docker rm` the stopped containers and delete their
+now-orphaned data directories on Spire
+(`/mnt/teracache/Novak/data/{whisper,piper}`); bring the stack back up
+with the trimmed compose file; pull this repo's changes onto Spire's own
+checkout.
+
+## 40. Custom Conversation (HACS) needed three real bugs fixed before Home Assistant's voice pipeline worked at all
+
+Wiring up `custom_conversation` (michelle-avery/custom-conversation
+v1.6.1) against this household's real Home Assistant Core (2026.9.0)
+surfaced three genuine compatibility bugs, not configuration mistakes —
+worth recording since none of them were obvious from the integration's
+own docs, and at least one still has no upstream fix at all.
+
+**Bug 1 — missing `voluptuous-openapi` dependency.** The integration's
+`conversation.py` imports `voluptuous_openapi`, but its own
+`manifest.json` never lists it as a requirement, so HA never installs it
+and the whole integration fails to load (`ModuleNotFoundError`).
+Confirmed against the real upstream `manifest.json` for tag `1.6.1` — not
+a corrupted local install. Fixed by hand-patching the installed
+`custom_components/custom_conversation/manifest.json` to add
+`"voluptuous-openapi"` to `requirements` and restarting HA Core.
+
+**Bug 2 — removed `llm.AssistAPI` class.** HA Core 2026.9.0 removed
+`homeassistant.helpers.llm.AssistAPI` entirely (confirmed via
+`dir(llm)`); the integration's `config_flow.py` still referenced
+`llm.AssistAPI.IGNORE_INTENTS` in three places, crashing every config-flow
+interaction with `AttributeError` (a 500 error in the Options dialog). An
+open, unmerged upstream PR (#112) already had the exact fix — applied it
+by hand across all three occurrences (one was missed on the first pass;
+a second patch attempt introduced an indentation error, caught and fixed
+by computing the correct indent from the preceding `if` line rather than
+guessing it).
+
+**Bug 3 — thinking-model output crashes the chat log (upstream issue
+#71, still open).** A "thinking" model's `reasoning_content` field in its
+response makes the integration fail with "Last message in chat log is
+not AssistantContent". Confirmed model-dependent by testing directly:
+Ollama's `qwen3:4b` (hybrid thinking) triggers it, `qwen3:4b-instruct`
+(non-thinking) does not — same otherwise. No upstream fix exists yet.
+Worked around, not fixed: switched the `ha-voice` and `task` roles in
+`registry/engines.yaml` from `qwen3:4b` to `qwen3:4b-instruct` and
+reapplied via `reconciler/router_apply.py`.
+
+**Still open, not root-caused:** the integration's "Instructions
+Prompt"/"Custom Prompts" section (where
+[prompts/novak-voice.md](../prompts/novak-voice.md)'s persona is meant to
+go) is defined unconditionally in the integration's own schema code
+(`config_flow.py`'s `section()`-wrapped `CONF_CUSTOM_PROMPTS_SECTION`)
+but never renders in the live Options dialog on this HA installation.
+`voluptuous_serialize` — the HA Core dependency responsible for turning
+that schema into JSON for the frontend — was confirmed completely absent
+from this install (`pip list` showed no such package) and was installed
+by hand (`pip install voluptuous-serialize`, from HA's own official
+wheel index), but the section still didn't appear after a restart. An
+isolated Python test showed `voluptuous_serialize.convert()` raising
+`ValueError: Unable to convert schema` on a bare `section()` object, but
+that test bypasses whatever custom-type registration HA Core's real boot
+sequence performs, so it isn't proof the same failure happens live.
+Deliberately stopped chasing this given the effort already spent — real
+open bug, not resolved. Net effect until it is: Custom Conversation
+answers with its own generic persona, not Novak's, even though the
+model/connection/tool-access all otherwise work correctly.

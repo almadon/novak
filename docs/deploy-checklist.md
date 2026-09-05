@@ -213,9 +213,12 @@ not verified there.
       router once set up) with the `ha-voice` role's model name. Keep HA's
       built-in Assist API for device control; tools come via MCP below.
       Decision 19 covers why not the other two candidates.
-- [ ] Wyoming integrations: STT (`WHISPER_PORT`, default `13405`), TTS
-      (`PIPER_PORT`, default `13406`), wake word (`OPENWAKEWORD_PORT`,
-      default `13407`).
+- [ ] STT/TTS: use Home Assistant's own native Whisper/Piper add-ons
+      (decision #39) rather than standing up a second copy — install both
+      from the Store if not already present. Wyoming wake word detection
+      still comes from Novak's own stack (`OPENWAKEWORD_PORT`, default
+      `13407`), since HA has no native equivalent for server-side wake
+      word on Wyoming satellites.
 - [ ] MCP integration → the household bank. **The household bank only.**
       Never a personal one: anyone who talks to a satellite would reach it,
       and a microphone cannot tell who is speaking.

@@ -255,24 +255,14 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  # ── Wyoming voice services for HA Voice ───────────────────────────────
-  whisper:
-    image: rhasspy/wyoming-whisper:latest
-    restart: unless-stopped
-    command: --model ${WHISPER_MODEL:-small-int8} --language en
-    ports:
-      - "${WHISPER_PORT:-13405}:10300"
-    volumes:
-      - ${WHISPER_DATA_DIR:-whisper}:/data
-
-  piper:
-    image: rhasspy/wyoming-piper:latest
-    restart: unless-stopped
-    command: --voice ${PIPER_VOICE:-en_US-lessac-medium}
-    ports:
-      - "${PIPER_PORT:-13406}:10200"
-    volumes:
-      - ${PIPER_DATA_DIR:-piper}:/data
+  # Wyoming STT/TTS used to run here too (whisper/piper), removed (decision
+  # #39): every real deployment ended up using Home Assistant's own native
+  # Whisper/Piper add-ons instead — same underlying models
+  # (faster-whisper/`auto`, Piper `en_US-lessac-medium`), already wired to
+  # a working pipeline, one less network hop from HA to the voice services,
+  # and one less thing to keep in sync between two places. openwakeword
+  # stays — HA has no native equivalent for server-side wake word detection
+  # on Wyoming satellites.
 
   # Server-side wake word detection ("hey novak"). Only used by Wyoming
   # satellites — HA Voice PE detects on-device with microWakeWord instead.
@@ -496,7 +486,5 @@ services:
 volumes:
   open-webui:
   hindsight:
-  whisper:
-  piper:
   tinyauth:
   ollama:

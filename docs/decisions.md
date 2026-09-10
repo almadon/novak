@@ -1988,7 +1988,7 @@ field directly and confirmed via a real `conversation/process` call that
 Custom Conversation now answers as Novak. See decision #41 for what
 happened after that fix surfaced a *different*, genuinely deeper bug.
 
-## 41. Custom Conversation's Assist tool-calling: fixed upstream, then hit a real context-window limit, then a real model-reliability limit
+## 41. Custom Conversation's Assist tool-calling: fixed upstream, hit a real context-window limit, and a false alarm on model reliability
 
 Direct continuation of decision #40. Setting the persona correctly (via
 the "Customize Prompts" fix) surfaced a fourth bug: any conversation
@@ -2066,27 +2066,50 @@ the dry-run output named `omlx`/`Qwen3-4B-Instruct-2507-4bit` instead of
 remembering: this script's silent-fallback-to-repo-template behavior is
 a footgun for anyone running it outside its normal invocation context.
 
-### What's left: the model itself isn't reliable at tool-calling yet
+### What looked like a model-reliability bug, and wasn't
 
-With both bugs and the context limit gone, device control was tested
-directly and is **inconsistent, not fixed**: asked Custom Conversation
-to turn on a specific light by name, and it replied *"Light L2 Dining
-Room Accent is now on"* — a different entity than the one named — with
-an **empty `success`/`failed` array** in the structured response,
-meaning no tool was actually invoked at all; the target entity's state
-and `last_changed` timestamp were unchanged. A differently-phrased
-request in the same session *did* produce a real `HassTurnOn` call with
-genuine area/entity metadata in the response. Same model
-(`qwen3:4b-instruct-ctx8k`), same system prompt (which already
-explicitly instructs *"When controlling Home Assistant always call the
-intent tools"*) — sometimes it complies, sometimes it just narrates a
-plausible-sounding success.
+First pass at testing device control looked damning: asked Custom
+Conversation to turn on a specific light by name, got back *"Light L2
+Dining Room Accent is now on"* — a different entity than the one named
+— with an **empty `success`/`failed` array** in the structured
+response. Read as "no tool was invoked at all, just narration," and
+this decision originally said so, landed back on "No control," and
+called it a `qwen3:4b`-scale capability limit.
 
-This reads as a capability limit of a 4B model doing real tool
-selection against a large exposed-entity set, not a further integration
-bug. **Left on "No control" again, deliberately** — a wrong "the light
-is on" when it isn't is worse than the feature being absent, and this
-isn't a "keep patching" problem the way the last three were; it needs
-either a stronger model for the `ha-voice` role, a smaller
-exposed-entity set, or lower temperature/different sampling before it's
-trustworthy enough to turn on. Not attempted tonight.
+**That conclusion was wrong**, caught the same session on a closer
+look. Reproduced the exact call directly against the router (from
+inside the HA container, real 15,626-char system prompt captured live
+off the unconditional `LOGGER.debug("Iteration %s, messages: %s", ...)`
+line — not the error-only debug line used earlier) at both `temperature
+1.0` and `0.1`: **6/6 correct `intent__HassTurnOn` tool calls at both
+temperatures**, every time picking the same "Accent" entity the live
+run did. Temperature was never the variable. Then forced the actual
+target entities to known states in HA directly and re-ran the live
+call: the light that gets named in the speech response
+(`light.light_l2_dining_room_accent`) **genuinely turns on**, with a
+`last_changed` timestamp landing exactly when the call was made; a
+same-area light with a very similar name
+(`light.relay_l2_dr_light_l2_dining_room`, friendly name literally
+"Light L2 Dining Room") correctly stays untouched. The tool call is
+real, executes correctly, and the spoken response accurately describes
+what happened.
+
+So there were two separate, much smaller things, not one big one:
+
+1. **The `success`/`failed` metadata fields are unreliable in 1.7.0** —
+   empty even on a real, verified-successful execution. Cosmetic/
+   reporting bug, not a dispatch failure; don't trust these fields as
+   evidence either way without checking real entity state.
+2. **A genuine but minor entity-disambiguation quirk**: asked for
+   "Light L2 Dining Room" (the exact friendly name of one specific
+   entity), it consistently resolves to a *different*, plausibly-named
+   entity in the same area ("...Accent") instead. Worth another look on
+   its own, but it's "picks a slightly wrong real light," not "invents
+   success with nothing behind it" — a much smaller problem.
+
+**Net effect**: `qwen3:4b-instruct-ctx8k` is not the blocker. Device
+control through Custom Conversation appears to actually work. Left on
+"No control" at the end of this session anyway, simply because the
+entity-disambiguation quirk hadn't been characterized well enough yet
+to trust turning it back on unattended — not because tool-calling
+itself needs a bigger model.

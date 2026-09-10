@@ -2113,3 +2113,112 @@ control through Custom Conversation appears to actually work. Left on
 entity-disambiguation quirk hadn't been characterized well enough yet
 to trust turning it back on unattended — not because tool-calling
 itself needs a bigger model.
+
+## 42. Switched from Custom Conversation to HA Core's native `litellm` integration
+
+Direct continuation of decisions #40/#41. HA Core shipped a **native
+`litellm` integration** in 2026.8 — one release before the 2026.9.0 this
+household runs — discovered while comparing alternatives after a whole
+session spent on `custom_conversation`'s own bugs. It wasn't obviously
+findable earlier: it doesn't show up by searching "OpenAI" or "Ollama" in
+HA's integration picker, only by its own name, "LiteLLM."
+
+### Why it's the better choice here
+
+It's part of HA Core, not a third-party HACS dependency — none of
+decision #40's bug class (a stale reference to a class HA Core itself
+removed, a missing declared dependency) is even possible, since it's
+maintained on HA Core's own release cadence rather than by one external
+maintainer catching up to HA's changes after the fact. It points at a
+LiteLLM proxy directly (Spire's router), so `persona_hook.py`'s injection
+(decision #21) still applies exactly as designed. It discovers the
+router's model roles automatically (`chat`, `ha-voice`, `deep`, `task`)
+and creates one conversation agent per role. Setup took minutes: add the
+integration, add a conversation agent for `ha-voice`, paste
+[prompts/novak-voice.md](../prompts/novak-voice.md) into its Instructions
+field, check "Assist," done — persona-correct on the first request, no
+dialog-finding, no restart cycle.
+
+**Head-to-head against Custom Conversation 1.7.0**, both tested live
+against the same household data:
+
+| | Custom Conversation 1.7.0 | Native `litellm` |
+|---|---|---|
+| Setup | Hours, across multiple sessions | Minutes |
+| Persona field | Present but mislabeled ("Customize Prompts", not "Instructions Prompt") | Labeled Instructions, worked first try |
+| Device control executes | Yes (once model/context issues resolved) | Yes |
+| `success`/`failed` response metadata | Unreliable — empty even on a verified real success | Accurate |
+| Maintenance | One external maintainer, actively fixing real bugs found this session | HA Core team, HA's own release cadence |
+
+🥉 Bronze quality, ~188 installs at time of writing — genuinely newer and
+less battle-tested than Custom Conversation's 1,428-star alternative
+(Extended OpenAI Conversation) or even Custom Conversation itself. Traded
+consciously: less community mileage, in exchange for zero third-party
+integration-bug surface and a working state reached in minutes instead of
+a whole session.
+
+**Custom Conversation is not removed** — still installed, its
+`conversation.custom_conversation` entity still exists, left on "No
+control" (harmless, unused). Kept as a fallback and because decision #19's
+comparison logic (Extended OpenAI Conversation brings its own
+function-calling, breaking the "HA's intents, not a third-party tool
+system" architecture) still applies to it — the native integration doesn't
+change that reasoning, it just removes the reason `custom_conversation`
+was needed at all on HA versions ≥ 2026.8.
+
+### What switching to it actually surfaced: two real, separate bugs — neither in either integration
+
+With the crash-class bugs gone and the persona working, a specific light
+still refused every phrasing, across *every* agent tried — including HA's
+own **built-in, non-AI** conversation agent. That last part was the
+key diagnostic: it isolated the problem away from any LLM or integration
+entirely, since the built-in agent has no LLM in the loop at all.
+
+**Root cause 1 — the entity was never exposed to Assist.** Its registry
+entry read `"conversation": {"should_expose": false}` — a `switch_as_x`
+wrapper around a relay switch, apparently never toggled on for voice.
+Every "I don't have a device named X" response, from every conversation
+agent, was accurate: none of them could see it, because it was never in
+the exposed-entity list any of them build their tool/entity descriptions
+from. No amount of prompt engineering, alias tuning, or model swapping
+could have fixed this — it doesn't reach the LLM layer at all. Fixed with
+one websocket call: `homeassistant/expose_entity` with
+`should_expose: true`.
+
+**Root cause 2 — multiple aliases on one entity confuse a small model.**
+Once exposed, the entity still wasn't reliably addressable by its two
+aliases together. HA joins an entity's registered aliases into a single
+comma-separated `"names"` field for the LLM's context (e.g. `"Buffet
+Light, Sideboard Light"`) — confirmed via HA Core's own PR
+[#126163](https://github.com/home-assistant/core/pull/126163), which
+added this `exposed_entities`/`aliases` structure generically for every
+native LLM conversation agent, not just `litellm`. `qwen3:4b-instruct`
+reliably treated that *whole joined string* as one literal (and
+therefore unmatchable) device name rather than trying either alternative
+separately. Dropping to a **single** alias per ambiguous entity resolved
+it cleanly and repeatably. Worth remembering for the general case (two
+similarly-named entities sharing an area, where an LLM's own tool
+selection tends to favor matching the *area* over a specific entity
+anyway) — one well-chosen alias beats several redundant ones.
+
+Both fixes verified with real, physical state-change tests (forced light
+state, live conversation call, checked `last_changed` moved and the
+*correct* entity changed) — not just plausible-sounding response text,
+following the same lesson decision #41 learned the hard way about
+trusting response metadata over ground truth.
+
+### A footgun hit chasing the wrong root cause first
+
+Before finding the real cause, effort went into: (a) suspecting the
+prompt-building code path itself (reading HA Core's `llm.py`/`litellm`
+component source directly, including a PR archaeology detour), and (b)
+trying to capture live request payloads via LiteLLM router debug logging
+(`set_verbose`/`LITELLM_LOG=DEBUG`) — which needed a full container
+recreate to pick up a new env var, not just `novak restart router` (env
+vars are fixed at container creation; a restart alone doesn't re-read
+`env_file`). Both were legitimate leads and both were abandoned once a
+much simpler test — asking HA's own built-in agent the same question —
+isolated the actual layer the problem was in within one call. Worth
+trying that kind of maximally-isolating test earlier next time a
+conversation-agent problem looks like it might be model- or
+integration-specific: rule out the shared, LLM-free baseline first.

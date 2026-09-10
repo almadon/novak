@@ -8,87 +8,85 @@ This household's own real setup (Spire) is the reference: HA runs on
 separate hardware (a Home Assistant Yellow), reaching Spire's router over
 the LAN/tailnet.
 
-## 1. Conversation agent → the router (or an engine directly)
+## 1. Conversation agent → the router, via HA's native `litellm` integration
 
 HA's stock OpenAI integration still doesn't accept a custom base URL
-([core#137087](https://github.com/home-assistant/core/issues/137087)), so this
-needs a custom component. Install **Custom Conversation** via HACS
-(<https://github.com/michelle-avery/custom-conversation>).
+([core#137087](https://github.com/home-assistant/core/issues/137087),
+closed as not planned), so pointing HA at Spire's router needs *something*
+else. **Use HA Core's own native `litellm` integration** (added in HA Core
+2026.8 — check Settings → Devices & Services → Add Integration → "LiteLLM"
+before installing anything from HACS; if your HA predates 2026.8, see
+decision #40/#41 for the HACS-based fallback this section used to
+recommend).
 
-It lets you keep HA's built-in Assist API for device control, which is what
-this stack wants: the conversation agent handles *language*, and tools arrive
-through HA's MCP integration (§3) or through the "Assist" API choice built
-into Custom Conversation itself (used here — see below). It can also run
-both — built-in intents first, the LLM for whatever they don't match.
+It's built into Core, not a third-party dependency — no manifest/import
+bugs to chase, no removed-API references to patch, none of decision #40's
+entire bug class. It discovers every model the router exposes automatically
+and creates one conversation agent per role name (`chat`, `ha-voice`,
+`deep`, `task`), and it uses HA's own Assist API for device control — same
+architecture this doc has always wanted (conversation agent handles
+*language*, HA's own intents handle devices), just without a third party
+in between.
 
-Configure it as the **OpenAI** provider and override the base URL — its
-[supported providers](https://github.com/michelle-avery/custom-conversation/blob/main/docs/supported-providers.md)
-doc confirms that is how arbitrary self-hosted endpoints are meant to be used,
-while warning that *"supposedly 'OpenAI-compatible' APIs are sometimes not
-fully compatible."* Confirmed directly against this household's real router
-(decision #40): it works, once past two real compatibility bugs — see below.
+Settings:
 
-> **If you are following an older copy of these notes**, they recommended
-> `openai-compatible-conversation`. Its maintainer has since disclaimed it —
-> *"I personally cannot support this, as I don't actually use this
-> integration"* — and points at Custom Conversation, which is the same author
-> and actively maintained. See decision 19 for the full comparison, including
-> when Extended OpenAI Conversation is the better answer.
+- URL: `http://<engine-host-ts-ip>:<ROUTER_PORT>` (`13402` by default) — no
+  `/v1` suffix, no API key needed if the router doesn't enforce one.
+- Per conversation agent (Settings → Devices & Services → LiteLLM → **Add
+  conversation agent**): pick the role (**`ha-voice`** for this pipeline),
+  paste [prompts/novak-voice.md](../prompts/novak-voice.md)'s persona into
+  **Instructions** (supports Jinja templates), and check **Assist** under
+  "Control Home Assistant."
+- Wire the new agent into the actual pipeline: Settings → Voice assistants
+  → your assistant → **Conversation agent** → the new `ha-voice` agent.
+  Adding the LiteLLM integration does *not* do this automatically — it
+  only creates the `conversation.*` entity.
 
-Settings (real values, this household — adjust host/port to yours):
+Confirmed directly against this household's real router (decision #41/#42):
+persona-correct responses and genuine, verified device control (real state
+changes, accurate `success`/`failed` metadata — notably *more* reliable
+here than the HACS-based Custom Conversation was, whose response metadata
+stayed empty even on real successes).
 
-- Base URL: `http://<engine-host-ts-ip>:<ROUTER_PORT>/v1` (`13402` by
-  default) if going through the router — recommended, since it's what
-  injects Novak's persona (decision #21) — or a specific engine's own
-  base URL to bypass the router entirely.
-- API key: the router's shared key (`OMLX_API_KEY`), or the engine's own
-  if going direct.
-- Model: the router's short role name, e.g. **`ha-voice`** — not an
-  engine's own long model id. The router exposes role names directly;
-  only a direct-to-engine setup needs the engine's own naming (oMLX:
-  `Qwen3-4B-Instruct-2507-4bit:ha-voice`; Ollama: a plain tag like
-  `qwen3:4b-instruct`).
-- API choice: **Assist**, not "No control" — exposes HA's device-control
-  intents to the LLM without a separate MCP round trip.
+### The one real gotcha: entity exposure, not the integration
 
-### Two real compatibility bugs found running this (decision #40)
+A light that silently refused to respond to any phrasing — by every
+integration tried, including HA's own **built-in, non-AI** agent — turned
+out to have `"conversation": {"should_expose": false}` in its entity
+registry entry (a `switch_as_x`-wrapped switch, never exposed to Assist at
+all). No LLM, alias, or prompt fix could have found it; it was never in
+the exposed-entity list to begin with. **If a request "doesn't recognize"
+an entity that definitely exists, check its exposure state before
+suspecting the model** — Settings → Voice assistants → Expose, or `{
+"type": "homeassistant/expose_entity", "assistants": ["conversation"],
+"entity_ids": [...], "should_expose": true }` over the websocket API.
 
-Both against a recent Home Assistant Core (2026.9.0) with Custom
-Conversation v1.6.1 — check whether they're already fixed upstream before
-assuming you'll hit them:
+**A second, smaller gotcha once exposure is fixed:** entity aliases work
+(HA joins them into the entity's `"names"` field the model sees), but
+**giving one entity multiple aliases at once measurably confused the small
+`ha-voice` model** — it received `"names": "Buffet Light, Sideboard
+Light"` and echoed the whole comma-joined string back as if it were one
+literal (unmatchable) name, rather than trying either alternative. A
+*single*, distinctive alias per ambiguous entity resolved cleanly and
+reliably. Useful for the common case — two similarly-named lights in the
+same area — where the model's own tool-selection otherwise favors the
+*area* match over a specific entity.
 
-1. **Missing `voluptuous-openapi` dependency.** The integration's
-   `manifest.json` doesn't declare it despite importing it, so HA never
-   installs it and the integration fails to load entirely
-   (`ModuleNotFoundError`). Fix: add `"voluptuous-openapi"` to the
-   `requirements` list in the installed
-   `custom_components/custom_conversation/manifest.json` and restart HA
-   Core — it'll get pip-installed on the next startup like any other
-   declared requirement.
-2. **Removed `llm.AssistAPI` class.** HA Core 2026.9.0 removed it; the
-   integration's `config_flow.py` still references
-   `llm.AssistAPI.IGNORE_INTENTS` in three places, crashing every config
-   flow interaction with `AttributeError`. An open, unmerged upstream fix
-   exists (PR #112 on the integration's repo) — applying it manually
-   (replace each `llm.AssistAPI.IGNORE_INTENTS` reference with an empty
-   list default) resolves it.
+### History: the HACS `custom_conversation` path (superseded here)
 
-**A third, still-open bug** (upstream issue #71): a "thinking" model's
-`reasoning_content` output makes the integration fail with "Last message
-in chat log is not AssistantContent". Confirmed by testing directly: it's
-model-dependent, not integration-version-dependent. Workaround that
-avoids it entirely — use a non-thinking model variant for the `ha-voice`
-role (e.g. Ollama's `qwen3:4b-instruct`, not the hybrid-thinking `qwen3:4b`
-default) rather than waiting on an upstream fix.
-
-**Also open, not yet root-caused**: Custom Conversation's own "Instructions
-Prompt" field — where [prompts/novak-voice.md](../prompts/novak-voice.md)'s
-persona is meant to go — is defined in the integration's code (a
-`CONF_CUSTOM_PROMPTS_SECTION`) but doesn't render in the Options dialog on
-this HA Core version. Confirmed it's not a scroll/viewport issue (checked
-the live DOM directly). Until this is resolved, Custom Conversation
-answers with its own generic assistant persona, not Novak's — everything
-else (device control, real responses, no crashes) works.
+Before HA Core shipped `litellm` natively, this doc recommended **Custom
+Conversation** via HACS (<https://github.com/michelle-avery/custom-conversation>).
+It's still a reasonable choice on HA versions before 2026.8, or if you want
+its specific features (Langfuse tracing, per-agent ignored-intents UI). Real
+compatibility bugs were found and fixed against it this way (decisions #40,
+#41) — missing `voluptuous-openapi` dependency, references to HA Core's
+since-removed `llm.AssistAPI` class, and a thinking-model chat-log crash —
+all fixed in the integration's own 1.7.0 release. If using it: configure it
+as the **OpenAI** provider with the router's base URL (same settings as
+above, but with a `/v1` suffix), persona goes in its "Customize Prompts" →
+`instructions_prompt` field (mislabeled enough in the UI that it's easy to
+miss — it is *not* called "Instructions Prompt" despite that being the
+field's internal purpose), and API choice **Assist**.
 
 ## 2. STT/TTS: Home Assistant's own native add-ons
 
@@ -139,7 +137,7 @@ trigger like "okay nabu" — the assistant still answers as Novak.
 
 Settings → Voice assistants → Add assistant, named **Novak**:
 
-- Conversation agent: Custom Conversation (→ `ha-voice`)
+- Conversation agent: HA's native LiteLLM agent (→ `ha-voice`)
 - STT: HA's native Whisper add-on, TTS: HA's native Piper add-on
 - Wake word: `hey_novak` (satellites) or a stock word (Voice PE)
 - Expose only the entities you actually want voice-controllable.

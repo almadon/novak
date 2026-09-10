@@ -1973,22 +1973,120 @@ Worked around, not fixed: switched the `ha-voice` and `task` roles in
 `registry/engines.yaml` from `qwen3:4b` to `qwen3:4b-instruct` and
 reapplied via `reconciler/router_apply.py`.
 
-**Still open, not root-caused:** the integration's "Instructions
-Prompt"/"Custom Prompts" section (where
-[prompts/novak-voice.md](../prompts/novak-voice.md)'s persona is meant to
-go) is defined unconditionally in the integration's own schema code
-(`config_flow.py`'s `section()`-wrapped `CONF_CUSTOM_PROMPTS_SECTION`)
-but never renders in the live Options dialog on this HA installation.
-`voluptuous_serialize` — the HA Core dependency responsible for turning
-that schema into JSON for the frontend — was confirmed completely absent
-from this install (`pip list` showed no such package) and was installed
-by hand (`pip install voluptuous-serialize`, from HA's own official
-wheel index), but the section still didn't appear after a restart. An
-isolated Python test showed `voluptuous_serialize.convert()` raising
-`ValueError: Unable to convert schema` on a bare `section()` object, but
-that test bypasses whatever custom-type registration HA Core's real boot
-sequence performs, so it isn't proof the same failure happens live.
-Deliberately stopped chasing this given the effort already spent — real
-open bug, not resolved. Net effect until it is: Custom Conversation
-answers with its own generic persona, not Novak's, even though the
-model/connection/tool-access all otherwise work correctly.
+**Correction, same night:** the "Instructions Prompt" field was never
+actually broken. It renders fine — it's just titled **"Customize
+Prompts"**, not "Custom Prompts" as assumed, and sits below the Agents
+and Ignored Intents sections in a dialog whose scroll behaviour was
+flaky all session (the same stuck-scroll issue hit repeatedly
+elsewhere). Confirmed directly: the backend's raw options-flow schema
+payload (fetched straight off the websocket API, bypassing the rendered
+UI) included the `custom_prompts` section with `instructions_prompt`
+correctly present the whole time, and the live DOM had a real,
+functioning `ha-form` for it once actually scrolled into view. Set
+[prompts/novak-voice.md](../prompts/novak-voice.md)'s persona into that
+field directly and confirmed via a real `conversation/process` call that
+Custom Conversation now answers as Novak. See decision #41 for what
+happened after that fix surfaced a *different*, genuinely deeper bug.
+
+## 41. Custom Conversation's Assist tool-calling: fixed upstream, then hit a real context-window limit, then a real model-reliability limit
+
+Direct continuation of decision #40. Setting the persona correctly (via
+the "Customize Prompts" fix) surfaced a fourth bug: any conversation
+turn through the **Assist** or **Custom Conversation LLM API** choice
+crashed with `litellm.InternalServerError: ... Object of type
+_Unsupported is not JSON serializable`, traced to HA's built-in
+`HassBroadcast` intent producing a tool parameter schema that
+`voluptuous_openapi` couldn't convert to JSON Schema. Adding
+`HassBroadcast` to Custom Conversation's own Ignored Intents list had no
+effect, and hand-patching `api.py`'s `ignored_intents` lookup (it read a
+flat key from what the UI actually saves as a nested section — a second,
+independent bug in the same file) still didn't clear it. Landed on **"No
+control"** for the night as the one API choice that doesn't build a tool
+list at all, confirmed persona-correct, and stopped there — real device
+control via the conversation agent was left not working.
+
+### The fix arrived upstream before a next session did
+
+`michelle-avery/custom-conversation` [1.7.0](https://github.com/michelle-avery/custom-conversation/releases/tag/1.7.0)
+shipped fixes for the exact two bugs found by hand:
+*"Fix: ignored-intents option is saved nested but read flat, so the UI
+setting has no effect"* and *"Fix YAML RepresenterError when an exposed
+entity's attribute key is an Enum"* (the decision #40 prompt_manager.py
+bug), plus a `Fix/ha 2026.9 compat` PR that replaces the removed
+`llm.AssistAPI.IGNORE_INTENTS` reference **and** swaps `voluptuous` for
+a new library (`probatio`) as the schema-conversion layer entirely.
+
+Upgraded via HACS, retested both `Assist` and `Custom Conversation LLM
+API`: **the `_Unsupported` crash is gone on both.** The hand-patches to
+`api.py`/`config_flow.py`/`prompt_manager.py` from decision #40 are now
+superseded by the real upstream fix and can be treated as gone (the
+HACS update overwrote them).
+
+### What broke next: a genuinely mundane context-window limit
+
+With the crash gone, both tool-calling modes failed instead with:
+
+```
+litellm.ContextWindowExceededError: request (7674 tokens) exceeds the
+available context size (4096 tokens)
+model=ha-voice
+```
+
+Ollama's default context window (4096) was never enough once the full
+Assist tool list is included in every turn. Fixed the same way decision
+#38's thinking-model swap was fixed — a new Ollama model tag, not a
+router code change (the reconciler's `registry/engines.yaml` schema has
+no field for this at all; extending it was a bigger lift than baking the
+setting into the model):
+
+```
+FROM qwen3:4b-instruct
+PARAMETER num_ctx 8192
+```
+
+Built as `qwen3:4b-instruct-ctx8k` via `ollama create`, pointed both
+`ha-voice` and `task` roles at it in `registry/engines.yaml`, reapplied
+with `reconciler/router_apply.py`, restarted the router. Confirmed via
+`ollama show --parameters` that `num_ctx 8192` actually took, and via a
+live request that the context error is gone.
+
+**A real gotcha hit applying this:** `router_apply.py` resolves its
+registry path from `$NOVAK_HOME`, which defaults to `~/.novak` when
+unset. Running it as `root` over SSH (rather than as whatever user
+normally drives `novak` commands, with `NOVAK_HOME` set in their shell
+profile) silently fell through to the **repo's own checked-in template
+`registry/engines.yaml`** — a stale oMLX-era example — because
+`~/.novak` didn't exist for `root` and the script's fallback is exactly
+that: fall back to the repo default, no error. Caught only by noticing
+the dry-run output named `omlx`/`Qwen3-4B-Instruct-2507-4bit` instead of
+`ollama-local`/`qwen3:...`. The real deployed path, confirmed via
+`docker inspect novak-router-1`'s mounts, is
+`/mnt/cache/appdata/stacks/Novak` — passed explicitly as
+`NOVAK_HOME=... python3 reconciler/router_apply.py` from then on. Worth
+remembering: this script's silent-fallback-to-repo-template behavior is
+a footgun for anyone running it outside its normal invocation context.
+
+### What's left: the model itself isn't reliable at tool-calling yet
+
+With both bugs and the context limit gone, device control was tested
+directly and is **inconsistent, not fixed**: asked Custom Conversation
+to turn on a specific light by name, and it replied *"Light L2 Dining
+Room Accent is now on"* — a different entity than the one named — with
+an **empty `success`/`failed` array** in the structured response,
+meaning no tool was actually invoked at all; the target entity's state
+and `last_changed` timestamp were unchanged. A differently-phrased
+request in the same session *did* produce a real `HassTurnOn` call with
+genuine area/entity metadata in the response. Same model
+(`qwen3:4b-instruct-ctx8k`), same system prompt (which already
+explicitly instructs *"When controlling Home Assistant always call the
+intent tools"*) — sometimes it complies, sometimes it just narrates a
+plausible-sounding success.
+
+This reads as a capability limit of a 4B model doing real tool
+selection against a large exposed-entity set, not a further integration
+bug. **Left on "No control" again, deliberately** — a wrong "the light
+is on" when it isn't is worse than the feature being absent, and this
+isn't a "keep patching" problem the way the last three were; it needs
+either a stronger model for the `ha-voice` role, a smaller
+exposed-entity set, or lower temperature/different sampling before it's
+trustworthy enough to turn on. Not attempted tonight.

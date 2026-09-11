@@ -203,16 +203,23 @@ whether this is private and whether it is safe. Same on both platforms.
 
 ## Phase 8 — Voice *(optional; skip to come back later)*
 
-See [home-assistant.md](home-assistant.md). Not yet set up on the Unraid
-reference deployment as of this writing — tracked as open follow-up work,
-not verified there.
+See [home-assistant.md](home-assistant.md). Set up and verified on the
+Unraid reference deployment (decisions #39–#42) — persona-correct, real
+device control confirmed.
 
-- [ ] HACS: install **Custom Conversation**
-      (<https://github.com/michelle-avery/custom-conversation>), and point
-      it at your engine's base URL (`DEFAULT_ENGINE_BASE_URL`, or the
-      router once set up) with the `ha-voice` role's model name. Keep HA's
-      built-in Assist API for device control; tools come via MCP below.
-      Decision 19 covers why not the other two candidates.
+- [ ] Add HA Core's own native **LiteLLM** integration (Settings →
+      Devices & Services → Add Integration → "LiteLLM" — built in since
+      HA 2026.8, nothing to install from HACS). Point it at the router's
+      URL, add a conversation agent for the `ha-voice` role, paste
+      [prompts/novak-voice.md](../prompts/novak-voice.md) into its
+      Instructions field, and check "Assist" for device control. Wire the
+      new agent into your actual Assist pipeline (Settings → Voice
+      assistants) — adding the integration alone doesn't do this.
+      **On HA versions before 2026.8**, use **Custom Conversation** via
+      HACS instead (<https://github.com/michelle-avery/custom-conversation>)
+      — see [home-assistant.md](home-assistant.md)'s "History" section for
+      that setup and the real compatibility bugs found running it.
+      Decision 19 covers why not the other HACS candidates.
 - [ ] STT/TTS: use Home Assistant's own native Whisper/Piper add-ons
       (decision #39) rather than standing up a second copy — install both
       from the Store if not already present. Wyoming wake word detection

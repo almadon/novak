@@ -165,10 +165,13 @@ at all, and it still doesn't exist. See [STATE.md](STATE.md).
 **Text chat**: browser → Open WebUI → oMLX (`chat`); tool calls go Open
 WebUI → MCP servers → Outline/Vikunja/Hindsight.
 
-**Voice via HA**: speaker → HA Assist → Wyoming whisper (STT, on the mini)
-→ conversation agent → oMLX (`ha-voice`) with HA-registered MCP tools →
-Wyoming piper (TTS, on the mini) → speaker. Same memory, same knowledge,
-no Open WebUI in the loop.
+**Voice via HA**: speaker → HA Assist → HA's own native Whisper add-on
+(STT, decision #39 — no longer a Novak container) → HA's native `litellm`
+conversation agent (decision #42) → the router → Ollama (`ha-voice`) with
+HA's own Assist API for device control → HA's own native Piper add-on
+(TTS) → speaker. Wake word detection is the one voice piece still served
+by Novak itself, via `openwakeword` (Wyoming). Same memory, same
+knowledge, no Open WebUI in the loop.
 
 ## Privacy / leakage model
 
@@ -185,8 +188,10 @@ prompt.
 
 **Corrected 2026-09-04, superseding the previous correction below.** The
 migration decision #28 recorded is now complete, not aspirational:
-Hindsight, Open WebUI, the console, the Wyoming voice services, and Ollama
-all run together on Spire (Unraid, AMD RDNA4 GPU). Mitochon (the Mac mini)
+Hindsight, Open WebUI, the console, `openwakeword` (the one Wyoming voice
+service Novak still runs — whisper/piper were decommissioned, decision
+#39), and Ollama all run together on Spire (Unraid, AMD RDNA4 GPU).
+Mitochon (the Mac mini)
 has been taken down as a server and is kept only for oMLX development —
 Novak's household deployment has no dependency on it running.
 
@@ -215,7 +220,7 @@ one host:
 | oMLX | Metal/MLX — cannot be containerized or moved | Mitochon, kept for development only, not depended on in production |
 | Ollama | needs a GPU worth using | Spire (RDNA4/Vulkan) — the household's real `deep`/`chat`/`ha-voice` engine now |
 | Hindsight | every memory write triggers an LLM extraction call — wants to be next to whichever engine serves it | Spire, pointed at Spire's own Ollama (`HINDSIGHT_LLM_MODEL`/`HINDSIGHT_LLM_PROVIDER`), not oMLX |
-| Wyoming STT/TTS | voice latency budget is ~1–2s end to end; keep close to HA and the satellites | Spire, same LAN as HA |
+| `openwakeword` (Wyoming) | voice latency budget is ~1–2s end to end; keep close to HA and the satellites | Spire, same LAN as HA |
 | Open WebUI | just a frontend; reaches whichever engine(s) the router points at | Spire |
 | Console | reaches Hindsight often, Pocket ID once per session | Spire, with Hindsight |
 
@@ -241,18 +246,19 @@ proxy doing it is in question here.
    [public internet, if this deployment has any — see the VERIFY above]
                                      │
                                      ▼
-                     Caddy (LAN-neighboring host, not this Mac)
+                     Caddy (LAN-neighboring host, not Spire)
                                      │
                                      ▼
-                          Open WebUI    (this Mac, same host as oMLX)
+                          Open WebUI    (Spire)
                                      │
                                      ▼
-                          oMLX · Hindsight · Konzol   (this Mac)
+                    Ollama (Spire) · Hindsight · Konzol   (Spire)
                                      ▲
-                          Wyoming voice ── HA + satellites    (LAN)
+                    HA (own host) ── openwakeword (Spire), HA's own
+                                      native Whisper/Piper add-ons
 
    LAN / tailnet ──▶ Portal's own Caddy ──▶ TinyAuth ──▶ Open WebUI, Konzol
-                      (Mac, home — decision #22; not the VPS Caddy above,
+                      (decision #22; not the VPS Caddy above,
                        and not public — see docs/proxy.md)
 ```
 
@@ -274,18 +280,26 @@ Two consequences worth being explicit about:
 
 ## Ports
 
+All external ports below are Spire's, in the `134xx` range by convention
+(decision #33) except where noted; the `${VAR:-default}` is each one's
+`.env` override.
+
 | Service | Port |
 |---|---|
-| oMLX | per app config (`OMLX_PORT`) |
-| Open WebUI | 3000 |
+| oMLX | per app config (`OMLX_PORT`) — Mitochon, development only |
+| Ollama | `11434` (`OLLAMA_PORT`) |
+| Router (LiteLLM) | `13402` (`ROUTER_PORT`) |
+| Open WebUI | `13400` (`OPENWEBUI_PORT`) |
 | Outline MCP | external — `https://et.a64.one/mcp` |
-| Vikunja MCP | 8002 |
-| Hindsight (API + MCP) | 8888 |
-| Hindsight (web UI) | 9999 |
-| Console | 3002 |
-| Wyoming whisper (STT) | 10300 |
-| Wyoming piper (TTS) | 10200 |
-| Wyoming openWakeWord | 10400 |
+| Vikunja MCP | `8002` |
+| Hindsight (API + MCP) | `13403` (`HINDSIGHT_PORT`) |
+| Hindsight (web UI) | `13404` (`HINDSIGHT_UI_PORT`) |
+| Console | `13401` (`CONSOLE_PORT`) |
+| Wyoming openWakeWord | `13407` (`OPENWAKEWORD_PORT`) |
+
+STT/TTS are no longer Novak-hosted ports at all (decision #39) — they're
+HA's own native Whisper/Piper add-ons, running on whatever host HA itself
+runs on, outside this table's scope.
 
 All LAN-only. For remote access use Tailscale; never port-forward.
 

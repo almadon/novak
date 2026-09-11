@@ -24,15 +24,15 @@ this repo or any image built from it.
 | [Brave Search API](https://api.search.brave.com/) | Web search, shared by Open WebUI and Home Assistant | Proprietary API, free tier |
 | [@modelcontextprotocol/server-brave-search](https://github.com/modelcontextprotocol/servers) | MCP access to Brave Search | MIT |
 | [supergateway](https://github.com/supercorp-ai/supergateway) | Wraps stdio MCP servers as HTTP — now actually running (brave-search), previously catalogued but unused | VERIFY |
-| [Wyoming / Rhasspy](https://github.com/rhasspy) | Voice protocol; whisper, piper, openWakeWord services | MIT |
-| [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | Speech to text | MIT |
-| [Piper](https://github.com/OHF-Voice/piper1-gpl) | Text to speech. Development moved to the Open Home Foundation as `piper1-gpl`; the old `rhasspy/piper` repo was archived Oct 2025 and its banner is widely misread as abandonment | GPL-3.0 |
-| [openWakeWord](https://github.com/dscripka/openWakeWord) | Wake word detection | Apache-2.0 |
+| [Wyoming / Rhasspy](https://github.com/rhasspy) | Voice protocol; Novak runs the `openwakeword` service over it (decision #39 retired the whisper/piper ones — see below) | MIT |
+| [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | Speech to text — via Home Assistant's own native Whisper add-on, not a Novak container (decision #39) | MIT |
+| [Piper](https://github.com/OHF-Voice/piper1-gpl) | Text to speech — via Home Assistant's own native Piper add-on, not a Novak container (decision #39). Development moved to the Open Home Foundation as `piper1-gpl`; the old `rhasspy/piper` repo was archived Oct 2025 and its banner is widely misread as abandonment | GPL-3.0 |
+| [openWakeWord](https://github.com/dscripka/openWakeWord) | Wake word detection — the one voice service Novak still runs itself | Apache-2.0 |
 | [Pocket ID](https://github.com/pocket-id/pocket-id) | Single sign-on | VERIFY |
 | [Home Assistant](https://www.home-assistant.io) | Home automation, voice pipeline | Apache-2.0 |
 | [Caddy](https://github.com/caddyserver/caddy) | Reverse proxy in front of the portal | Apache-2.0 |
 | [TinyAuth](https://github.com/tinyauthapp/tinyauth) | Forward-auth for the portal, against Pocket ID | AGPL-3.0 |
-| [LiteLLM](https://github.com/BerriAI/litellm) | Inference router — persona injection in front of oMLX (decision #21/#23) | MIT for everything used here; an `enterprise/` subdirectory is separately licensed and not enabled |
+| [LiteLLM](https://github.com/BerriAI/litellm) | Inference router — persona injection in front of the engine (decision #21/#23). Also, separately: Home Assistant Core's own native `litellm` conversation-agent integration (added HA 2026.8) talks to this same router — decision #42 | MIT for everything used here; an `enterprise/` subdirectory is separately licensed and not enabled |
 
 ## Used to build the console and shim
 

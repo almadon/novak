@@ -87,13 +87,21 @@ down.
 | Service | Tag |
 |---|---|
 | open-webui | `:main` |
-| console | `:latest` |
+| console | `:latest` (default; `CONSOLE_IMAGE` override) |
 | hindsight | `:latest` |
-| whisper | `:latest` |
-| piper | `:latest` |
 | openwakeword | `:latest` |
+| ollama | `:latest` |
 
-All six. `docs/credits.md` already records unpinned `npx -y` MCP servers as a
+Five now, not the six this once said — whisper/piper are gone entirely
+(decision #39, HA's own native add-ons do that job now), `ollama` is new
+since the Spire migration (decision #28) and still unpinned. Three
+services **have** since been pinned and aren't in this table anymore:
+`caddy:2`, `tinyauth:v5`, and `router` (LiteLLM), which is pinned to an
+exact image digest, not just a tag — the strongest form of this fix,
+applied to the one service most worth trusting not to change silently
+(decision #21's persona injection lives there).
+
+`docs/credits.md` already records unpinned `npx -y` MCP servers as a
 known weakness, which is the honest-open-item treatment the standard asks
 for, but it does not cover the images themselves.
 

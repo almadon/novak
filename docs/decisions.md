@@ -2418,3 +2418,42 @@ says to reread `STATE.md`/`decisions.md` before trusting the rest of
 Correctly triaged as the weaker case in the audit itself — its
 justification is about changes a *user* would notice, and there is no
 tagged release yet. Left for the first one, not built ahead of its need.
+
+## 47. Every VERIFY licence in credits.md checked directly
+
+`docs/credits.md` carried eight `VERIFY` licences — the conformIT audit's
+"Not checked" section named this directly as "still a release gate."
+Checked each against a primary source: GitHub's repository licence API
+(`gh api repos/<owner>/<repo> --jq '.license.spdx_id'`) where the project
+is a GitHub repo, npm registry metadata (`license` field) for the two MCP
+packages, and the actual `LICENSE` file content where the API's guess
+looked incomplete.
+
+**Findings:**
+
+- oMLX, outline-mcp-server, Tududi, `@aimbitgmbh/vikunja-mcp`,
+  supergateway: as expected, resolved cleanly to Apache-2.0/MIT.
+- Pocket ID: BSD-2-Clause, not previously guessed at.
+- **Open WebUI was the one worth reading in full, not trusting a single
+  SPDX tag for.** GitHub's API returns `NOASSERTION` — it isn't a stock
+  licence, so the detector can't classify it. The actual `LICENSE` file
+  is BSD-3-Clause-style redistribution terms plus a fourth clause
+  prohibiting altering or removing "Open WebUI" branding, with an
+  explicit carve-out for deployments under 50 end users in any rolling
+  30 days (also: written permission, or an enterprise licence). Novak
+  runs the image unmodified and is a household deployment well under
+  that threshold — compliant as actually run here, which the prior note
+  ("has had licence changes") didn't establish either way.
+- **microWakeWord-Trainer-AppleSilicon (decision #43) has no LICENSE
+  file at all** — confirmed by checking `LICENSE`/`LICENSE.md`/
+  `LICENSE.txt` directly (all 404) as well as GitHub's own detector.
+  Default copyright applies: all rights reserved, no redistribution
+  permission granted by the author. Not a problem for how it's actually
+  used here — cloned, run once locally, output kept, never
+  redistributed, the same posture `credits.md` already applies to other
+  run-once build tooling — but it's the one entry in this table with
+  *no* grant at all, worth a real look before this project ever
+  redistributes anything built with it.
+
+**Cost:** none — this was reading, not building. `docs/credits.md`
+updated in place; no VERIFY licence markers remain as of this decision.

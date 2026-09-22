@@ -5,40 +5,52 @@ on and what was evaluated, so credit is traceable and so licence obligations
 can be checked before anything is published.
 
 **Licences marked VERIFY have not been checked.** Do that before distributing
-this repo or any image built from it.
+this repo or any image built from it. (As of 2026-09-22, none are — every
+licence below was checked directly against the upstream repo or registry;
+see decision #47.)
 
 ## Running in the stack
 
 | Project | Used for | Licence |
 |---|---|---|
-| [oMLX](https://omlx.ai) | Inference on Apple Silicon | VERIFY |
+| [oMLX](https://omlx.ai) | Inference on Apple Silicon | Apache-2.0 |
 | [MLX](https://github.com/ml-explore/mlx) | Apple's array framework under oMLX | MIT |
-| [Open WebUI](https://github.com/open-webui/open-webui) | Chat frontend | VERIFY (has had licence changes) |
+| [Open WebUI](https://github.com/open-webui/open-webui) | Chat frontend | Custom (BSD-3-Clause-style, plus a branding-retention clause — see below) |
 | [Hindsight](https://github.com/vectorize-io/hindsight) | Long-term memory — serves MCP natively | MIT |
 
 | [Outline](https://github.com/outline/outline) | Knowledge base | BSL 1.1 — **check before any commercial use** |
-| [outline-mcp-server](https://www.npmjs.com/package/outline-mcp-server) | MCP access to Outline | VERIFY |
+| [outline-mcp-server](https://www.npmjs.com/package/outline-mcp-server) | MCP access to Outline | MIT |
 | [Vikunja](https://vikunja.io) | Tasks | AGPL-3.0 |
-| [Tududi](https://github.com/chrisvel/tududi) | Tasks — **serves MCP natively**, no adapter needed | VERIFY |
-| [@aimbitgmbh/vikunja-mcp](https://www.npmjs.com/package/@aimbitgmbh/vikunja-mcp) | MCP access to Vikunja | VERIFY |
+| [Tududi](https://github.com/chrisvel/tududi) | Tasks — **serves MCP natively**, no adapter needed | MIT |
+| [@aimbitgmbh/vikunja-mcp](https://www.npmjs.com/package/@aimbitgmbh/vikunja-mcp) | MCP access to Vikunja | MIT |
 | [Brave Search API](https://api.search.brave.com/) | Web search, shared by Open WebUI and Home Assistant | Proprietary API, free tier |
 | [@modelcontextprotocol/server-brave-search](https://github.com/modelcontextprotocol/servers) | MCP access to Brave Search | MIT |
-| [supergateway](https://github.com/supercorp-ai/supergateway) | Wraps stdio MCP servers as HTTP — now actually running (brave-search), previously catalogued but unused | VERIFY |
+| [supergateway](https://github.com/supercorp-ai/supergateway) | Wraps stdio MCP servers as HTTP — now actually running (brave-search), previously catalogued but unused | MIT |
 | [Wyoming / Rhasspy](https://github.com/rhasspy) | Voice protocol; Novak runs the `openwakeword` service over it (decision #39 retired the whisper/piper ones — see below) | MIT |
 | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | Speech to text — via Home Assistant's own native Whisper add-on, not a Novak container (decision #39) | MIT |
 | [Piper](https://github.com/OHF-Voice/piper1-gpl) | Text to speech — via Home Assistant's own native Piper add-on, not a Novak container (decision #39). Development moved to the Open Home Foundation as `piper1-gpl`; the old `rhasspy/piper` repo was archived Oct 2025 and its banner is widely misread as abandonment | GPL-3.0 |
 | [openWakeWord](https://github.com/dscripka/openWakeWord) | Wake word detection — the one voice service Novak still runs itself | Apache-2.0 |
-| [Pocket ID](https://github.com/pocket-id/pocket-id) | Single sign-on | VERIFY |
+| [Pocket ID](https://github.com/pocket-id/pocket-id) | Single sign-on | BSD-2-Clause |
 | [Home Assistant](https://www.home-assistant.io) | Home automation, voice pipeline | Apache-2.0 |
 | [Caddy](https://github.com/caddyserver/caddy) | Reverse proxy in front of the portal | Apache-2.0 |
 | [TinyAuth](https://github.com/tinyauthapp/tinyauth) | Forward-auth for the portal, against Pocket ID | AGPL-3.0 |
 | [LiteLLM](https://github.com/BerriAI/litellm) | Inference router — persona injection in front of the engine (decision #21/#23). Also, separately: Home Assistant Core's own native `litellm` conversation-agent integration (added HA 2026.8) talks to this same router — decision #42 | MIT for everything used here; an `enterprise/` subdirectory is separately licensed and not enabled |
 
+**Open WebUI's licence, in full**: BSD-3-Clause-style redistribution terms,
+plus a fourth clause prohibiting removal or alteration of "Open WebUI"
+branding — with an explicit carve-out for deployments under 50 end users in
+any rolling 30 days, prior written permission, or an enterprise licence.
+Novak runs the image unmodified, doesn't touch its branding, and is a
+household deployment well under that threshold, so this is compliant as
+run here — flagging this explicitly rather than leaving it as an unchecked
+VERIFY, since "has had licence changes" (the prior note) undersold how
+specific the actual restriction is.
+
 ## Used for wake word training
 
 | Project | Used for | Licence |
 |---|---|---|
-| [microWakeWord-Trainer-AppleSilicon](https://github.com/TaterTotterson/microWakeWord-Trainer-AppleSilicon) | Trains the on-device "Hey Novak" model for ESPHome satellites/Voice PE (decision #43) — run once on a Mac, not a running service | VERIFY |
+| [microWakeWord-Trainer-AppleSilicon](https://github.com/TaterTotterson/microWakeWord-Trainer-AppleSilicon) | Trains the on-device "Hey Novak" model for ESPHome satellites/Voice PE (decision #43) — run once on a Mac, not a running service | **None** — no LICENSE file in the repo, confirmed directly (checked `LICENSE`/`LICENSE.md`/`LICENSE.txt`, all 404, and GitHub's own licence detector agrees). Default copyright applies: all rights reserved, no redistribution permission granted. Used here only as a local tool — cloned, run once on a Mac, output kept locally, never redistributed — the same posture as everything else in this table that's "used to build," not shipped. Worth a real look before this project ever redistributes anything built with it. |
 
 ## Used to build the console and shim
 

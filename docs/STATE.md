@@ -96,6 +96,11 @@ itself the way the rest of the stack has.
   and error across sessions). Also caught and removed a stale claim in
   this file: `novak guided-setup` already existed and was never crossed
   off "Not started" below.
+- **Every VERIFY licence in credits.md checked directly** (decision #47).
+  Notably: Open WebUI's real licence has a branding-retention clause
+  (this deployment is exempt, under its 50-user/30-day threshold), and
+  the microWakeWord trainer (decision #43) has no LICENSE file at all —
+  fine for local, never-redistributed use.
 
 ## Decided, not built
 
@@ -116,7 +121,13 @@ itself the way the rest of the stack has.
 
 - Whether Hindsight has a trash, before trusting `delete` to be
   recoverable.
-- Licences marked VERIFY in [credits.md](credits.md).
+- ~~Licences marked VERIFY in credits.md~~ — done (decision #47). All
+  eight checked directly; none remain. Worth noting: Open WebUI's actual
+  licence has a branding-retention clause (exempt under 50 users/30
+  days, which this deployment is), and the microWakeWord trainer
+  (decision #43) has no LICENSE file at all — fine for the local,
+  never-redistributed use it gets here, not fine to build on for
+  anything redistributed later.
 - **The portal's OAuth-group restriction against a live Pocket ID
   login**, on whichever deployment actually runs the portal. Everything
   about TinyAuth's startup and the OIDC connection was verified

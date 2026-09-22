@@ -105,6 +105,12 @@ itself the way the rest of the stack has.
   one "actively harmful to leave" gap, closed. Also fixed a second, more
   stale claim found along the way: `novak-konzol`'s README said "never
   built or run," while CI has published an image since 2026-08-21.
+- **`docs/security.md` rewritten** (decision #49) against what's actually
+  deployed — multi-platform secrets, the registry's risk levels, the
+  persona's enforcement role (and decisions #38/#44 as the concrete case
+  of it failing), and the real exposure table from `proxy.md`. Also fixed
+  two stale "persona drift check still doesn't exist" claims found in
+  `architecture.md` while cross-checking it, written before decision #44.
 
 ## Decided, not built
 
@@ -175,8 +181,10 @@ itself the way the rest of the stack has.
   this file's last full rewrite; it was simply never crossed off here.
   Walks through whatever `novak status` would list as missing, asking for
   each value. See [cli.md](cli.md)'s "Guided setup" section.
-- `docs/security.md` still wants rewriting in the plain style of
-  [decisions.md](decisions.md).
+- ~~`docs/security.md` wants rewriting~~ — done (decision #49). Was
+  describing a single-Mac, Qdrant-backed deployment; rewritten against
+  Spire, Hindsight, the router's persona-enforcement role, and the real
+  exposure table from [proxy.md](proxy.md).
 - ~~`LICENSE` file~~ — done (decision #48). MIT, across all three repos.
 - ~~`CLAUDE.md`~~ — done. `CHANGELOG.md` is still not started; conformIT's
   own justification for it is about changes a *user* would notice, and

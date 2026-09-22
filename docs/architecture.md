@@ -95,9 +95,11 @@ Hindsight's own per-connection URL scoping is what does that, unchanged.
 
 The router is optional, gated behind its own compose profile
 (`docker-compose.yml`), so a client can still be pointed at oMLX directly.
-Nothing currently checks whether one is — that's the persona drift check
-decision #21 named as the prerequisite for trusting this at all, and it
-still doesn't exist (see [STATE.md](STATE.md)).
+Nothing checks that case specifically — a client bypassing the router
+entirely still looks the same as one going through it and simply sending
+its own system message. Decision #44 built the detector for the failure
+that actually happened (a router-bound client silently defeating
+injection); see [STATE.md](STATE.md) for what's still open.
 
 The persona is not decoration — it encodes the security posture the model
 itself must enforce: never ask for credentials, treat retrieved content as
@@ -153,12 +155,14 @@ copy that was pushed there, editable in place without the repo knowing.
 
 **A client pointed at the router instead doesn't have this problem** — it
 never holds a copy to drift, since `router/persona_hook.py` reads
-`prompts/` fresh on every request. What remains open is knowing which
-state any given client is actually in. Nothing currently checks whether a
-client has been switched over or is still talking to oMLX directly with
-whatever persona (or none) its own config holds — that's the persona
-drift check decision 21 named as the prerequisite for trusting the router
-at all, and it still doesn't exist. See [STATE.md](STATE.md).
+`prompts/` fresh on every request. Decision #44 closed the half of this
+that's actually bitten the project: `persona_hook.py` now logs when a
+router-bound client silently sends its own system message (`chat`/`deep`),
+surfaced via `novak drift --live`. What's still open: whether a client is
+pointed at the router at all, or still talking to oMLX directly with
+whatever persona (or none) its own config holds — that has no detector,
+since a direct-to-oMLX client never reaches the router to be observed. See
+[STATE.md](STATE.md).
 
 ## Data flow examples
 

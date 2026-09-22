@@ -2384,3 +2384,37 @@ session. **VERIFY** on the next `novak update` or fresh deploy: that each
 service still starts, and that automated builds elsewhere
 (`.github/workflows`, if any reference these images by tag) aren't
 affected by the change.
+
+## 46. `CLAUDE.md` added, and a stale STATE.md claim found while writing it
+
+conformIT audit gap #6: `CLAUDE.md` was the one required file with a real,
+immediate cost, named in the audit as an "afternoon [of work] and pays for
+itself" — conventions like the commit hook's 72-character subject limit
+had been rediscovered by trial and error across sessions rather than
+written down once.
+
+Wrote [CLAUDE.md](../CLAUDE.md) from what was actually observable in this
+repo's own history and existing docs: `docs/commit-style.md`'s rules, the
+actual branch/PR pattern recent commits show (`git checkout -b`, `gh pr
+create`, `gh pr merge --merge --delete-branch`), conformIT's no-em-dash
+rule stated as forward-looking rather than already-true (the audit found
+Novak fails it at scale and deliberately deferred that cleanup — the new
+file says so explicitly, so a future session doesn't assume the docs
+already conform), and where `prompts/`/`registry/` sit as live config
+versus `docs/` as reasoning.
+
+**A concrete example of the exact problem this file exists to prevent,
+found while writing it**: `STATE.md`'s "Not started" section still listed
+"No interactive first-run wizard" — `novak guided-setup` has existed since
+2026-09-04 (confirmed via `git log -S`), before this file's own last full
+rewrite (2026-09-10). It was built and simply never crossed off. Fixed in
+the same pass as this decision. Nothing about this was a large drift — one
+stale bullet in one file — but it is exactly the class of thing `STATE.md`
+itself warns is easy to miss, and the reason `CLAUDE.md`'s own guidance
+says to reread `STATE.md`/`decisions.md` before trusting the rest of
+`docs/` at face value.
+
+**Not done:** `CHANGELOG.md`, conformIT's other required-file gap.
+Correctly triaged as the weaker case in the audit itself — its
+justification is about changes a *user* would notice, and there is no
+tagged release yet. Left for the first one, not built ahead of its need.

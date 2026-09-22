@@ -101,6 +101,10 @@ itself the way the rest of the stack has.
   (this deployment is exempt, under its 50-user/30-day threshold), and
   the microWakeWord trainer (decision #43) has no LICENSE file at all —
   fine for local, never-redistributed use.
+- **Licensed MIT across all three repos** (decision #48) — the audit's
+  one "actively harmful to leave" gap, closed. Also fixed a second, more
+  stale claim found along the way: `novak-konzol`'s README said "never
+  built or run," while CI has published an image since 2026-08-21.
 
 ## Decided, not built
 
@@ -173,11 +177,7 @@ itself the way the rest of the stack has.
   each value. See [cli.md](cli.md)'s "Guided setup" section.
 - `docs/security.md` still wants rewriting in the plain style of
   [decisions.md](decisions.md).
-- **`LICENSE` file.** Public repo, still all-rights-reserved by default.
-  Flagged by the conformIT audit ([conformit-audit.md](conformit-audit.md))
-  as the one gap worth treating as active harm, not a backlog item. The
-  choice of licence is the maintainer's call, not something to default
-  silently.
+- ~~`LICENSE` file~~ — done (decision #48). MIT, across all three repos.
 - ~~`CLAUDE.md`~~ — done. `CHANGELOG.md` is still not started; conformIT's
   own justification for it is about changes a *user* would notice, and
   there's been no tagged release yet — worth starting at the first one

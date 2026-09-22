@@ -251,3 +251,9 @@ Powerful tools are allowed, but the ones that can change your system or act
 irreversibly have to be switched on deliberately: the file records what a tool
 can do, who agreed to it, and when. Turning it back off takes nothing. The
 point isn't to stop you; it's so that in a year you can see what you agreed to.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE). What this repo runs is other people's work too;
+see [docs/credits.md](docs/credits.md) for what each dependency is licensed
+under, since several are copyleft or otherwise conditional.

@@ -2457,3 +2457,33 @@ looked incomplete.
 
 **Cost:** none — this was reading, not building. `docs/credits.md`
 updated in place; no VERIFY licence markers remain as of this decision.
+
+## 48. Licensed MIT, across all three repos
+
+conformIT audit gap #1, and the only one the audit itself called "actively
+harmful to leave" — a public repo with no `LICENSE` file is all-rights-
+reserved by default, the opposite of what a public repo usually intends.
+The audit was explicit that this choice belongs to the maintainer, not to
+an automated pass, so it stayed open until asked directly.
+
+**Chosen: MIT**, across `novak`, `novak-konzol`, and `novak-integracije` —
+conformIT's own stated default "for an application not intended for reuse
+[as a library]," which fits: nothing here is packaged for import elsewhere,
+and the goal is that people can fork, self-host, and modify freely, not
+that the code become a dependency.
+
+Added a `LICENSE` file (standard MIT text, copyright Tyler Meuse, 2026 —
+each repo's first commit) and a `## Licence` section to each repo's
+`README.md`, pointing at `docs/credits.md` in `novak`'s case since several
+of *its* dependencies carry their own, more restrictive terms (AGPL-3.0,
+GPL-3.0, BSL 1.1) that MIT-licensing Novak's own code does not change.
+
+**While in `novak-konzol`'s README for this**: found and fixed a second
+stale status claim, unrelated to licensing — "never built or run, no npm
+install has happened" — while CI has actually been building and
+publishing an image to `ghcr.io/almadon/novak-konzol` since 2026-08-21.
+Replaced with what's actually true: it builds and publishes, and is still
+three placeholder pages with no real components, per this repo's own
+`docs/STATE.md`. The same habit `CLAUDE.md` (decision #46) was written to
+name keeps surfacing in small, easy-to-miss ways across all three repos,
+not just this one.

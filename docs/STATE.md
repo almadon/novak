@@ -91,6 +91,11 @@ itself the way the rest of the stack has.
   `console`, `hindsight`, `openwakeword`, and `ollama` join `caddy`,
   `tinyauth`, and `router`, which were already pinned. Not yet pulled on
   a live host; see Open VERIFY below.
+- **`CLAUDE.md` added** (decision #46) — conformIT's required-file gap,
+  the one with the real immediate cost (conventions rediscovered by trial
+  and error across sessions). Also caught and removed a stale claim in
+  this file: `novak guided-setup` already existed and was never crossed
+  off "Not started" below.
 
 ## Decided, not built
 
@@ -150,17 +155,22 @@ itself the way the rest of the stack has.
 - Konzol has three placeholder pages and a design token layer, no
   components — less urgent now that the portal (where deployed) covers
   the cross-app viewing want that was the main pressure on it.
-- No interactive first-run wizard; `novak status` names what is missing.
+- ~~No interactive first-run wizard~~ — stale claim, removed. `novak
+  guided-setup` (also menu item 4) has existed since 2026-09-04, before
+  this file's last full rewrite; it was simply never crossed off here.
+  Walks through whatever `novak status` would list as missing, asking for
+  each value. See [cli.md](cli.md)'s "Guided setup" section.
 - `docs/security.md` still wants rewriting in the plain style of
   [decisions.md](decisions.md).
 - **`LICENSE` file.** Public repo, still all-rights-reserved by default.
   Flagged by the conformIT audit ([conformit-audit.md](conformit-audit.md))
-  as the one gap worth treating as active harm, not a backlog item.
-- **`CLAUDE.md` and `CHANGELOG.md`**, both on conformIT's required-file
-  list. `CLAUDE.md` has a real, immediate cost: conventions like the
-  72-character commit subject limit keep getting rediscovered by trial
-  and error across sessions, which is exactly what the file exists to
-  prevent.
+  as the one gap worth treating as active harm, not a backlog item. The
+  choice of licence is the maintainer's call, not something to default
+  silently.
+- ~~`CLAUDE.md`~~ — done. `CHANGELOG.md` is still not started; conformIT's
+  own justification for it is about changes a *user* would notice, and
+  there's been no tagged release yet — worth starting at the first one
+  rather than now.
 - ~~**Version pinning**~~ — done (decision #45). Every image in
   `docker-compose.yml` now pins to a digest, not a moving tag. Not yet
   verified against a live pull; see Open VERIFY below.

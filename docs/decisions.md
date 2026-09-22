@@ -2269,3 +2269,63 @@ Training produced the artifact; it isn't on a satellite yet. Per
 work (ESPHome Builder adoption for HA Voice PE, or a custom firmware
 build for a Satellite1) and "costs more than a file copy" — tracked
 separately in STATE.md, not resolved by this decision.
+
+## 44. A real persona drift check, for the failure mode that actually bit us
+
+STATE.md has carried "client-side persona drift check — still does not
+exist" as an open item since decision #38, describing it as "exactly what
+let decision #38's Open WebUI bug go unnoticed until someone actually
+looked at a real chat." Decision #18's original framing of this problem
+was text drift — a client's copy of the persona diverging from
+`prompts/`. That's not what actually happened. What happened was a
+client silently sending its *own* system message at all, which makes
+`persona_hook.py`'s `async_pre_call_hook` (decision #21) skip injection
+entirely, by design — the router has no persona text to compare, because
+none of its own text was ever sent.
+
+That's a detectable event, not a content diff, and it doesn't need a new
+credential: `router/persona_hook.py` already knows, on every single call,
+whether it just skipped injecting. It was simply throwing that fact away.
+
+### What changed
+
+`persona_hook.py` now logs `PERSONA_DRIFT` (a `logger.warning`, tagged for
+grepping) whenever a request for a router-injected model (`chat`, `deep`)
+arrives with `messages[0]` already `role: system` — the exact condition
+decision #38 found by accident, now observable without a live chat test.
+`ha-voice` is deliberately excluded: HA's native `litellm` integration
+(decision #42) is *supposed* to send its own system message (a manual
+copy of `prompts/novak-voice.md` pasted into its Instructions field), so
+flagging that would be 100% noise.
+
+`novak drift --live` (new flag, opt-in — everything else `novak drift`
+does is file-only and credential-free by design, and this genuinely isn't:
+it needs docker reachability to wherever the router container runs)
+greps `docker compose logs router --since 24h` for that tag and reports
+what it finds, with a pointer at the specific Open WebUI setting decision
+#38 traced this to.
+
+### Verified offline, not yet live
+
+The hook logic was exercised directly against `router/persona_hook.py`
+with `litellm` stubbed out (no live router available from where this was
+written) — confirmed it injects normally with no client system message,
+warns for `chat` with one, and stays silent for `ha-voice` with one. The
+`novak drift --live` grep itself has not been run against a real
+deployment. **VERIFY**: run it on Spire, and confirm a warning actually
+appears if Builtin Tools/Memory get re-enabled on a model preset again.
+
+### What this does not solve
+
+The other half of decision #18's original problem — whether the *text*
+HA's Instructions field holds has drifted from `prompts/novak-voice.md` —
+is still open. HA's native integration is a deliberate second copy, not
+an accident, so there's no "skipped injection" event to detect; catching
+that needs actually reading HA's config and diffing it, which needs HA's
+own API and a dedicated long-lived token. No such token exists in this
+deployment (`HA_MCP_TOKEN` belongs to the `ha-mcp` registry entry, which
+ships `enabled: false` and is a different, higher-privilege credential —
+reusing it for a read-only check would be borrowing scope it doesn't
+need). Left as a named, still-open item rather than built blind: this
+project's own pattern is "checked directly" before "done," and there was
+no live HA instance reachable from this session to check against.

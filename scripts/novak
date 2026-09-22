@@ -10,6 +10,8 @@
 #   novak ports               what's listening, and whether it's reachable
 #   novak drift               where this deployment differs from the repo
 #                             (aliases: verify, check)
+#   novak drift --live        also check the router's logs for persona
+#                             injection silently skipped (decision #38)
 #   novak drift --adopt       copy settings the repo added into your .env
 #   novak adopt               git pull, then the above — refuses to pull over
 #                             uncommitted changes or diverged history
@@ -485,10 +487,16 @@ cmd_drift() {
     drift_adopt
     return 0
   fi
+  local live=0
+  [ "${1:-}" = "--live" ] && live=1
   bold "Drift   (this deployment vs the repo)"
   echo
   dim "  Read-only. Compares files only — client-side config (Open WebUI"
   dim "  presets, HA agent prompts) needs credentials and is not checked here."
+  if [ "$live" -eq 0 ]; then
+    dim "  'novak drift --live' additionally checks the router's own logs for"
+    dim "  persona injection silently skipped (decision #38's failure mode)."
+  fi
   echo
 
   local found=0
@@ -556,6 +564,44 @@ cmd_drift() {
   elif [ ! -f "$dep" ]; then
     dim "  No deployed registry yet — 'novak up' seeds one."
     echo
+  fi
+
+  # ── persona (live, opt-in) ───────────────────────────────────────────
+  # Unlike everything above, this reads the router's own logs rather than
+  # comparing files — it needs docker reachability to wherever the stack
+  # actually runs, not "anywhere", which is why it's --live and not part
+  # of the default (credential-free, run-from-anywhere) check. Catches
+  # decision #38's actual failure mode: a client (most often Open WebUI's
+  # own Builtin Tools/Memory capabilities re-enabling on a model preset)
+  # silently sending its own system message, which makes persona_hook.py
+  # skip injecting prompts/*.md for that call — not "text has drifted",
+  # but the more common and more silent failure this project has actually
+  # hit. See router/persona_hook.py's PERSONA_DRIFT log line.
+  if [ "$live" -eq 1 ]; then
+    bold "Persona   (live — router logs, last 24h)"
+    echo
+    if ! docker info >/dev/null 2>&1; then
+      red "  Cannot reach docker ($(docker_hint)) — this check only works"
+      red "  where the stack itself runs."
+      echo
+    else
+      local hits
+      hits="$(compose logs --no-color --no-log-prefix --since 24h router 2>/dev/null \
+        | grep -c 'PERSONA_DRIFT' || true)"
+      if [ "${hits:-0}" -gt 0 ]; then
+        found=1
+        ylw "  $hits persona-drift warning(s) in the last 24h:"
+        compose logs --no-color --no-log-prefix --since 24h router 2>/dev/null \
+          | grep 'PERSONA_DRIFT' | tail -10 | sed 's/^/    /'
+        echo
+        dim "  If none of these were a deliberate client override, check Open"
+        dim "  WebUI's Builtin Tools/Memory capabilities on the model preset"
+        dim "  named above (Admin Settings -> Models -> Capabilities)."
+      else
+        grn "  No persona-drift warnings in the last 24h."
+      fi
+      echo
+    fi
   fi
 
   [ "$found" -eq 0 ] && grn "  No drift. Deployment matches the repo."

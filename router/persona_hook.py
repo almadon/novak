@@ -42,6 +42,14 @@ PERSONA_MAP = {
     "ha-voice": "novak-voice.md",
 }
 
+# Models whose persona is client-managed, not router-injected: a client
+# system message here is expected, not drift. HA's native `litellm`
+# conversation agent (decision #42) takes its persona from its own
+# Instructions field, itself a manual, separately-maintained copy of
+# prompts/novak-voice.md's body — the router is never the source of truth
+# for this model, so it has nothing to warn about.
+CLIENT_MANAGED_PERSONA = {"ha-voice"}
+
 
 def _load_persona(filename: str) -> str:
     """
@@ -73,7 +81,20 @@ class PersonaInjector(CustomLogger):
             # A client that sends its own system message is trusted over
             # the default — this is what lets a real debugging session or
             # a deliberately different client override the persona without
-            # needing a flag or a second code path here.
+            # needing a flag or a second code path here. Decision #38's bug
+            # was exactly this path firing silently and by accident, so
+            # anything landing here that isn't a known client-managed model
+            # (see CLIENT_MANAGED_PERSONA) gets logged rather than skipped
+            # quietly — `novak drift --live` greps for this line.
+            if model not in CLIENT_MANAGED_PERSONA:
+                logger.warning(
+                    "PERSONA_DRIFT model=%s persona_file=%s: request arrived "
+                    "with its own system message, router injection skipped. "
+                    "If this wasn't a deliberate client override, check "
+                    "Open WebUI's Builtin Tools/Memory capabilities on this "
+                    "model preset (decision #38).",
+                    model, persona_file,
+                )
             return data
 
         try:

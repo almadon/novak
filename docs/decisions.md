@@ -2487,3 +2487,35 @@ three placeholder pages with no real components, per this repo's own
 `docs/STATE.md`. The same habit `CLAUDE.md` (decision #46) was written to
 name keeps surfacing in small, easy-to-miss ways across all three repos,
 not just this one.
+
+## 49. `docs/security.md` rewritten for what's actually deployed
+
+It described a single-Mac deployment: Qdrant (replaced by Hindsight two
+migrations ago), "the mini" (Mitochon, not Spire, the actual production
+host since decision #33), Keychain-only secrets (Unraid has no OS
+keychain and never did), and no mention of the router or the persona's
+role in enforcing the security posture at all. Not a style problem —
+factually describing infrastructure that no longer runs this way.
+
+Rewritten against what's actually current: multi-platform secrets (Rule
+1, both Keychain and `.env` paths), the registry's own risk levels as
+the mechanism behind least-privilege (Rule 2, replacing a hand-maintained
+example list), the persona's enforcement role and decision #38/#44 as the
+concrete case of it silently failing (Rule 3), the real exposure table
+from [proxy.md](proxy.md) with the actual public/internal proxy split
+(Rule 4, replacing a stale single-host LAN description), and the current
+backup story per platform including the still-open Unraid confirmation
+gap (already tracked in `deploy-checklist.md`, now cross-referenced
+instead of silently contradicted).
+
+**Found and fixed two more stale claims in `architecture.md` while
+cross-checking this** — both said the persona drift check "still doesn't
+exist," written before decision #44 built the router-side half of it.
+Updated to describe what decision #44 actually covers (a client silently
+overriding the router's injection) versus what's still genuinely open (a
+client bypassing the router entirely, which has no detector since it
+never reaches the router to be observed).
+
+**Cost:** none — reading and rewriting, no new claims made that weren't
+already established elsewhere in this repo. The value is entirely in one
+document no longer contradicting the rest of them.

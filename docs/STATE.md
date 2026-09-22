@@ -86,6 +86,11 @@ itself the way the rest of the stack has.
   observable instead of silent). `novak drift --live` surfaces it from
   the router's logs. Logic verified offline; not yet run against a live
   router — see Open VERIFY below.
+- **Every container image now pins to a digest, not a moving tag**
+  (decision #45) — closes conformIT audit gap #4. `open-webui`,
+  `console`, `hindsight`, `openwakeword`, and `ollama` join `caddy`,
+  `tinyauth`, and `router`, which were already pinned. Not yet pulled on
+  a live host; see Open VERIFY below.
 
 ## Decided, not built
 
@@ -121,6 +126,12 @@ itself the way the rest of the stack has.
   grep has never been run against a real deployment. Run it on Spire, and
   ideally confirm the warning genuinely appears if Builtin Tools/Memory
   get flipped back on for a model preset.
+- **The digest pins (decision #45) have not been pulled on a live host.**
+  Confirmed against each registry's manifest API and `docker compose
+  config`, not against an actual pull/start. Run `novak update` or a
+  fresh `novak up` and confirm all five services still come up; for
+  `open-webui` specifically, re-confirm decision #38's persona fix still
+  holds against the pinned build through the real chat UI.
 - **Wake word deployment to a satellite is not done.** Training itself
   is (decision #43) — a real `hey_novak.tflite` exists, calibrated to
   0.103 false-accepts/hour at 0.992 recall. What's left is
@@ -150,11 +161,9 @@ itself the way the rest of the stack has.
   72-character commit subject limit keep getting rediscovered by trial
   and error across sessions, which is exactly what the file exists to
   prevent.
-- **Version pinning**, improved but not complete — `caddy`, `tinyauth`,
-  and `router` (pinned to an exact image digest, not just a tag) are
-  fixed; `open-webui`, `console`, `hindsight`, `openwakeword`, and
-  `ollama` are still `:latest`/`:main`. See
-  [conformit-audit.md](conformit-audit.md).
+- ~~**Version pinning**~~ — done (decision #45). Every image in
+  `docker-compose.yml` now pins to a digest, not a moving tag. Not yet
+  verified against a live pull; see Open VERIFY below.
 
 ## Traps already hit, all documented (still true, still worth knowing)
 

@@ -23,8 +23,12 @@ name: novak
 
 services:
   # ── Chat frontend ─────────────────────────────────────────────────────
+  # Pinned to the digest :main resolved to on 2026-09-22 (decision #45) —
+  # not the moving tag. Refresh: resolve :main again, confirm the persona
+  # capabilities fix (decision #38) still holds against the new build
+  # through the real chat UI, then update this line in its own commit.
   open-webui:
-    image: ghcr.io/open-webui/open-webui:main
+    image: ghcr.io/open-webui/open-webui@sha256:8b432fe0a65b91116afc7961365c6cca5379cc923171386a96691f3471f3cae9
     restart: unless-stopped
     ports:
       - "${OPENWEBUI_PORT:-13400}:8080"
@@ -167,8 +171,15 @@ services:
     # Optional, and gated behind a compose profile so a missing OIDC secret
     # skips the console instead of refusing to start the whole stack. up.sh
     # sets COMPOSE_PROFILES=console once its config is complete.
+    #
+    # The default falls back to the digest :latest resolved to on
+    # 2026-09-22 (decision #45), not the moving tag — this is this
+    # project's own actively-developed image, so this pin goes stale
+    # faster than the third-party ones below and needs bumping as part of
+    # any novak-konzol change meant to actually ship. CONSOLE_IMAGE still
+    # overrides it for local development or a deliberate rollback.
     profiles: ["console"]
-    image: "${CONSOLE_IMAGE:-ghcr.io/almadon/novak-konzol:latest}"
+    image: "${CONSOLE_IMAGE:-ghcr.io/almadon/novak-konzol@sha256:d3305bee81f734cde12d39604380638e0d7d4c5366d7d7c01f4a8d09cc1adc2d}"
     restart: unless-stopped
     ports:
       - "${CONSOLE_PORT:-13401}:3002"
@@ -212,8 +223,9 @@ services:
   # "bank", and the tools have no bank parameter to override it. That is the
   # property that keeps one person's memories out of another's context, and
   # out of reach of anything a model reads. See docs/how-memory-works.md.
+  # Pinned to the digest :latest resolved to on 2026-09-22 (decision #45).
   hindsight:
-    image: ghcr.io/vectorize-io/hindsight:latest
+    image: ghcr.io/vectorize-io/hindsight@sha256:b4d3b76f363aa40cf348450e7f8f52a50653008731b99824b14623a196182e73
     restart: unless-stopped
     ports:
       - "${HINDSIGHT_PORT:-13403}:8888"   # API + MCP
@@ -266,9 +278,10 @@ services:
 
   # Server-side wake word detection ("hey novak"). Only used by Wyoming
   # satellites — HA Voice PE detects on-device with microWakeWord instead.
-  # See wakeword/README.md before training a model.
+  # See docs/wakeword.md before training a model. Pinned to the digest
+  # :latest resolved to on 2026-09-22 (decision #45).
   openwakeword:
-    image: rhasspy/wyoming-openwakeword:latest
+    image: rhasspy/wyoming-openwakeword@sha256:52cb1168731a1849fc28cf339c935fde58746bbabc94226668a40ef6ddf5d42b
     restart: unless-stopped
     command: >
       --preload-model ${WAKEWORD_MODEL:-hey_novak}
@@ -455,9 +468,10 @@ services:
   # Point registry/engines.yaml's base_url_var at
   # http://ollama:11434/v1 (in-network) or http://<host>:${OLLAMA_PORT}/v1
   # (from outside) once this profile is enabled. See docs/ollama-settings.md.
+  # Pinned to the digest :latest resolved to on 2026-09-22 (decision #45).
   ollama:
     profiles: ["ollama"]
-    image: ollama/ollama:latest
+    image: ollama/ollama@sha256:da6e0dc5651df159e45686fd663c4dbe1624a52c44d7280eeac1551d8f865532
     restart: unless-stopped
     ports:
       - "${OLLAMA_PORT:-11434}:11434"

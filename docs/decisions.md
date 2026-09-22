@@ -2329,3 +2329,58 @@ reusing it for a read-only check would be borrowing scope it doesn't
 need). Left as a named, still-open item rather than built blind: this
 project's own pattern is "checked directly" before "done," and there was
 no live HA instance reachable from this session to check against.
+
+## 45. Every unpinned image now pins to a digest, not a moving tag
+
+The conformIT audit ([conformit-audit.md](conformit-audit.md), gap #4)
+named this directly: `open-webui`, `console`, `hindsight`, `openwakeword`,
+and `ollama` were all still `:latest`/`:main`, an unreviewed change on
+every pull and an outage if the network is down at the wrong moment. It
+offered two acceptable outcomes — pin, or write a decision recording the
+exposure as deliberate. This is the first.
+
+**Cost:** updates to these five images become manual from here — the
+tradeoff the audit named explicitly, and the reason this wasn't already
+done. The audit's own position, which this decision adopts, is that a
+silent surprise upstream change is worse than a quiet stale pin: a stale
+pin fails the same way every time until someone updates it; an unpinned
+`:latest` can change behavior under you with nothing in git to show it
+happened, which is exactly the failure class decision #38 already cost a
+whole debugging session to.
+
+Each `image:` line in `docker-compose.yml` now carries a comment naming
+the date the tag was resolved and pointing at this decision. Digests were
+resolved directly against each registry's manifest API (GHCR and Docker
+Hub, anonymous pull-scoped tokens, `Docker-Content-Digest` header) on
+2026-09-22 — not against a live pull on the deployment host, since none
+was reachable from this session. Each captured digest is an OCI image
+index (multi-arch), the same strength of pin `router`'s own digest
+already used (decision #21) — not a single-platform manifest, so
+`docker compose` still resolves the right platform underneath it.
+
+**Refresh procedure**, since a pin with no way to move it just becomes a
+permanently stale dependency: resolve the tag's current digest again
+(same manifest-API approach, or `docker manifest inspect <image>:<tag>`
+on a host with a running daemon), update the one `image:` line, and for
+`open-webui` specifically, re-confirm decision #38's persona-capabilities
+fix still holds against the new build through the real chat UI before
+trusting it — a `curl` test against the router alone did not catch that
+bug the first time.
+
+**`console` pins differently from the other four**: it is this project's
+own actively-developed image (`novak-konzol`), not a third party's, so its
+pin will go stale on every real console change, not just on upstream's
+own release cadence. Bumping it belongs with the `novak-konzol` change
+that's meant to actually ship, not on the same cycle as the others.
+
+### Not verified against a live pull
+
+Every digest was confirmed to resolve via the registry API and to belong
+to the currently-tagged image (index digest for the tag, checked via
+response `Content-Type`), and `docker compose config` parses the edited
+file cleanly. None of the five has actually been pulled and started with
+these pins — there was no live host to do that against from this
+session. **VERIFY** on the next `novak update` or fresh deploy: that each
+service still starts, and that automated builds elsewhere
+(`.github/workflows`, if any reference these images by tag) aren't
+affected by the change.

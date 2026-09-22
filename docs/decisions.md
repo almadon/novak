@@ -2519,3 +2519,34 @@ never reaches the router to be observed).
 **Cost:** none — reading and rewriting, no new claims made that weren't
 already established elsewhere in this repo. The value is entirely in one
 document no longer contradicting the rest of them.
+
+## 50. The trained microWakeWord model is committed here, not left local
+
+Decision #43 trained `hey_novak.tflite` and left it on the machine that
+trained it, on the reasoning that `wakeword.md` frames the ESPHome model
+as something that "goes into the device's ESPHome config" — deployment
+target, not repo content.
+
+**That reasoning didn't hold up against this repo's own existing
+convention.** `wakeword/models/.gitkeep` already establishes that
+openWakeWord's trained models get committed here — the directory is
+tracked, `wakeword.md` says "drop a trained model in" with no caveat
+about it being deployment-local, and nothing in `.gitignore` excludes
+model binaries. A trained microWakeWord model is the same category of
+thing: a small, non-secret build output that's the actual source of
+truth for a deployment, not scratch state. Excluding it while including
+its openWakeWord sibling was an inconsistency, not a principled
+distinction — caught by direct question, not found independently.
+
+**Committed** `hey_novak.tflite`, `hey_novak.json`, and
+`hey_novak.esphome.json` to `wakeword/microwakeword/`, parallel to
+`wakeword/models/`. `docs/wakeword.md` updated to describe two separate
+steps rather than one: committing the artifact here (versioning,
+durability against a nondeterministic and "still very difficult" training
+process) and copying it onto the actual device's ESPHome config
+(deployment, decision #43's still-open item, genuinely costs more than a
+file copy).
+
+**Cost:** ~140KB in the repo. Worth it — the alternative is a trained
+artifact that exists in exactly one place, on one machine, with no
+history if it's ever lost or needs comparing against a retrain.

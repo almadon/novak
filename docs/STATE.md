@@ -86,7 +86,9 @@ itself the way the rest of the stack has.
 - **Voice pipeline overhaul** (decisions #39–#42) — see above.
 - **"Hey Novak" microWakeWord training completed** (decision #43) — a
   real `hey_novak.tflite` now exists, calibrated to 0.103 false-accepts/hour
-  at 0.992 recall. Not yet on a device; see Open VERIFY below.
+  at 0.992 recall, and is committed to
+  [`wakeword/microwakeword/`](../wakeword/microwakeword/) (decision #50).
+  Not yet on a device; see Open VERIFY below.
 - **A real persona drift check, for the failure mode that actually
   happened** (decision #44) — `persona_hook.py` now logs `PERSONA_DRIFT`
   whenever `chat`/`deep` silently skip persona injection because a
@@ -119,6 +121,10 @@ itself the way the rest of the stack has.
   of it failing), and the real exposure table from `proxy.md`. Also fixed
   two stale "persona drift check still doesn't exist" claims found in
   `architecture.md` while cross-checking it, written before decision #44.
+- **The trained microWakeWord model is committed to the repo** (decision
+  #50), in [`wakeword/microwakeword/`](../wakeword/microwakeword/) —
+  matches the existing `wakeword/models/` convention for openWakeWord,
+  caught as an inconsistency in decision #43's original reasoning.
 
 ## Decided, not built
 
@@ -167,8 +173,8 @@ itself the way the rest of the stack has.
   `open-webui` specifically, re-confirm decision #38's persona fix still
   holds against the pinned build through the real chat UI.
 - **Wake word deployment to a satellite is not done.** Training itself
-  is (decision #43) — a real `hey_novak.tflite` exists, calibrated to
-  0.103 false-accepts/hour at 0.992 recall. What's left is
+  is (decision #43), and the artifact is committed to this repo (decision
+  #50), not just local to whichever Mac trained it. What's left is
   device-specific: flashing it onto an actual Voice PE or streaming
   satellite, which `wakeword.md` already flags as costing more than a
   file copy. `openwakeword`'s own server-side model (a different format,

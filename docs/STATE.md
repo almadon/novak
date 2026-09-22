@@ -4,12 +4,20 @@ Working notes for the current deployment. Delete this once the stack has
 run a while unattended with nothing below it worth flagging — see "On
 this file's own exit condition" below for why it hasn't been yet.
 
-**Last updated:** 2026-09-10, from Spire (Unraid), covering everything
+**Last full rewrite:** 2026-09-10, from Spire (Unraid), covering everything
 since the previous version (2026-08-27, written from the Mac mini
 `Mitochon`). That version is not reproduced here — see git history if the
 detail is ever needed again — because almost everything in it is now
 either done, superseded, or simply about the wrong host: Spire, not
 Mitochon, has been the real household deployment since decision #33.
+
+**Since then (2026-09-22, incremental, not a rewrite):** decisions
+#43-#49 — wake word training actually completed, a real persona drift
+detector, every remaining container image pinned, `CLAUDE.md` and a
+`LICENSE` added, every VERIFY licence in `credits.md` checked, and
+`security.md` rewritten against current reality. Written from a coding
+session with no live host access, so anything needing a real deployment
+to confirm is marked VERIFY below rather than claimed.
 
 **On this file's own exit condition:** the previous version said the
 stack was "close to" the point where this file could go away. It's

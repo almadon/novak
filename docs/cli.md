@@ -76,6 +76,7 @@ works identically on both platforms.
 | `novak logs [SERVICE]` | follow logs |
 | `novak registry` | what the reconciler thinks it should start |
 | `novak drift` | where this deployment differs from the repo (aliases: `verify`, `check`) |
+| `novak drift --live` | also greps router logs for persona injection silently skipped (decision #38) |
 | `novak omlx apply` | apply `registry/omlx.yaml` — models, profiles, TTLs |
 | `novak router apply` | apply `registry/engines.yaml` -> `router/config.yaml` (decision #28); needs `novak restart router` after |
 
@@ -488,10 +489,26 @@ difference, so it is safe to run anywhere and cannot cause the drift it
 reports. Adopting the repo's registry is left to you, with the commands
 printed, because your local choices get overwritten.
 
-**What it does not check:** client-side configuration. Whether Open WebUI's
-model preset or Home Assistant's agent prompt still matches `prompts/` needs
-each client's API credentials, which core deliberately does not hold — see
-decision 18.
+```bash
+novak drift --live
+```
+
+Everything above compares files. This instead greps the router's own logs
+(`docker compose logs router`, last 24h) for `PERSONA_DRIFT` — a warning
+`router/persona_hook.py` logs whenever a request for `chat` or `deep` arrives
+with its own `system` message already attached, which makes the router skip
+injecting `prompts/*.md` for that call (decision #38's actual failure mode:
+Open WebUI's own Builtin Tools/Memory capabilities silently sending one).
+Needs docker reachability to wherever the stack runs, not "anywhere" — that's
+why it's opt-in rather than part of the default check. `ha-voice` is excluded
+on purpose: HA's native `litellm` integration is expected to send its own
+system message (decision #42), so a hit there would be noise, not signal.
+
+**What this still does not check:** whether the *text* HA's Instructions
+field holds still matches `prompts/novak-voice.md` — that's a second,
+independently-maintained copy (decision #42), and confirming it hasn't
+drifted needs HA's own API and a dedicated long-lived token, neither of
+which exists yet. See STATE.md's "Decided, not built."
 
 ## When something breaks
 

@@ -79,18 +79,28 @@ itself the way the rest of the stack has.
 - **"Hey Novak" microWakeWord training completed** (decision #43) — a
   real `hey_novak.tflite` now exists, calibrated to 0.103 false-accepts/hour
   at 0.992 recall. Not yet on a device; see Open VERIFY below.
+- **A real persona drift check, for the failure mode that actually
+  happened** (decision #44) — `persona_hook.py` now logs `PERSONA_DRIFT`
+  whenever `chat`/`deep` silently skip persona injection because a
+  client sent its own system message (decision #38's bug, made
+  observable instead of silent). `novak drift --live` surfaces it from
+  the router's logs. Logic verified offline; not yet run against a live
+  router — see Open VERIFY below.
 
 ## Decided, not built
 
 - **Persona push to clients** (decision #18's original proposal).
   Superseded by the router existing at all (decision #23); not going to
   be built.
-- **Client-side persona drift check** (decision #18's weaker half,
-  decision #21's stated prerequisite for trusting the router). Still
-  does not exist. `novak drift` checks settings and the registry only.
-  This gap is exactly what let decision #38's Open WebUI bug go
-  unnoticed until someone actually looked at a real chat — worth
-  building before the next silent persona regression, not after.
+- **The HA-side half of the client-side persona drift check.** Decision
+  #44 built the other half — see Built, below. What's still open: HA's
+  native `litellm` integration keeps its own copy of
+  `prompts/novak-voice.md`'s text (decision #42, pasted into its
+  Instructions field), and nothing checks whether that copy has since
+  drifted from the master file. Needs HA's own API and a dedicated,
+  read-only long-lived token — none exists yet, and none of this was
+  built blind, since there's no live HA instance reachable from a coding
+  session to verify it against.
 
 ## Open VERIFY items
 
@@ -104,6 +114,13 @@ itself the way the rest of the stack has.
   an account outside `admins.novak` needs a real round trip.
 - **The exact Pocket ID claim shape** feeding `OWUI_OIDC_ROLES_CLAIM` /
   `OWUI_OIDC_GROUP_CLAIM`. Decode a real ID token after first login.
+- **The `PERSONA_DRIFT` log line (decision #44) has not been run against
+  a live router.** Its logic was checked offline with `litellm` stubbed
+  out — confirmed it fires for `chat`/`deep` and stays silent for
+  `ha-voice` — but `novak drift --live`'s actual `docker compose logs`
+  grep has never been run against a real deployment. Run it on Spire, and
+  ideally confirm the warning genuinely appears if Builtin Tools/Memory
+  get flipped back on for a model preset.
 - **Wake word deployment to a satellite is not done.** Training itself
   is (decision #43) — a real `hey_novak.tflite` exists, calibrated to
   0.103 false-accepts/hour at 0.992 recall. What's left is

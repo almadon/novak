@@ -2222,3 +2222,50 @@ isolated the actual layer the problem was in within one call. Worth
 trying that kind of maximally-isolating test earlier next time a
 conversation-agent problem looks like it might be model- or
 integration-specific: rule out the shared, LLM-free baseline first.
+
+## 43. "Hey Novak" microWakeWord training actually completed
+
+[STATE.md](STATE.md) and [wakeword.md](wakeword.md) have said since
+2026-09-10 that this was decided but not done — a training run was
+started and ~12,500 raw candidate samples were staged, but nothing had
+crossed into an actual training pass. It has now: a real `hey_novak.tflite`
+exists, trained with
+[microWakeWord-Trainer-AppleSilicon](https://github.com/TaterTotterson/microWakeWord-Trainer-AppleSilicon)
+on Apple Silicon, per the headless flow `wakeword.md` already documented
+(`./train_microwakeword_macos.sh "hey_novak"`).
+
+Calibration, from the trainer's own manifest (`generated_at`
+2026-09-19T09:08Z, validated against a held-out set — 50,000 positive
+tracks, ~9.7 hours of ambient audio):
+
+- Target false-accept rate: 0.25/hour. Achieved: 0.103/hour — better than
+  target.
+- Recall: 0.992 at `probability_cutoff` 0.99.
+
+Both numbers matter together: a model tuned only for recall would false-
+trigger on the television, which is exactly the failure mode
+`wakeword.md` warns about for a truncated phrase — "hey novak" (3
+syllables) gave the trainer enough signal to hit a low false-accept rate
+without giving up recall.
+
+### Two output files, not one, and they're not interchangeable
+
+The trainer produced three files: `hey_novak.tflite` (the model itself),
+`hey_novak.json` (a full manifest — training metadata, the
+`tater_native` block for that project's own satellite firmware, and the
+calibration numbers above), and `hey_novak.esphome.json` — a minimal
+manifest carrying only what `micro_wake_word:` actually reads (`type`,
+`wake_word`, `model`, `micro.*`). Feed ESPHome the `.esphome.json`, not
+the full one; the extra fields in the full manifest aren't schema ESPHome
+expects, and `wakeword.md`'s existing YAML example
+(`model: /config/models/hey_novak.json`) should be read as "the ESPHome
+manifest," which will need renaming or updating to point at
+`hey_novak.esphome.json` when this actually gets flashed to a device.
+
+### What's still open
+
+Training produced the artifact; it isn't on a satellite yet. Per
+`wakeword.md`'s existing guidance, getting it there is device-specific
+work (ESPHome Builder adoption for HA Voice PE, or a custom firmware
+build for a Satellite1) and "costs more than a file copy" — tracked
+separately in STATE.md, not resolved by this decision.

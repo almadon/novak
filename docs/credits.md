@@ -34,6 +34,12 @@ this repo or any image built from it.
 | [TinyAuth](https://github.com/tinyauthapp/tinyauth) | Forward-auth for the portal, against Pocket ID | AGPL-3.0 |
 | [LiteLLM](https://github.com/BerriAI/litellm) | Inference router — persona injection in front of the engine (decision #21/#23). Also, separately: Home Assistant Core's own native `litellm` conversation-agent integration (added HA 2026.8) talks to this same router — decision #42 | MIT for everything used here; an `enterprise/` subdirectory is separately licensed and not enabled |
 
+## Used for wake word training
+
+| Project | Used for | Licence |
+|---|---|---|
+| [microWakeWord-Trainer-AppleSilicon](https://github.com/TaterTotterson/microWakeWord-Trainer-AppleSilicon) | Trains the on-device "Hey Novak" model for ESPHome satellites/Voice PE (decision #43) — run once on a Mac, not a running service | VERIFY |
+
 ## Used to build the console and shim
 
 | Project | Used for | Licence |

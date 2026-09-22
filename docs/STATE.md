@@ -76,6 +76,9 @@ itself the way the rest of the stack has.
   `novak drift` could have caught (see the persona-drift-check gap
   below, still open).
 - **Voice pipeline overhaul** (decisions #39–#42) — see above.
+- **"Hey Novak" microWakeWord training completed** (decision #43) — a
+  real `hey_novak.tflite` now exists, calibrated to 0.103 false-accepts/hour
+  at 0.992 recall. Not yet on a device; see Open VERIFY below.
 
 ## Decided, not built
 
@@ -101,14 +104,14 @@ itself the way the rest of the stack has.
   an account outside `admins.novak` needs a real round trip.
 - **The exact Pocket ID claim shape** feeding `OWUI_OIDC_ROLES_CLAIM` /
   `OWUI_OIDC_GROUP_CLAIM`. Decode a real ID token after first login.
-- **Wake word training ("Hey Novak") is not actually done**, despite
-  earlier notes suggesting it might be. Checked directly (2026-09-10):
-  no `.tflite` file exists anywhere on the machine running the trainer,
-  and the finished sample corpus directory (`generated_samples/`) is
-  empty — a training run was started and staged ~12,500 raw candidate
-  samples, but never crossed into an actual training pass. `openwakeword`
-  is running with no real "hey novak" model loaded. See
-  [wakeword.md](wakeword.md).
+- **Wake word deployment to a satellite is not done.** Training itself
+  is (decision #43) — a real `hey_novak.tflite` exists, calibrated to
+  0.103 false-accepts/hour at 0.992 recall. What's left is
+  device-specific: flashing it onto an actual Voice PE or streaming
+  satellite, which `wakeword.md` already flags as costing more than a
+  file copy. `openwakeword`'s own server-side model (a different format,
+  for Wyoming satellites — see wakeword.md) is a separate, still-untouched
+  question.
 - **HA's native `litellm` conversation agent is new tonight** — working
   and verified in this session's testing, but hasn't had the kind of
   real-world daily use that would turn "verified once" into "trusted."

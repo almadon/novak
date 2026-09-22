@@ -80,8 +80,15 @@ or headless:
 ./train_microwakeword_macos.sh "hey_novak"
 ```
 
-It produces `trained_wake_words/hey_novak.tflite` and a matching `.json`
-manifest. The JSON is what ESPHome consumes.
+It produces `trained_wake_words/hey_novak.tflite` and two JSON files: a
+full manifest (`hey_novak.json`, with training/calibration metadata and a
+`tater_native` block for that project's own firmware) and a minimal one
+(`hey_novak.esphome.json`, only the fields `micro_wake_word:` reads).
+**ESPHome consumes the `.esphome.json` one**, not the full manifest.
+
+A real training run completed 2026-09-19 — see decision #43 for the
+calibration numbers. The artifact exists; it hasn't been flashed to a
+device yet.
 
 ### Getting it onto the device — cost depends entirely on which device
 
@@ -90,9 +97,9 @@ ESPHome's `micro_wake_word` accepts a custom model:
 ```yaml
 micro_wake_word:
   models:
-    - model: /config/models/hey_novak.json
+    - model: /config/models/hey_novak.esphome.json
       id: hey_novak
-      probability_cutoff: 0.95
+      probability_cutoff: 0.99  # the trainer's own calibrated value, decision #43
 ```
 
 **On HA Voice PE this is the expensive part.** It ships stock firmware, so

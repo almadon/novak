@@ -40,8 +40,9 @@ languages.
 
 ## Important: this covers server-side detection only
 
-This service does wake-word detection **on the mini**, which is right for
-Wyoming satellites and any mic streaming audio to Home Assistant.
+This service does wake-word detection **on whichever host runs the
+stack** (Spire, decision #33), which is right for Wyoming satellites and
+any mic streaming audio to Home Assistant.
 
 **Home Assistant Voice PE hardware detects its wake word on-device using
 microWakeWord**, a different system with a different model format. A model
@@ -57,8 +58,10 @@ Decide which you need before training anything:
 
 1. **Wyoming satellites, or any mic streaming audio to HA** — server-side, this
    openWakeWord service. Model goes in `models/` here.
-2. **HA Voice PE hardware** — on-device microWakeWord. Model goes into the
-   device's ESPHome config, and getting it there costs more than a file copy.
+2. **HA Voice PE hardware** — on-device microWakeWord. Model is committed to
+   `microwakeword/` here (source of truth, same as `models/` above), then
+   separately copied onto the device's own ESPHome config — that second
+   step costs more than a file copy.
 3. **Both** — two models, trained separately, sharing only the phrase.
 
 ## Training a microWakeWord model (for Voice PE)
@@ -86,13 +89,25 @@ full manifest (`hey_novak.json`, with training/calibration metadata and a
 (`hey_novak.esphome.json`, only the fields `micro_wake_word:` reads).
 **ESPHome consumes the `.esphome.json` one**, not the full manifest.
 
+Copy all three into [`microwakeword/`](../wakeword/microwakeword/) here
+and commit them — same reasoning as `models/` above: a trained model is a
+build output worth versioning, not a file that only ever exists on
+whichever machine happened to train it. Training is also genuinely hard
+to reproduce exactly (nondeterministic, and "still very difficult" per
+the upstream trainer's own warning below), so the committed copy is the
+only reliable way back to it if the local output ever gets lost.
+
 A real training run completed 2026-09-19 — see decision #43 for the
-calibration numbers. The artifact exists; it hasn't been flashed to a
-device yet.
+calibration numbers, and decision #50 for committing the artifact here.
+The model exists and is versioned in this repo; it hasn't been flashed
+to a device yet.
 
 ### Getting it onto the device — cost depends entirely on which device
 
-ESPHome's `micro_wake_word` accepts a custom model:
+Committing the model here (above) is the versioning step, not the
+deployment step — it makes the trained artifact durable and reviewable,
+but the device still needs its own copy. ESPHome's `micro_wake_word`
+accepts a custom model:
 
 ```yaml
 micro_wake_word:

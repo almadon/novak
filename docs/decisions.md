@@ -2550,3 +2550,46 @@ file copy).
 **Cost:** ~140KB in the repo. Worth it — the alternative is a trained
 artifact that exists in exactly one place, on one machine, with no
 history if it's ever lost or needs comparing against a retrain.
+
+## 51. One ESPHome manifest, in ESPHome's own schema, with the model's author being ours
+
+Decisions #43 and #50 committed the trainer's output as it came out: the
+`.tflite` plus two JSON files, `hey_novak.json` (full) and
+`hey_novak.esphome.json` (minimal). Reviewed against the actual target, a
+FutureProofHomes Satellite 1 on firmware v0.2.1, that was wrong in two ways.
+
+**Duplicate.** The minimal file is a strict subset of the full one (checked
+key by key: same values for every shared key, nothing unique to it), and
+the firmware's `micro_wake_word:` takes a single manifest per model, resolved
+by path or URL with the `.tflite` alongside it. Decision #43's "feed ESPHome
+the `.esphome.json`, not the full one" was right about which file ESPHome
+can read and wrong to keep both.
+
+**Wrong provenance.** The manifests named the trainer's author and website
+as the model's author, and the full one carried a `tater_native` block whose
+`recommended_for` lists that project's own satellite firmware. ESPHome
+ignores all of it, but anyone reading the file, or the raw URL a satellite
+config points at, would reasonably conclude this is someone else's model
+built for someone else's hardware. It is a model trained here, by the
+maintainer, for this household's wake phrase. The trainer is a tool and is
+credited as one in [credits.md](credits.md).
+
+**Changed:** `wakeword/microwakeword/` now holds `hey_novak.tflite` and a
+single `hey_novak.json` in the same schema the stock manifests use
+(FPH's `okay_nabu.json` was the reference). `author` is the maintainer,
+`website` is this repo, `wake_word` is `Hey Novak` (title case, matching
+the stock manifests; ESPHome passes it through as a display phrase). The
+model numbers are unchanged: `probability_cutoff` 0.99, window 5, step 10,
+arena 30000. `hey_novak.esphome.json` is removed. The trainer's
+calibration block is not kept in the file, since it isn't part of the
+schema; its numbers are in decision #43, and the original files are in git
+history at the commit that introduced them.
+
+**Not verified:** none of this has been compiled into firmware or heard by
+a real Satellite 1. Two things worth knowing before it is, both now in
+[wakeword.md](wakeword.md): the firmware's sensitivity selector only knows
+the stock models, so `hey_novak` runs at its manifest cutoff (0.99, from
+the trainer's own validation set rather than FPH's corpus) until tuned by
+hand; and removing a stock model the selector's lambda still names breaks
+the compile unless the selector goes too.
+

@@ -66,7 +66,7 @@ Decide which you need before training anything:
 
 ## Training a microWakeWord model (for Voice PE)
 
-Apple Silicon has a native trainer, so this runs on the mini itself:
+Apple Silicon has a native trainer, so this runs on a Mac:
 <https://github.com/TaterTotterson/microWakeWord-Trainer-AppleSilicon>
 
 Prerequisites: an Apple Silicon Mac, `python@3.11`, and `ffmpeg`. No Docker.
@@ -83,39 +83,46 @@ or headless:
 ./train_microwakeword_macos.sh "hey_novak"
 ```
 
-It produces `trained_wake_words/hey_novak.tflite` and two JSON files: a
-full manifest (`hey_novak.json`, with training/calibration metadata and a
-`tater_native` block for that project's own firmware) and a minimal one
-(`hey_novak.esphome.json`, only the fields `micro_wake_word:` reads).
-**ESPHome consumes the `.esphome.json` one**, not the full manifest.
+It produces `trained_wake_words/hey_novak.tflite` plus JSON manifests. The
+trainer writes two, one a strict subset of the other: a full one carrying
+its own training and calibration metadata (including a `tater_native` block
+for that project's own satellite firmware, and the trainer's name as
+`author`), and a minimal one holding only what ESPHome's `micro_wake_word:`
+reads. ESPHome needs one manifest, in the same schema as the stock models,
+so this repo keeps a single `hey_novak.json` in that schema (decision #51),
+with the trainer credited in [credits.md](credits.md) rather than in the
+model's own `author` field.
 
-Copy all three into [`microwakeword/`](../wakeword/microwakeword/) here
-and commit them — same reasoning as `models/` above: a trained model is a
-build output worth versioning, not a file that only ever exists on
-whichever machine happened to train it. Training is also genuinely hard
-to reproduce exactly (nondeterministic, and "still very difficult" per
-the upstream trainer's own warning below), so the committed copy is the
-only reliable way back to it if the local output ever gets lost.
+Put the `.tflite` and that one manifest in
+[`microwakeword/`](../wakeword/microwakeword/) here and commit them, same
+reasoning as `models/` above: a trained model is a build output worth
+versioning, not a file that only ever exists on whichever machine happened
+to train it. Training is also genuinely hard to reproduce exactly
+(nondeterministic, and "still very difficult" per the upstream trainer's own
+warning below), so the committed copy is the only reliable way back to it
+if the local output ever gets lost. The trainer's calibration numbers are
+recorded in decision #43; the original full manifest is in git history.
 
-A real training run completed 2026-09-19 — see decision #43 for the
-calibration numbers, and decision #50 for committing the artifact here.
-The model exists and is versioned in this repo; it hasn't been flashed
-to a device yet.
+A real training run completed 2026-09-19. The model exists and is versioned
+in this repo; it has not been compiled into firmware or heard by a real
+device yet.
 
 ### Getting it onto the device — cost depends entirely on which device
 
 Committing the model here (above) is the versioning step, not the
-deployment step — it makes the trained artifact durable and reviewable,
-but the device still needs its own copy. ESPHome's `micro_wake_word`
-accepts a custom model:
+deployment step. ESPHome's `micro_wake_word` takes a custom model as a
+manifest path or URL, and resolves the `.tflite` relative to it, so a raw
+URL into this (public) repo works without copying anything onto the device:
 
 ```yaml
 micro_wake_word:
   models:
-    - model: /config/models/hey_novak.esphome.json
-      id: hey_novak
-      probability_cutoff: 0.99  # the trainer's own calibrated value, decision #43
+    - id: hey_novak
+      model: https://raw.githubusercontent.com/almadon/novak/main/wakeword/microwakeword/hey_novak.json
 ```
+
+`main` moves; pin the URL to a commit SHA once a model is proven on a device,
+for the same reason images are pinned to digests (decision #45).
 
 **On HA Voice PE this is the expensive part.** It ships stock firmware, so
 changing its models means adopting the device in ESPHome Builder and flashing
@@ -125,10 +132,30 @@ then on.
 **On a FutureProofHomes Satellite 1 it is not.** Its firmware is
 [open source ESPHome](https://github.com/FutureProofHomes/Satellite1-ESPHome)
 that you are expected to build yourself; the vendor documents compiling your own
-with additional microWakeWords and points at the same author's model collection.
-Nothing is given up by customising it, because customising it is the supported
-path. It also has an XMOS chip doing echo cancellation and beamforming *before*
-detection, so the model sees a cleaner signal than a bare microphone gives.
+with additional microWakeWords. Nothing is given up by customising it, because
+customising it is the supported path. It also has an XMOS chip doing echo
+cancellation and beamforming *before* detection, so the model sees a cleaner
+signal than a bare microphone gives.
+
+Read against Satellite1-ESPHome v0.2.1's own `satellite1.dashboard.yaml`
+and `common/voice_assistant.yaml` (not yet compiled or flashed, so VERIFY
+on the device):
+
+- Its documented custom-model pattern is the `models:` list above, under the
+  existing `micro_wake_word: id: mww`, added alongside the stock entries.
+  Add `- id: !remove hey_jarvis` to drop the default word.
+- **The "Wake word sensitivity" selector does not apply to `hey_novak`.** Its
+  lambda sets cutoffs only for the models built into the firmware
+  (`okay_nabu`, `hey_jarvis`), calibrated by FPH against their own corpus.
+  `hey_novak` runs at its manifest's `probability_cutoff` (0.99, from the
+  trainer's own, different validation set) until you change it. Removing a
+  stock model that the lambda still names, such as `hey_jarvis`, breaks the
+  compile unless the selector is removed too, as the firmware's own comment
+  says.
+- FPH's stock manifests use cutoffs of 0.85 (`okay_nabu`) and 0.97
+  (`hey_jarvis`); `okay_nabu`'s `tensor_arena_size` is 37000, while this
+  model's manifest says 30000 (from the trainer). If the device logs a
+  tensor arena allocation failure, raise it first.
 
 ### Why on-device usually beats this service
 

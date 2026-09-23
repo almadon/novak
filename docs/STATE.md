@@ -125,6 +125,8 @@ itself the way the rest of the stack has.
   #50), in [`wakeword/microwakeword/`](../wakeword/microwakeword/) —
   matches the existing `wakeword/models/` convention for openWakeWord,
   caught as an inconsistency in decision #43's original reasoning.
+  Cleaned up to one manifest in ESPHome's schema, authored as ours rather
+  than the trainer's (decision #51).
 
 ## Decided, not built
 

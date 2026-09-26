@@ -25,6 +25,7 @@ SECRET_VARS=(
   OWUI_OIDC_CLIENT_SECRET
   WEBUI_SECRET_KEY
   HA_MCP_TOKEN
+  HA_DRIFT_TOKEN
   TINYAUTH_OIDC_CLIENT_SECRET
 )
 
@@ -61,6 +62,15 @@ CORE_SECRETS=(HINDSIGHT_API_KEY)
 #                   system already has, so generating one is not a shortcut,
 #                   it is a silent outage: the service simply starts refusing
 #                   us. `novak secret set --generate` refuses these outright.
+#                   HA_DRIFT_TOKEN belongs here too, and deliberately does not
+#                   reuse HA_MCP_TOKEN (decision #44/#52): it's a long-lived
+#                   access token from a dedicated, non-admin HA user, created
+#                   for `novak drift --live`'s HA-side persona check
+#                   (reconciler/ha_persona_drift.py) alone — see
+#                   docs/home-assistant.md for exactly where to create it.
+#                   HA tokens carry no scope of their own, so the read-only
+#                   property comes entirely from the user account behind it,
+#                   not from anything this repo can enforce.
 #
 # SHARED_SECRETS    we generate them, but a human has to paste them somewhere
 #                   else afterwards — HINDSIGHT_API_KEY is the bearer token
@@ -80,6 +90,7 @@ EXTERNAL_SECRETS=(
   OIDC_CLIENT_SECRET
   OWUI_OIDC_CLIENT_SECRET
   HA_MCP_TOKEN
+  HA_DRIFT_TOKEN
   OUTLINE_EVERYTHING_API_KEY
   TUDUDI_API_TOKEN
   VIKUNJA_API_TOKEN

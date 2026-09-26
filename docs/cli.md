@@ -504,11 +504,15 @@ why it's opt-in rather than part of the default check. `ha-voice` is excluded
 on purpose: HA's native `litellm` integration is expected to send its own
 system message (decision #42), so a hit there would be noise, not signal.
 
-**What this still does not check:** whether the *text* HA's Instructions
-field holds still matches `prompts/novak-voice.md` — that's a second,
-independently-maintained copy (decision #42), and confirming it hasn't
-drifted needs HA's own API and a dedicated long-lived token, neither of
-which exists yet. See STATE.md's "Decided, not built."
+The same `--live` run also checks the *other* half of this: whether the
+*text* HA's Instructions field holds still matches
+`prompts/novak-voice.md` — a second, independently-maintained copy
+(decision #42). Unlike the router-log check above, this needs its own
+credential (`HA_URL`/`HA_DRIFT_TOKEN`, deliberately not `HA_MCP_TOKEN` —
+see decision #44/#52) and skips silently, with a pointer to
+`docs/home-assistant.md`, when that isn't configured. This half was built
+without a live HA instance to check it against — see STATE.md's Open
+VERIFY list before trusting its output.
 
 ## When something breaks
 

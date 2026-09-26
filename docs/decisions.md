@@ -2593,3 +2593,60 @@ the trainer's own validation set rather than FPH's corpus) until tuned by
 hand; and removing a stock model the selector's lambda still names breaks
 the compile unless the selector goes too.
 
+## 52. The HA-side persona drift check, built blind against a guessed field name
+
+Decision #44 built half of decision #18's original persona-drift problem
+(a client silently skipping router injection) and left the other half
+explicitly open: whether the text pasted into HA's `litellm` Instructions
+field (decision #42) has drifted from `prompts/novak-voice.md`. That half
+needed two things decision #44 didn't have: a credential scoped for a
+one-field read, and a way to actually reach the field.
+
+### The credential
+
+Not `HA_MCP_TOKEN` — decision #44 already ruled that out (it belongs to
+the `ha-mcp` registry entry, a different and much higher-privilege
+integration). A new `HA_DRIFT_TOKEN`/`HA_URL` pair exists now
+(`.env.example`, `scripts/lib/vars.sh`), external secrets like
+`HA_MCP_TOKEN` since their value has to match what HA issued.
+
+Worth being explicit about, since it's easy to assume otherwise: **Home
+Assistant's long-lived access tokens carry no scope of their own.** A
+token can do exactly what the user behind it can do, full stop — HA has no
+concept of a "read-only" token. The read-only property this check wants
+comes entirely from pointing it at a dedicated, non-admin HA user made for
+this alone, not from the token itself. `docs/home-assistant.md` now says
+so, with where in HA's UI to create both the user and the token.
+
+### Reaching the field
+
+HA has no REST endpoint for a config entry's stored options — only the
+websocket API the frontend itself uses (`config_entries/get`,
+`config_entries/subentries/list`). `reconciler/ha_persona_drift.py`
+authenticates over `/api/websocket` with the token above, finds the
+`litellm` config entry, and reads the `ha-voice` conversation agent's
+subentry data. Wired into `novak drift --live` as a fourth, independently
+opt-in block — skips silently when `HA_URL`/`HA_DRIFT_TOKEN` aren't set,
+same as everything else in that command degrading individually rather
+than failing outright.
+
+### Built blind — the part that actually needs verifying
+
+There was no live HA instance reachable from this session, the same
+constraint decision #44 hit. The router-log check that decision built
+could still be exercised offline against `persona_hook.py` directly; this
+one can't — the thing being checked is HA's own internal representation of
+a config entry, which this project has never seen firsthand. The one
+genuinely uncertain part is `INSTRUCTION_KEYS` in
+`ha_persona_drift.py`: a guess at which key in the subentry's `data` dict
+holds the pasted Instructions text (`instructions`, `prompt`,
+`system_prompt`, `instructions_prompt`). Rather than risk a wrong guess
+silently reporting "no drift" forever, the script fails loud instead: if
+it finds the right agent but none of the guessed keys, it prints the raw
+subentry JSON and exits non-zero, so the real key name can be read off
+once and dropped in.
+
+**VERIFY** (added to STATE.md): run `novak drift --live` against Spire's
+real HA instance once `HA_URL`/`HA_DRIFT_TOKEN` are set up there, and fix
+`INSTRUCTION_KEYS` if the raw dump shows a different key than guessed.
+

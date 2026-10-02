@@ -133,6 +133,44 @@ custom-training path**, so "Hey Novak" works for Wyoming satellites (like
 Satellite1) but not (currently) for Voice PE. On Voice PE, keep a stock
 trigger like "okay nabu" — the assistant still answers as Novak.
 
+## Persona drift check (HA's own copy, decision #44/#52)
+
+The Instructions field set up in step 1 above is a manual paste of
+[prompts/novak-voice.md](../prompts/novak-voice.md)'s body — a second,
+independently-maintained copy, not something the router can see. `novak
+drift --live` can catch it drifting, but only once it has its own
+credential:
+
+1. **Create a dedicated HA user for this alone** — Settings → People →
+   Users → Add User. Give it a name like `novak-drift-check` and leave it
+   an ordinary (non-admin) user. This matters more than it sounds: **Home
+   Assistant's long-lived access tokens carry no scope of their own** —
+   a token can do exactly what the user behind it can do, in full. The
+   only way this check is actually read-only is if the account issuing
+   the token is too. Do not use your own admin account's token here, and
+   do not reuse `HA_MCP_TOKEN` (a different, much higher-privilege
+   credential belonging to the separate `ha-mcp` registry entry — decision
+   #44 already rejected reusing it for exactly this reason).
+2. **Log in as that user, then create the token on its own profile page**
+   — click the user's name (bottom left) → scroll to **Long-Lived Access
+   Tokens** → **Create Token**. Copy it immediately; HA shows it once.
+3. Apply it to this deployment:
+   ```bash
+   novak config set HA_URL http://<ha-host>:8123
+   novak secret set HA_DRIFT_TOKEN
+   ```
+   (paste the token when prompted — same `novak secret set` flow as any
+   other credential here, never typed directly into `.env`).
+4. `novak drift --live` now includes this check automatically. With
+   nothing set, it skips silently rather than failing.
+
+**Built, not yet verified against a live HA instance** — see
+`reconciler/ha_persona_drift.py`'s own docstring and `docs/STATE.md`'s Open
+VERIFY list: the field name it reads out of HA's `litellm` config entry is
+a best guess, and it deliberately fails loud (printing the raw config) if
+it doesn't recognize what it finds, rather than silently reporting no
+drift.
+
 ## 4. Assist pipeline
 
 Settings → Voice assistants → Add assistant, named **Novak**:

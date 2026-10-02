@@ -604,6 +604,44 @@ cmd_drift() {
     fi
   fi
 
+  # ── HA-side persona (live, opt-in, separate credential) ─────────────────
+  # Decision #38's failure mode above is "a client skipped injection." This
+  # is the other half of decision #18's original problem: HA's `litellm`
+  # Instructions field is a *deliberate* second copy of
+  # prompts/novak-voice.md (decision #42), not an accident, so there's no
+  # skipped-injection event to grep for — the only way to catch drift here
+  # is reading HA's own config and diffing it (decision #44/#52). Skips
+  # silently (not a failure) when HA_URL/HA_DRIFT_TOKEN aren't set, same
+  # "an unconfigured integration degrades individually" rule as everything
+  # else in this command.
+  if [ "$live" -eq 1 ]; then
+    bold "Persona   (live — HA's Instructions field)"
+    echo
+    local ha_token; ha_token="$(keychain HA_DRIFT_TOKEN 2>/dev/null || true)"
+    if [ -z "${HA_URL:-}" ] || [ -z "$ha_token" ] || [ "$ha_token" = "set-in-keychain" ]; then
+      dim "  HA_URL/HA_DRIFT_TOKEN not configured — skipping. See"
+      dim "  docs/home-assistant.md for where to create the token."
+      echo
+    elif [ ! -x "$NOVAK_HOME/.venv/bin/python" ]; then
+      dim "  No $NOVAK_HOME/.venv yet — run 'novak up' once first."
+      echo
+    else
+      local ha_out ha_rc
+      ha_out="$(HA_URL="$HA_URL" HA_DRIFT_TOKEN="$ha_token" \
+        "$NOVAK_HOME/.venv/bin/python" "$REPO_DIR/reconciler/ha_persona_drift.py" 2>&1)"
+      ha_rc=$?
+      if [ "$ha_rc" -eq 0 ]; then
+        grn "  ${ha_out}"
+      elif [ "$ha_rc" -eq 1 ]; then
+        found=1
+        ylw "$ha_out" | sed 's/^/  /'
+      else
+        red "  Could not check: ${ha_out}"
+      fi
+      echo
+    fi
+  fi
+
   [ "$found" -eq 0 ] && grn "  No drift. Deployment matches the repo."
   return 0
 }

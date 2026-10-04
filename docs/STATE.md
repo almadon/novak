@@ -127,21 +127,19 @@ itself the way the rest of the stack has.
   caught as an inconsistency in decision #43's original reasoning.
   Cleaned up to one manifest in ESPHome's schema, authored as ours rather
   than the trainer's (decision #51).
+- **The HA-side half of the persona drift check** (decision #52) — decision
+  #44 built the router-log half; this reads HA's `litellm` config entry
+  over its websocket API and diffs the pasted Instructions text against
+  `prompts/novak-voice.md`, via a new dedicated `HA_DRIFT_TOKEN` (never
+  `HA_MCP_TOKEN` — HA tokens carry no scope, so a dedicated non-admin HA
+  user is what actually makes it read-only). Wired into `novak drift
+  --live`. Not yet run against a live HA instance; see Open VERIFY below.
 
 ## Decided, not built
 
 - **Persona push to clients** (decision #18's original proposal).
   Superseded by the router existing at all (decision #23); not going to
   be built.
-- **The HA-side half of the client-side persona drift check.** Decision
-  #44 built the other half — see Built, below. What's still open: HA's
-  native `litellm` integration keeps its own copy of
-  `prompts/novak-voice.md`'s text (decision #42, pasted into its
-  Instructions field), and nothing checks whether that copy has since
-  drifted from the master file. Needs HA's own API and a dedicated,
-  read-only long-lived token — none exists yet, and none of this was
-  built blind, since there's no live HA instance reachable from a coding
-  session to verify it against.
 
 ## Open VERIFY items
 
@@ -186,6 +184,15 @@ itself the way the rest of the stack has.
   and verified in this session's testing, but hasn't had the kind of
   real-world daily use that would turn "verified once" into "trusted."
   Worth revisiting after it's actually been lived with for a while.
+- **The HA-side persona drift check (decision #52) has not been run
+  against a live HA instance.** Its websocket calls and the field name it
+  reads out of a `litellm` config entry's subentry data
+  (`INSTRUCTION_KEYS` in `reconciler/ha_persona_drift.py`) are a
+  best-effort guess, not something this project could check directly. Set
+  up `HA_URL`/`HA_DRIFT_TOKEN` per `docs/home-assistant.md` and run `novak
+  drift --live` on a real deployment; if it reports the field name as
+  unrecognized, its error prints the raw config so the real key can be
+  dropped into `INSTRUCTION_KEYS`.
 
 ## Not started
 

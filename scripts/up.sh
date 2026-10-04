@@ -190,6 +190,12 @@ if [ ! -x "$PY" ] || ! "$PY" -c 'import yaml' 2>/dev/null; then
   fi
   echo "🐍 PyYAML ready"
 fi
+# websockets is only needed by reconciler/ha_persona_drift.py (novak drift
+# --live's optional HA-side persona check) — not by anything `novak up`
+# itself runs, so a failure here is a warning, never a reason to block the
+# whole stack from starting. ha_persona_drift.py gives its own install
+# hint if this was skipped and someone runs the check anyway.
+"$PY" -c 'import websockets' 2>/dev/null || "$PY" -m pip install --quiet websockets 2>/dev/null || true
 # Compose reads COMPOSE_PROFILES from the environment, and the reconciler is
 # what runs `docker compose up`, so this is all it takes to include or omit
 # any optional profile — no reconciler change, and nothing here needs to

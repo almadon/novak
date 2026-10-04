@@ -220,6 +220,18 @@ device control confirmed.
       — see [home-assistant.md](home-assistant.md)'s "History" section for
       that setup and the real compatibility bugs found running it.
       Decision 19 covers why not the other HACS candidates.
+- [ ] **Persona drift check for that Instructions field** (decision #52,
+      optional but cheap) — create a second, non-admin HA user for this
+      alone, generate a long-lived access token on *that* user's own
+      profile page, then `novak config set HA_URL ...` and `novak secret
+      set HA_DRIFT_TOKEN`. See [home-assistant.md](home-assistant.md)'s
+      "Persona drift check" section for exactly where in HA's UI each step
+      is. Never your own admin token and never `HA_MCP_TOKEN` here — HA's
+      long-lived tokens carry no scope of their own, so a dedicated
+      low-privilege user is what actually makes this read-only. `novak
+      drift --live` picks it up automatically once both are set; skips
+      silently otherwise. **Not yet verified against a real HA instance**
+      — see STATE.md's Open VERIFY list.
 - [ ] STT/TTS: use Home Assistant's own native Whisper/Piper add-ons
       (decision #39) rather than standing up a second copy — install both
       from the Store if not already present. Wyoming wake word detection

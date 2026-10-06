@@ -291,6 +291,25 @@ services:
     volumes:
       - ./wakeword/models:/custom:ro
 
+  # Serves prompts/novak-voice.md to Home Assistant as JSON, so HA pulls the
+  # persona instead of holding a hand-pasted copy (decision #53). HA's REST
+  # sensor polls it; its `litellm` Instructions field is a template reading
+  # the sensor. Read-only and secret-free. PERSONA_BIND should be this
+  # host's Tailscale IP on a real deployment: only HA needs to reach it.
+  # Pinned to the digest python:3.13-alpine resolved to on 2026-10-06
+  # (decision #45).
+  persona:
+    image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+    restart: unless-stopped
+    command: ["python", "-u", "/app/server.py"]
+    ports:
+      - "${PERSONA_BIND:-0.0.0.0}:${PERSONA_PORT:-13408}:8000"
+    volumes:
+      # ${REPO_DIR}, not a relative path, for the same reason as the router's
+      # mounts below: compose resolves relative paths against NOVAK_HOME.
+      - ${REPO_DIR}/persona/server.py:/app/server.py:ro
+      - ${REPO_DIR}/prompts:/prompts:ro
+
   # ── Portal (single glass pane over Open WebUI and Konzol) ─────────────
   # Optional, and gated behind a compose profile for the same reason the
   # console is: a missing OIDC client must skip this, not refuse to start

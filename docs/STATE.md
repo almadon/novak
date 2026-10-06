@@ -127,13 +127,15 @@ itself the way the rest of the stack has.
   caught as an inconsistency in decision #43's original reasoning.
   Cleaned up to one manifest in ESPHome's schema, authored as ours rather
   than the trainer's (decision #51).
-- **The HA-side half of the persona drift check** (decision #52) — decision
-  #44 built the router-log half; this reads HA's `litellm` config entry
-  over its websocket API and diffs the pasted Instructions text against
-  `prompts/novak-voice.md`, via a new dedicated `HA_DRIFT_TOKEN` (never
-  `HA_MCP_TOKEN` — HA tokens carry no scope, so a dedicated non-admin HA
-  user is what actually makes it read-only). Wired into `novak drift
-  --live`. Not yet run against a live HA instance; see Open VERIFY below.
+- **HA pulls the voice persona** (decision #53, replacing decision #52's
+  approach): `persona/server.py` (the `persona` compose service) serves
+  `prompts/novak-voice.md` as JSON, an HA REST sensor polls it, and the
+  `ha-voice` agent's Instructions field is a template reading the sensor.
+  No pasted copy remains. `novak drift --live` checks the pull is healthy
+  by reading that one sensor with a non-admin `HA_DRIFT_TOKEN`. Decision
+  #52's check, which tried to read the Instructions field over HA's
+  websocket API, was run against a real HA and could not work: that API
+  returns no settings for a config entry's subentries.
 
 ## Decided, not built
 
@@ -184,15 +186,11 @@ itself the way the rest of the stack has.
   and verified in this session's testing, but hasn't had the kind of
   real-world daily use that would turn "verified once" into "trusted."
   Worth revisiting after it's actually been lived with for a while.
-- **The HA-side persona drift check (decision #52) has not been run
-  against a live HA instance.** Its websocket calls and the field name it
-  reads out of a `litellm` config entry's subentry data
-  (`INSTRUCTION_KEYS` in `reconciler/ha_persona_drift.py`) are a
-  best-effort guess, not something this project could check directly. Set
-  up `HA_URL`/`HA_DRIFT_TOKEN` per `docs/home-assistant.md` and run `novak
-  drift --live` on a real deployment; if it reports the field name as
-  unrecognized, its error prints the raw config so the real key can be
-  dropped into `INSTRUCTION_KEYS`.
+- **HA persona pull (decision #53) needs confirming on a live HA.** The
+  server and the pull-health check are tested offline and against the
+  reference deployment's HA for reachability. Confirm that the Instructions
+  template renders the sensor's text (ask `ha-voice` who it is), and that
+  `novak drift --live` reports "matches" once the sensor exists.
 
 ## Not started
 

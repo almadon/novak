@@ -300,6 +300,7 @@ All external ports below are Spire's, in the `134xx` range by convention
 | Hindsight (web UI) | `13404` (`HINDSIGHT_UI_PORT`) |
 | Console | `13401` (`CONSOLE_PORT`) |
 | Wyoming openWakeWord | `13407` (`OPENWAKEWORD_PORT`) |
+| Persona server (HA pulls) | `13408` (`PERSONA_PORT`, bound by `PERSONA_BIND`) |
 
 STT/TTS are no longer Novak-hosted ports at all (decision #39) — they're
 HA's own native Whisper/Piper add-ons, running on whatever host HA itself

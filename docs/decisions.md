@@ -2650,3 +2650,53 @@ once and dropped in.
 real HA instance once `HA_URL`/`HA_DRIFT_TOKEN` are set up there, and fix
 `INSTRUCTION_KEYS` if the raw dump shows a different key than guessed.
 
+## 53. HA pulls the voice persona instead of holding a pasted copy
+
+Decision #52 tried to detect drift in the text pasted into HA's `litellm`
+Instructions field by reading that field over HA's websocket API. Run for
+the first time against a real HA, it could not work: the websocket call
+that lists a config entry's subentries (`config_entries/subentries/list`)
+returned the `ha-voice` agent with empty `data`, so the stored
+Instructions are not readable that way, and the other routes need an admin
+token, which defeats the dedicated read-only user #52 was built around.
+The first run also found two plain bugs (`HA_URL` was only read from the
+shell, not `.env`, and `set -e` hid the check's exit code), fixed in
+PR #66.
+
+The deeper issue is the design, not the detector. The router injects the
+persona for Open WebUI, but HA's agent always sends its own system message,
+so `ha-voice` is deliberately client-managed (`CLIENT_MANAGED_PERSONA`) and
+HA held a second, manually maintained copy. The intent of the project is
+that `prompts/` is the only copy and every client stays in sync, so HA
+should pull.
+
+### What was decided
+
+- `persona/server.py`, run as the `persona` compose service, serves
+  `prompts/novak-voice.md` (header stripped, same rule as the router) as
+  `{"text", "sha256"}` at `/voice.json`. Stdlib only, read-only, re-read on
+  every request, bound to the Novak host's Tailscale IP (`PERSONA_BIND`)
+  because only HA needs it. The persona is not a secret.
+- HA polls it with a REST sensor (`sensor.novak_voice_persona`, text in an
+  attribute, because a state is capped at 255 characters). The agent's
+  Instructions field is a template reading that attribute, with a short
+  fallback so an outage degrades the persona rather than removing it.
+- `ha_persona_drift.py` now reads that one sensor's state over REST and
+  compares its text with the repo. Reading a state works for a non-admin
+  user, so the read-only property holds, and it no longer needs
+  `websockets`.
+
+### What it costs
+
+HA's REST integration is YAML only, so one block goes into HA's
+`configuration.yaml` by hand. HA polls (default every five minutes), so a
+persona edit reaches `ha-voice` at the next poll, not instantly. HA will
+not let anything read the Instructions field back, so that the field
+contains the template is confirmed once by asking `ha-voice` who it is,
+not by the drift check. A new service and port (`13408`) join the stack.
+
+### What would make it worth revisiting
+
+HA exposing a conversation agent's stored settings to a read-only user, or
+HA's LiteLLM integration gaining a way to take Instructions from a URL,
+either of which would remove the YAML block.

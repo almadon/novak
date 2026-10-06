@@ -210,9 +210,9 @@ device control confirmed.
 - [ ] Add HA Core's own native **LiteLLM** integration (Settings →
       Devices & Services → Add Integration → "LiteLLM" — built in since
       HA 2026.8, nothing to install from HACS). Point it at the router's
-      URL, add a conversation agent for the `ha-voice` role, paste
-      [prompts/novak-voice.md](../prompts/novak-voice.md) into its
-      Instructions field, and check "Assist" for device control. Wire the
+      URL, add a conversation agent for the `ha-voice` role, set its
+      Instructions field (next item), and check "Assist" for device
+      control. Wire the
       new agent into your actual Assist pipeline (Settings → Voice
       assistants) — adding the integration alone doesn't do this.
       **On HA versions before 2026.8**, use **Custom Conversation** via
@@ -220,18 +220,18 @@ device control confirmed.
       — see [home-assistant.md](home-assistant.md)'s "History" section for
       that setup and the real compatibility bugs found running it.
       Decision 19 covers why not the other HACS candidates.
-- [ ] **Persona drift check for that Instructions field** (decision #52,
-      optional but cheap) — create a second, non-admin HA user for this
-      alone, generate a long-lived access token on *that* user's own
-      profile page, then `novak config set HA_URL ...` and `novak secret
-      set HA_DRIFT_TOKEN`. See [home-assistant.md](home-assistant.md)'s
-      "Persona drift check" section for exactly where in HA's UI each step
-      is. Never your own admin token and never `HA_MCP_TOKEN` here — HA's
-      long-lived tokens carry no scope of their own, so a dedicated
-      low-privilege user is what actually makes this read-only. `novak
-      drift --live` picks it up automatically once both are set; skips
-      silently otherwise. **Not yet verified against a real HA instance**
-      — see STATE.md's Open VERIFY list.
+- [ ] **Persona: let HA pull it** (decision #53): bind the `persona`
+      service to the Novak host's Tailscale IP (`novak config set
+      PERSONA_BIND ...`, `novak up`), add the REST sensor to HA's
+      `configuration.yaml`, and set the agent's Instructions to the
+      template that reads it. Exact steps and YAML in
+      [home-assistant.md](home-assistant.md)'s "Persona: HA pulls it".
+      Replaces a hand-pasted copy of the persona.
+- [ ] *(Optional)* **Pull-health check**: a second, non-admin HA user, a
+      long-lived token from its own profile page, then `novak config set
+      HA_URL ...` and `novak secret set HA_DRIFT_TOKEN`. `novak drift
+      --live` then confirms the sensor exists and matches the repo. Never
+      your admin token and never `HA_MCP_TOKEN`; see the same section.
 - [ ] STT/TTS: use Home Assistant's own native Whisper/Piper add-ons
       (decision #39) rather than standing up a second copy — install both
       from the Store if not already present. Wyoming wake word detection

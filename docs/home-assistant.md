@@ -34,9 +34,9 @@ Settings:
   `/v1` suffix, no API key needed if the router doesn't enforce one.
 - Per conversation agent (Settings → Devices & Services → LiteLLM → **Add
   conversation agent**): pick the role (**`ha-voice`** for this pipeline),
-  paste [prompts/novak-voice.md](../prompts/novak-voice.md)'s persona into
-  **Instructions** (supports Jinja templates), and check **Assist** under
-  "Control Home Assistant."
+  set **Instructions** to the template in "Persona: HA pulls it" below
+  (not a pasted copy), and check **Assist** under "Control Home
+  Assistant."
 - Wire the new agent into the actual pipeline: Settings → Voice assistants
   → your assistant → **Conversation agent** → the new `ha-voice` agent.
   Adding the LiteLLM integration does *not* do this automatically — it
@@ -133,43 +133,89 @@ custom-training path**, so "Hey Novak" works for Wyoming satellites (like
 Satellite1) but not (currently) for Voice PE. On Voice PE, keep a stock
 trigger like "okay nabu" — the assistant still answers as Novak.
 
-## Persona drift check (HA's own copy, decision #44/#52)
+## Persona: HA pulls it (decision #53)
 
-The Instructions field set up in step 1 above is a manual paste of
-[prompts/novak-voice.md](../prompts/novak-voice.md)'s body — a second,
-independently-maintained copy, not something the router can see. `novak
-drift --live` can catch it drifting, but only once it has its own
-credential:
+HA's `litellm` agent always sends its own system message, so the router
+cannot inject the persona for `ha-voice`. Instead of a hand-pasted copy,
+HA pulls it: a small server on the Novak host (`persona/server.py`, the
+`persona` compose service) serves `prompts/novak-voice.md` as JSON, a REST
+sensor in HA polls it, and the agent's Instructions field is a template
+that reads the sensor. Edit `prompts/`, and HA has it at its next poll.
 
-1. **Create a dedicated HA user for this alone** — Settings → People →
-   Users → Add User. Give it a name like `novak-drift-check` and leave it
-   an ordinary (non-admin) user. This matters more than it sounds: **Home
-   Assistant's long-lived access tokens carry no scope of their own** —
-   a token can do exactly what the user behind it can do, in full. The
-   only way this check is actually read-only is if the account issuing
-   the token is too. Do not use your own admin account's token here, and
-   do not reuse `HA_MCP_TOKEN` (a different, much higher-privilege
-   credential belonging to the separate `ha-mcp` registry entry — decision
-   #44 already rejected reusing it for exactly this reason).
-2. **Log in as that user, then create the token on its own profile page**
-   — click the user's name (bottom left) → scroll to **Long-Lived Access
-   Tokens** → **Create Token**. Copy it immediately; HA shows it once.
-3. Apply it to this deployment:
+1. **Bind the server to the Tailscale IP** on the Novak host, so only the
+   tailnet can reach it:
+
    ```bash
-   novak config set HA_URL http://<ha-host>:8123
+   novak config set PERSONA_BIND <novak-host-tailscale-ip>
+   novak up
+   ```
+
+   `curl http://<novak-host-tailscale-ip>:13408/voice.json` should return
+   `{"text": ..., "sha256": ...}`.
+
+2. **Add the REST sensor to HA's `configuration.yaml`** (HA's REST
+   integration is YAML only, there is no UI for it), then reload it from
+   Developer tools → YAML → REST entities (no restart needed):
+
+   ```yaml
+   rest:
+     - resource: http://<novak-host-tailscale-ip>:13408/voice.json
+       scan_interval: 300
+       sensor:
+         - name: Novak voice persona
+           value_template: "{{ value_json.sha256[:12] }}"
+           json_attributes:
+             - text
+   ```
+
+   The entity is `sensor.novak_voice_persona`: its state is a short hash
+   of the persona, and its `text` attribute is the persona itself.
+
+3. **Set the agent's Instructions** (Settings → Devices & Services →
+   LiteLLM → the `ha-voice` agent's gear) to:
+
+   ```jinja
+   {{ state_attr('sensor.novak_voice_persona', 'text') or 'You are Novak, a private home assistant. You are speaking aloud. Answer in one or two short sentences with no markdown.' }}
+   ```
+
+   The text after `or` is a short fallback so a sensor outage degrades
+   the persona instead of removing it.
+
+4. Ask `ha-voice` "who are you?" once to confirm the template rendered.
+   HA gives no way to read the Instructions field back, so this is the
+   only check that it is in place.
+
+### The pull-health check
+
+`novak drift --live` can confirm the pull is healthy: that
+`sensor.novak_voice_persona` exists, is available, and its text matches
+`prompts/novak-voice.md`. It reads one entity's state, so it works with a
+non-admin user's token:
+
+1. **Create a dedicated HA user** (Settings → People → Users → Add User,
+   e.g. `novak-drift-check`), left non-admin. HA's long-lived tokens carry
+   no scope of their own: a token can do whatever its user can, so a
+   non-admin user is what makes this read-only. Never use your admin
+   token, and never `HA_MCP_TOKEN` (a different, much higher-privilege
+   credential).
+2. **Log in as that user** and create the token on its own profile page
+   (bottom-left name → Long-Lived Access Tokens → Create Token). HA
+   shows it once.
+3. Apply it:
+
+   ```bash
+   novak config set HA_URL http://<ha-host>
    novak secret set HA_DRIFT_TOKEN
    ```
-   (paste the token when prompted — same `novak secret set` flow as any
-   other credential here, never typed directly into `.env`).
-4. `novak drift --live` now includes this check automatically. With
-   nothing set, it skips silently rather than failing.
 
-**Built, not yet verified against a live HA instance** — see
-`reconciler/ha_persona_drift.py`'s own docstring and `docs/STATE.md`'s Open
-VERIFY list: the field name it reads out of HA's `litellm` config entry is
-a best guess, and it deliberately fails loud (printing the raw config) if
-it doesn't recognize what it finds, rather than silently reporting no
-drift.
+   Use the HA host's address as you reach it (include the port only if it
+   is not 80). Paste the token when prompted, never into `.env` directly.
+4. `novak drift --live` now includes the check. With nothing set it skips
+   silently.
+
+Note that HA's web login refuses to authorize from a Tailscale `100.x`
+address ("Invalid client id"), so use the LAN address or a hostname for
+the UI. API calls with a token are not affected.
 
 ## 4. Assist pipeline
 

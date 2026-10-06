@@ -44,10 +44,11 @@ PERSONA_MAP = {
 
 # Models whose persona is client-managed, not router-injected: a client
 # system message here is expected, not drift. HA's native `litellm`
-# conversation agent (decision #42) takes its persona from its own
-# Instructions field, itself a manual, separately-maintained copy of
-# prompts/novak-voice.md's body — the router is never the source of truth
-# for this model, so it has nothing to warn about.
+# conversation agent (decision #42) always sends its own system message, so
+# injection can never apply. Its Instructions field is a template that reads
+# a REST sensor HA polls from persona/server.py (decision #53), so
+# prompts/novak-voice.md is still the only copy and the router has nothing
+# to warn about.
 CLIENT_MANAGED_PERSONA = {"ha-voice"}
 
 

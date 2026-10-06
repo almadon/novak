@@ -605,17 +605,14 @@ cmd_drift() {
   fi
 
   # ── HA-side persona (live, opt-in, separate credential) ─────────────────
-  # Decision #38's failure mode above is "a client skipped injection." This
-  # is the other half of decision #18's original problem: HA's `litellm`
-  # Instructions field is a *deliberate* second copy of
-  # prompts/novak-voice.md (decision #42), not an accident, so there's no
-  # skipped-injection event to grep for — the only way to catch drift here
-  # is reading HA's own config and diffing it (decision #44/#52). Skips
-  # silently (not a failure) when HA_URL/HA_DRIFT_TOKEN aren't set, same
-  # "an unconfigured integration degrades individually" rule as everything
-  # else in this command.
+  # HA pulls prompts/novak-voice.md through a REST sensor (decision #53), so
+  # there is no pasted copy to drift. What this checks is that the pull is
+  # working: the sensor exists, is available, and its text matches the repo.
+  # Skips silently (not a failure) when HA_URL/HA_DRIFT_TOKEN aren't set,
+  # same "an unconfigured integration degrades individually" rule as
+  # everything else in this command.
   if [ "$live" -eq 1 ]; then
-    bold "Persona   (live — HA's Instructions field)"
+    bold "Persona   (live — HA's synced copy)"
     echo
     # HA_URL is a plain .env setting, so read it the way every other config
     # value is read (envval); an exported shell variable still wins.
@@ -710,6 +707,7 @@ cmd_ports() {
   row "oMLX (host app)"  "$(envval OMLX_PORT)"
   row "Router"           "$(envval ROUTER_PORT)"
   row "Console"          "$(envval CONSOLE_PORT)"
+  row "Persona (HA pull)" "$(envval PERSONA_PORT)"
   row "Hindsight API"    "$(envval HINDSIGHT_PORT)"
   row "Hindsight UI"     "$(envval HINDSIGHT_UI_PORT)"
   row "Open WebUI"       "$(envval OPENWEBUI_PORT)"

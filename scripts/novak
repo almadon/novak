@@ -617,8 +617,11 @@ cmd_drift() {
   if [ "$live" -eq 1 ]; then
     bold "Persona   (live — HA's Instructions field)"
     echo
+    # HA_URL is a plain .env setting, so read it the way every other config
+    # value is read (envval); an exported shell variable still wins.
+    local ha_url; ha_url="${HA_URL:-$(envval HA_URL)}"
     local ha_token; ha_token="$(keychain HA_DRIFT_TOKEN 2>/dev/null || true)"
-    if [ -z "${HA_URL:-}" ] || [ -z "$ha_token" ] || [ "$ha_token" = "set-in-keychain" ]; then
+    if [ -z "$ha_url" ] || [ -z "$ha_token" ] || [ "$ha_token" = "set-in-keychain" ]; then
       dim "  HA_URL/HA_DRIFT_TOKEN not configured — skipping. See"
       dim "  docs/home-assistant.md for where to create the token."
       echo
@@ -627,9 +630,12 @@ cmd_drift() {
       echo
     else
       local ha_out ha_rc
-      ha_out="$(HA_URL="$HA_URL" HA_DRIFT_TOKEN="$ha_token" \
-        "$NOVAK_HOME/.venv/bin/python" "$REPO_DIR/reconciler/ha_persona_drift.py" 2>&1)"
-      ha_rc=$?
+      # `|| ha_rc=$?`: this script runs under `set -e`, and the check exits 1
+      # (drift) or 2 (could not check) on purpose — a bare assignment would
+      # abort the whole command before either result was reported.
+      ha_rc=0
+      ha_out="$(HA_URL="$ha_url" HA_DRIFT_TOKEN="$ha_token" \
+        "$NOVAK_HOME/.venv/bin/python" "$REPO_DIR/reconciler/ha_persona_drift.py" 2>&1)" || ha_rc=$?
       if [ "$ha_rc" -eq 0 ]; then
         grn "  ${ha_out}"
       elif [ "$ha_rc" -eq 1 ]; then

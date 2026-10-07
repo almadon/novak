@@ -302,6 +302,8 @@ All external ports below are Spire's, in the `134xx` range by convention
 | Wyoming openWakeWord | `13407` (`OPENWAKEWORD_PORT`) |
 | Persona server (HA pulls) | `13408` (`PERSONA_PORT`, bound by `PERSONA_BIND`) |
 
+The router, Ollama and the persona server take a `*_BIND` address (`ROUTER_BIND`, `OLLAMA_BIND`, `PERSONA_BIND`); set them to the host's Tailscale IP so only the tailnet can reach them (decision #54). Containers in the stack reach each other by service name, not through these published ports.
+
 STT/TTS are no longer Novak-hosted ports at all (decision #39) — they're
 HA's own native Whisper/Piper add-ons, running on whatever host HA itself
 runs on, outside this table's scope.

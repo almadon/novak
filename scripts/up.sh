@@ -214,6 +214,37 @@ else
   echo "skipped:  router — not configured: ${router_missing[*]}" >&2
   echo "          everything else starts; set those and re-run to add it." >&2
 fi
+# Ollama is the Linux/GPU engine (docker-compose.yml's ollama service), so it
+# is part of the stack whenever an engine in registry/engines.yaml actually
+# points at this host's Ollama. It stays out when engines point elsewhere
+# (oMLX on a Mac, or an Ollama on another machine), which is why it sits
+# behind a profile at all. Nothing else started it on Unraid before this:
+# Compose Manager did, through its own profiles file.
+ollama_wanted="$("$PY" - "$NOVAK_HOME" <<'PYEOF'
+import os, re, sys
+import yaml
+home = sys.argv[1]
+env = {}
+for line in open(os.path.join(home, ".env")):
+    m = re.match(r"([A-Z0-9_]+)=(.*)", line.strip())
+    if m:
+        env[m.group(1)] = m.group(2)
+path = os.path.join(home, "registry", "engines.yaml")
+if not os.path.exists(path):
+    sys.exit(0)
+port = env.get("OLLAMA_PORT", "11434")
+local = {"ollama", "host.docker.internal", "localhost", "127.0.0.1", env.get("HOST_NAME", "")}
+for engine in (yaml.safe_load(open(path)) or {}).get("engines") or []:
+    url = env.get(engine.get("base_url_var", ""), "")
+    m = re.match(r"https?://([^:/]+)(?::(\d+))?", url)
+    if m and m.group(1) in local and (m.group(1) == "ollama" or (m.group(2) or "80") == port):
+        print("yes")
+        break
+PYEOF
+)"
+if [ "$ollama_wanted" = "yes" ]; then
+  profiles+=(ollama)
+fi
 if [ ${#profiles[@]} -gt 0 ]; then
   export COMPOSE_PROFILES
   COMPOSE_PROFILES="$(IFS=,; echo "${profiles[*]}")"

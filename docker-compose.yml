@@ -410,7 +410,7 @@ services:
     restart: unless-stopped
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     ports:
-      - "${ROUTER_PORT:-13402}:4000"
+      - "${ROUTER_BIND:-0.0.0.0}:${ROUTER_PORT:-13402}:4000"
     # env_file, not an enumerated `environment:` allowlist — the whole point
     # of registry/engines.yaml (decision #28/#29) is that an engine's
     # base_url_var/api_key_var can be ANY name, chosen per deployment. A
@@ -493,7 +493,7 @@ services:
     image: ollama/ollama@sha256:da6e0dc5651df159e45686fd663c4dbe1624a52c44d7280eeac1551d8f865532
     restart: unless-stopped
     ports:
-      - "${OLLAMA_PORT:-11434}:11434"
+      - "${OLLAMA_BIND:-0.0.0.0}:${OLLAMA_PORT:-11434}:11434"
     devices:
       # RDNA4/RDNA3-class AMD GPU passthrough (Vulkan or ROCm). Harmless to
       # list on a host without these nodes — Ollama falls back to CPU-only

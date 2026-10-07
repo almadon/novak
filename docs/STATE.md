@@ -127,6 +127,7 @@ itself the way the rest of the stack has.
   caught as an inconsistency in decision #43's original reasoning.
   Cleaned up to one manifest in ESPHome's schema, authored as ours rather
   than the trainer's (decision #51).
+- **Bind addresses and Ollama's profile** (decision #54): `ROUTER_BIND` and `OLLAMA_BIND` put the router and Ollama on the Tailscale IP instead of every interface, and `up.sh` now starts Ollama whenever an engine in `engines.yaml` points at this host's Ollama.
 - **HA pulls the voice persona** (decision #53, replacing decision #52's
   approach): `persona/server.py` (the `persona` compose service) serves
   `prompts/novak-voice.md` as JSON, an HA REST sensor polls it, and the

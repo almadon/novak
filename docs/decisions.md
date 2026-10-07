@@ -2700,3 +2700,52 @@ not by the drift check. A new service and port (`13408`) join the stack.
 HA exposing a conversation agent's stored settings to a read-only user, or
 HA's LiteLLM integration gaining a way to take Instructions from a URL,
 either of which would remove the YAML block.
+
+## 54. Published ports bind to the Tailscale IP; containers talk by service name; Ollama follows engines.yaml
+
+Two things the first real deployment forced into the open.
+
+### Who a published port is for
+
+The router (`13402`) and Ollama (`11434`) were published on `0.0.0.0`, so
+anything on the LAN could use them, and neither has authentication. The
+only outside client of the router is Home Assistant, over Tailscale. A key
+on the router would have to be set in every client (HA, Open WebUI,
+Hindsight) and in the generated router config. Binding the port to the
+host's Tailscale IP gets most of that protection with one setting.
+
+`ROUTER_BIND` and `OLLAMA_BIND` (default `0.0.0.0`, so existing
+deployments are unchanged until they opt in) set the address. A bind to one
+address does not accept connections to another, so containers must not
+reach these services through the published port (`host.docker.internal`
+resolves to the Docker bridge, not the Tailscale IP). Open WebUI and
+Hindsight use the router's service name instead (`http://router:4000/v1`),
+which also removes any dependency on Tailscale being up for
+container-to-container traffic.
+
+### Who starts Ollama
+
+`up.sh` enabled the console, portal and router profiles but never
+`ollama`, because on Unraid Compose Manager had been doing it through its
+own `profiles` file. Once a stack is run with `novak up` and `novak
+update` instead, nothing started it, and a `novak down` followed by `up`
+left the engine down. Ollama is part of the stack whenever an engine in
+`registry/engines.yaml` points at this host's Ollama, so `up.sh` now reads
+that file and enables the profile in that case (a `ollama` service name,
+`host.docker.internal`, `localhost`, or the host's own name, on the Ollama
+port). An oMLX deployment or an engine on another machine leaves it off,
+which is why it stays behind a profile.
+
+### What it costs
+
+A router on the Tailscale IP is unreachable from LAN clients that were
+using it. Moving Open WebUI and Hindsight to the service name is a change
+to each deployment's `.env`. The detection rule is a heuristic over URLs,
+so an unusual setup (Ollama reached through a hostname alias) needs the
+profile enabled by hand.
+
+### What would make it worth revisiting
+
+A client appearing that cannot use Tailscale; or router authentication
+being wanted anyway, for example if the router is ever reachable beyond
+the tailnet.

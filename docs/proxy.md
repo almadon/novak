@@ -123,7 +123,7 @@ port forwarding.
 **Corrected for decision #36 (this household's real, current shape):** the
 internal proxy now runs ON Spire itself — the same box as the services it
 fronts — replacing the earlier plan of a separate always-on proxy host (and
-replacing Mitochon's former role once it stopped running as a server,
+replacing the original Mac host's former role once it stopped running as a server,
 decision #33). `localhost` addresses below, not Tailscale hops — see "The
 shape" above for why that's correct here. A deployment that keeps its proxy
 on a genuinely separate host should use that host's Tailscale address
@@ -252,24 +252,48 @@ httpx.HTTPStatusError: Client error '401 Unauthorized'
   for url 'http://<core-host-ts-ip>:13403/mcp/household/'
 ```
 
-The way through is to let the proxy hold the credential and add it per request.
-HA then talks to an endpoint that needs no auth from its side, while Hindsight
-still refuses anything that reaches it without the key.
+The way through is to let a small proxy hold the credential and add it per
+request. HA then talks to an endpoint that needs no auth from its side, while
+Hindsight still refuses anything that reaches it without the key.
+
+This does not need a public hostname or TLS. HA and the Novak host are on the
+same tailnet, so the proxy listens on the host's Tailscale IP, in plain HTTP,
+on a port of its own. Nothing about it is reachable from outside the tailnet.
 
 ```caddy
-# Only Home Assistant may use this route — it carries no credential of its own.
-@ha remote_ip <ha-tailscale-ip>
+{
+	auto_https off
+}
 
-memory-ha.novak.example.tld {
-	import novak-internal
-	handle @ha {
-		reverse_proxy <core-host-ts-ip>:13403 {
+# Listens on the tailnet only. Only Home Assistant, and only the household
+# bank's path, gets through; the route carries a credential of its own.
+http://<novak-host-tailscale-ip>:13409 {
+	@ha_household {
+		remote_ip <ha-tailscale-ip>
+		path /mcp/household /mcp/household/*
+	}
+	handle @ha_household {
+		reverse_proxy <novak-host-tailscale-ip>:13403 {
 			header_up Authorization "Bearer {env.HINDSIGHT_API_KEY}"
+			flush_interval -1
 		}
 	}
 	respond 403
 }
 ```
+
+Then point HA's Model Context Protocol integration at
+`http://<novak-host-tailscale-ip>:13409/mcp/household/`. Notes:
+
+- `flush_interval -1` stops Caddy buffering the streamed MCP responses.
+- `HINDSIGHT_API_KEY` must be in Caddy's own environment. If Caddy runs as a
+  container, pass it with `environment:` or an `env_file:` (a second copy of
+  the key, see the cost below).
+- `remote_ip` only sees HA's real address if the connection reaches Caddy
+  directly. Run Caddy with `network_mode: host`, or confirm the published port
+  preserves the source address, before relying on it.
+- If Hindsight's own port is bound to the Tailscale IP, Caddy must reach it on
+  that address (as above), not on `localhost`.
 
 Traefik, file provider:
 
@@ -285,7 +309,7 @@ http:
         sourceRange: ["<ha-tailscale-ip>/32"]
   routers:
     novak-memory-ha:
-      rule: "Host(`memory-ha.novak.example.tld`)"
+      rule: "PathPrefix(`/mcp/household`)"
       middlewares: [ha-only, hindsight-auth]
       service: novak-memory
 ```
@@ -418,7 +442,7 @@ documentation:
   Confirmed directly: TinyAuth refuses to start with "ip addresses not
   allowed" against a bare Tailscale IP, and separately with "invalid url,
   must be in format https(s)://host" against a schemeless hostname.
-  `http://mini.local:13408` starts cleanly; `http://100.120.1.110:13408`
+  `http://host.local:13408` starts cleanly; `http://<tailscale-ip>:13408`
   does not start at all. If the portal needs to be reachable from off the
   LAN, use your tailnet's MagicDNS name for the node (visible in
   `tailscale status`), not the IP `novak ports` otherwise reports.

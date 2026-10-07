@@ -382,7 +382,7 @@ starts.
 account looks absent when it is merely invisible.
 
 ```
-SERVICE          PORT   LOCALHOST   100.120.1.110
+SERVICE          PORT   LOCALHOST   <host-ts-ip>
 oMLX (host app)  8000   yes         no
 Console          3002   yes         yes
 ```

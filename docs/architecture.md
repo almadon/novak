@@ -195,7 +195,7 @@ migration decision #28 recorded is now complete, not aspirational:
 Hindsight, Open WebUI, the console, `openwakeword` (the one Wyoming voice
 service Novak still runs — whisper/piper were decommissioned, decision
 #39), and Ollama all run together on Spire (Unraid, AMD RDNA4 GPU).
-Mitochon (the Mac mini)
+The original macOS host
 has been taken down as a server and is kept only for oMLX development —
 Novak's household deployment has no dependency on it running.
 
@@ -221,7 +221,7 @@ one host:
 
 | Service | Constraint | Where |
 |---|---|---|
-| oMLX | Metal/MLX — cannot be containerized or moved | Mitochon, kept for development only, not depended on in production |
+| oMLX | Metal/MLX — cannot be containerized or moved | A macOS host, kept for development only, not depended on in production |
 | Ollama | needs a GPU worth using | Spire (RDNA4/Vulkan) — the household's real `deep`/`chat`/`ha-voice` engine now |
 | Hindsight | every memory write triggers an LLM extraction call — wants to be next to whichever engine serves it | Spire, pointed at Spire's own Ollama (`HINDSIGHT_LLM_MODEL`/`HINDSIGHT_LLM_PROVIDER`), not oMLX |
 | `openwakeword` (Wyoming) | voice latency budget is ~1–2s end to end; keep close to HA and the satellites | Spire, same LAN as HA |
@@ -290,7 +290,7 @@ All external ports below are Spire's, in the `134xx` range by convention
 
 | Service | Port |
 |---|---|
-| oMLX | per app config (`OMLX_PORT`) — Mitochon, development only |
+| oMLX | per app config (`OMLX_PORT`), on the macOS host, development only |
 | Ollama | `11434` (`OLLAMA_PORT`) |
 | Router (LiteLLM) | `13402` (`ROUTER_PORT`) |
 | Open WebUI | `13400` (`OPENWEBUI_PORT`) |

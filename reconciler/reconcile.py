@@ -259,7 +259,9 @@ def render(servers: list[dict], configured: set[str]) -> dict:
         svc = {
             "image": s["image"],
             "restart": "unless-stopped",
-            "ports": [f"{s['port']}:8000"],
+            # MCP_BIND is resolved by compose at up-time (default: every interface).
+            # Set it to the host's Tailscale IP so only the tailnet reaches these.
+            "ports": [f"${{MCP_BIND:-0.0.0.0}}:{s['port']}:8000"],
         }
         if s["command"]:
             svc["command"] = s["command"]

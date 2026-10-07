@@ -108,8 +108,8 @@ Protocol integration pointing at `tcp://<core-host>:${OPENWAKEWORD_PORT}`
 Settings → Devices & Services → Add Integration → **Model Context
 Protocol** (official, HA 2025.2+), once per server:
 
-- Hindsight: `http://<mini>:8888/mcp/household/` with the API key as a bearer
-  token.
+- Hindsight: `http://<novak-host-tailscale-ip>:13409/mcp/household/`, through the
+  header-adding proxy in docs/proxy.md (HA cannot send the API key itself).
 
   **The bank is in the URL**, which is why this works at all: HA's MCP client
   cannot send custom headers per-server for scoping, so a backend that

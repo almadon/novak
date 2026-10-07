@@ -57,7 +57,7 @@ roles pointing at different engines simultaneously, which is exactly what
 this household runs: `chat` and `deep`'s smaller tiers on Ollama/Spire
 (fast, fits VRAM cleanly), while a model too large for that card
 (Qwen3.8-27B, confirmed not fitting RX 9060 XT's 16GB — see decision #28)
-stays on oMLX/Mitochon instead, because that's the hardware it actually
+stays on oMLX on a Mac instead, because that's the hardware it actually
 fits.
 
 This is a real, working `router/config.yaml` shape, not a hypothetical:
@@ -72,7 +72,7 @@ model_list:
   - model_name: deep
     litellm_params:
       model: openai/hf.co/unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M
-      api_base: http://mitochon.tailnet-name.ts.net:8000/v1
+      api_base: http://mac-host.tailnet-name.ts.net:8000/v1
       api_key: os.environ/OMLX_API_KEY
 ```
 

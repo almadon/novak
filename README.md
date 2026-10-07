@@ -7,7 +7,7 @@ things about you, can look things up in your notes, and can act on your behalf
 through tools you choose to give it. Nothing you say to it leaves your machines.
 
 > **Status: in real use, still being hardened.** Novak started as a single
-> Mac mini deployment; as of decision #28 it's multi-platform by design —
+> macOS-host deployment; as of decision #28 it's multi-platform by design —
 > core services run on macOS or Linux (Unraid is the tested reference), and
 > the inference engine is chosen per host rather than assumed: oMLX on
 > Apple Silicon, Ollama on Linux with a GPU. The primary household

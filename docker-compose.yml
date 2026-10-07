@@ -6,7 +6,7 @@
 #   - Linux + GPU: the `ollama` profile runs the engine in-stack instead;
 #     see docs/ollama-settings.md. Spire (Unraid, RDNA4/Vulkan) is the
 #     reference deployment as of decision #33 and is where most active
-#     development now happens; Mitochon (the Mac) stays supported for oMLX
+#     development now happens; a Mac host stays supported for oMLX
 #     work.
 # Start with scripts/up.sh on macOS (pulls secrets from Keychain); on
 # Unraid, apply via Compose Manager against real .env values (no Keychain
@@ -66,7 +66,7 @@ services:
       # reverse proxy it is a public name on another host that this stack never
       # sees. HOST_NAME is how machines here reach each other, and is the wrong
       # answer whenever a proxy is in front.
-      WEBUI_URL: "${OWUI_PUBLIC_URL:-http://${HOST_NAME:-mini.local}:${OPENWEBUI_PORT:-13400}}"
+      WEBUI_URL: "${OWUI_PUBLIC_URL:-http://${HOST_NAME:-localhost}:${OPENWEBUI_PORT:-13400}}"
       # Keep everything local: no external telemetry-ish integrations.
       ENABLE_OPENAI_API: "true"
       # Left unset, Open WebUI generates a random key at every container
@@ -104,11 +104,11 @@ services:
       OAUTH_PROVIDER_NAME: "${OWUI_OIDC_PROVIDER_NAME:-Pocket ID}"
       # Pin the callback. Left unset, Open WebUI builds it from the incoming
       # request's Host header — so it becomes whatever name you happened to
-      # type, and http://mini.local:13400/... and http://<tailscale-ip>:13400/...
+      # type, and http://host.local:13400/... and http://<tailscale-ip>:13400/...
       # are different redirect URIs that BOTH have to be registered with the
       # IdP. Pinning it means one URI to register and the same behaviour from
       # every hostname. Verified in Open WebUI's oauth.py.
-      OPENID_REDIRECT_URI: "${OWUI_OIDC_REDIRECT_URI:-${OWUI_PUBLIC_URL:-http://${HOST_NAME:-mini.local}:${OPENWEBUI_PORT:-13400}}/oauth/oidc/login/callback}"
+      OPENID_REDIRECT_URI: "${OWUI_OIDC_REDIRECT_URI:-${OWUI_PUBLIC_URL:-http://${HOST_NAME:-localhost}:${OPENWEBUI_PORT:-13400}}/oauth/oidc/login/callback}"
       # Off by default: with signup on, anyone your IdP authenticates gets an
       # account here. Turn it on once the IdP admits only people you mean in.
       ENABLE_OAUTH_SIGNUP: "${OWUI_OIDC_SIGNUP:-false}"
@@ -140,7 +140,7 @@ services:
     volumes:
       # ${OWUI_DATA_DIR:-open-webui} resolves to a bind mount when set (a
       # real host path — e.g. Spire's teracache split, decision #33) or the
-      # named volume below when unset (Mitochon's default, unchanged).
+      # named volume below when unset (the macOS default, unchanged).
       # Compose decides bind-mount vs. named-volume purely from whether the
       # source string matches a key under top-level `volumes:` — no other
       # code path needed for one image to support both deployment shapes.
@@ -187,7 +187,7 @@ services:
       AUTH_SECRET: "${CONSOLE_AUTH_SECRET}"
       # Same reasoning as OWUI_PUBLIC_URL: if a proxy fronts the console, this
       # must be the name users type, not how machines here reach each other.
-      AUTH_URL: "${KONZOL_PUBLIC_URL:-http://${HOST_NAME:-mini.local}:${CONSOLE_PORT:-13401}}"
+      AUTH_URL: "${KONZOL_PUBLIC_URL:-http://${HOST_NAME:-localhost}:${CONSOLE_PORT:-13401}}"
       AUTH_TRUST_HOST: "true"
       OIDC_ISSUER: "${OIDC_ISSUER}"
       OIDC_CLIENT_ID: "${OIDC_CLIENT_ID}"
@@ -353,7 +353,7 @@ services:
   #
   # TINYAUTH_APPURL must be a real hostname, not an IP — confirmed directly:
   # TinyAuth refuses to start with "ip addresses not allowed" against a bare
-  # Tailscale IP. mini.local and a Tailscale MagicDNS name both work; see
+  # Tailscale IP. A LAN name (host.local) and a Tailscale MagicDNS name both work; see
   # docs/proxy.md if the portal needs to be reachable from off the LAN.
   tinyauth:
     profiles: ["portal"]
@@ -432,7 +432,7 @@ services:
     # instead, and has to already be complete in .env.
     env_file:
       - .env
-    # A real bug found deploying to Mitochon after this design otherwise
+    # A real bug found deploying to a Mac host after this design otherwise
     # proved itself on Spire: env_file above reads .env's LITERAL on-disk
     # text, and a secret's line there is deliberately never the real value
     # (set-in-keychain is a placeholder — up.sh resolves the actual value

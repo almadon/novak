@@ -47,7 +47,7 @@ On the UPS, in order of importance:
 
 1. **The JetKVM** — no KVM, no unlock. It draws almost nothing.
 2. **Router and switch** — the KVM needs a network path out.
-3. **The Mac mini.**
+3. **The host.**
 
 If your UPS cannot carry all three, carry the KVM and the network gear and let
 the Mac drop. A Mac that lost power is recoverable remotely; a Mac you cannot

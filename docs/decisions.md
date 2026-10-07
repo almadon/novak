@@ -2791,3 +2791,45 @@ nothing there.
 A model whose non-thinking mode is noticeably worse than its thinking mode
 for the questions people actually ask, or a way to switch per request that
 LiteLLM accepts.
+
+## 56. Keep chat and task resident together: a memory budget, not a smaller model
+
+Even with thinking off (decision #55), Open WebUI turns paid a hidden
+reload. Each turn is a chat call plus background calls (title, tags,
+follow-ups) on the `task` role, and with Ollama's defaults (four parallel
+slots, 4096 context) `qwen3:14b` took 11 GB and the 4B task model 7.5 GB, so
+they could not share a 16 GB card: every turn swapped one out for the other.
+
+Measured on the reference deployment, models unloaded at the start:
+
+| step | before | after |
+|---|---|---|
+| chat turn after a task call | first word 6.4 s | 0.12 s |
+| task call after a chat turn | 2.6 s | 0.27 s |
+| `qwen3:14b` tokens/s | 33 | 32 to 33 |
+| 4B instruct tokens/s | 95 | 95 to 98 |
+| VRAM, both models loaded | did not fit | 13.97 of 16.30 GB |
+| chat context | 4096 (silent truncation) | 8192 |
+
+### What was decided
+
+`OLLAMA_CONTEXT_LENGTH`, `OLLAMA_FLASH_ATTENTION` and `OLLAMA_KV_CACHE_TYPE`
+are passed through by the compose file, with Ollama's own values as the
+defaults, next to the existing `OLLAMA_NUM_PARALLEL` and
+`OLLAMA_KEEP_ALIVE`. The reference deployment sets two parallel slots, an
+8192 context, flash attention, a q8_0 KV cache and a 24 hour keep-alive. KV
+cache memory is roughly context times parallel slots per loaded model, so
+the budget is: weights, plus context times slots times the per-token KV size,
+for every model that must stay loaded, under the card's memory.
+
+### What it costs
+
+Two parallel slots per model instead of four: two simultaneous requests to
+the same model queue the third. Loading the 27B `deep` model (about 15 GB)
+evicts both resident models; they reload on next use (not measured). The
+first request after a restart or a 24 hour idle still pays the load.
+
+### What would make it worth revisiting
+
+More than two people using chat at once, a card with more or less memory, or
+a different model mix (the arithmetic above is the thing to redo).

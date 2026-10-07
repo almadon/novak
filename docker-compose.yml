@@ -509,6 +509,14 @@ services:
       OLLAMA_MAX_LOADED_MODELS: "${OLLAMA_MAX_LOADED_MODELS:-2}"
       OLLAMA_NUM_PARALLEL: "${OLLAMA_NUM_PARALLEL:-4}"
       OLLAMA_KEEP_ALIVE: "${OLLAMA_KEEP_ALIVE:-20m}"
+      # Memory budget knobs (decision #56). The defaults below are Ollama's
+      # own, so nothing changes until a deployment sets them. The numbers that
+      # matter: KV cache memory is roughly (context x parallel slots) per
+      # loaded model, which decides whether the chat and task models can stay
+      # in VRAM together instead of being swapped on every turn.
+      OLLAMA_CONTEXT_LENGTH: "${OLLAMA_CONTEXT_LENGTH:-4096}"
+      OLLAMA_FLASH_ATTENTION: "${OLLAMA_FLASH_ATTENTION:-0}"
+      OLLAMA_KV_CACHE_TYPE: "${OLLAMA_KV_CACHE_TYPE:-f16}"
     volumes:
       # See OWUI_DATA_DIR's comment above — same pattern. Model weights are
       # large enough that most real deployments will want this pointed at

@@ -2751,3 +2751,43 @@ profile enabled by hand.
 A client appearing that cannot use Tailscale; or router authentication
 being wanted anyway, for example if the router is ever reachable beyond
 the tailnet.
+
+## 55. Interactive roles run with thinking off
+
+Open WebUI felt slow, and the cause was not throughput. `chat` is
+`qwen3:14b`, a hybrid reasoning model, and by default it reasons invisibly
+before answering. Measured on the reference deployment (RX 9060 XT, Ollama
+over Vulkan, streaming, warm unless noted):
+
+| `qwen3:14b` | first visible word | total |
+|---|---|---|
+| thinking on, one-sentence question | 10 to 20 s (45 s from a cold start) | 11 to 22 s |
+| thinking on, 120-word answer | 8 s | 12 s |
+| thinking on, short logic puzzle | never, inside a 600-token cap | 18 s |
+| thinking off | 0.1 to 0.2 s | 1.3 to 4.3 s |
+
+Tokens per second were the same either way (about 33). The non-thinking
+`qwen3:4b-instruct` runs at about 95 tokens per second. Disabling by a
+`/no_think` suffix in the prompt did nothing on this Ollama.
+
+### What was decided
+
+`registry/engines.yaml` takes an optional `thinking: off` per role, which
+`router_apply.py` renders as `extra_body: {reasoning_effort: none}` in that
+role's LiteLLM params. `extra_body`, because LiteLLM rejects
+`reasoning_effort: "none"` as an unsupported OpenAI parameter (HTTP 400)
+but passes `extra_body` through, and Ollama honours it. YAML 1.1 reads an
+unquoted `off` as `false`, so both spellings are accepted. Roles meant for
+deliberate reasoning (`deep`) are left on the default.
+
+### What it costs
+
+A role set to `off` cannot be asked to reason per request; use `deep` for
+that. Engines other than Ollama ignore the extra field, so the setting does
+nothing there.
+
+### What would make it worth revisiting
+
+A model whose non-thinking mode is noticeably worse than its thinking mode
+for the questions people actually ask, or a way to switch per request that
+LiteLLM accepts.

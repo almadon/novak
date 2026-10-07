@@ -25,6 +25,12 @@
 #            EVERY engine in this file: two engines both claiming to serve
 #            "chat" is ambiguous, not load-balancing, and the reconciler
 #            refuses it.
+#     thinking  optional  "default" or "off". "off" asks a hybrid reasoning model
+#            (Qwen3 and relatives) not to reason before answering, which turns
+#            seconds of hidden thinking into an immediate first word. Use it for
+#            interactive roles (chat, voice); leave the role meant for hard
+#            questions (deep) on "default". Honoured by Ollama; other engines
+#            ignore the extra field.
 #     model  the engine's OWN id for this model — an oMLX
 #            "<repo-basename>:<profile>" string, an Ollama tag, whatever
 #            that specific engine calls it. Never validated against the

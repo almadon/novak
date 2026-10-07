@@ -60,6 +60,14 @@ NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$")
 ENV_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 ROLE_RE = re.compile(r"^[a-z][a-z0-9-]*$")
 
+# Per-role reasoning behaviour. "default" leaves the model alone. "off" asks a
+# hybrid reasoning model (Qwen3 and relatives) not to think before answering.
+# Measured on the reference deployment, qwen3:14b went from 8 to 45 seconds
+# before the first visible word to about 0.1 seconds with thinking off, at the
+# same tokens per second; a one-sentence question that is "answered" after a
+# hidden 1,500 characters of reasoning is the main reason chat felt slow.
+THINKING_VALUES = ("default", "off")
+
 # Static across every deployment: the persona-injection hook decision #23
 # built, registered the one way confirmed to actually fire against LiteLLM's
 # current build (async_pre_call_hook, not the documented-but-inert
@@ -111,8 +119,21 @@ def validate_engine(entry: dict, seen_roles: set[str]) -> dict:
                 f"role {role!r} is claimed by more than one engine — that's ambiguous "
                 f"routing, not load-balancing. Every role must belong to exactly one engine."
             )
+        thinking = m.get("thinking", "default")
+        # YAML 1.1 reads an unquoted off/on as a boolean, so `thinking: off`
+        # arrives here as False. Accept that spelling rather than make people
+        # remember to quote it.
+        if thinking is False:
+            thinking = "off"
+        elif thinking is True:
+            thinking = "default"
+        if thinking not in THINKING_VALUES:
+            raise ValidationError(
+                f"[{name}] role {role!r}: thinking must be one of {THINKING_VALUES}, "
+                f"got {thinking!r}"
+            )
         seen_roles.add(role)
-        resolved.append({"role": role, "model": model})
+        resolved.append({"role": role, "model": model, "thinking": thinking})
 
     return {"name": name, "base_url_var": base_url_var, "api_key_var": api_key_var, "models": resolved}
 
@@ -129,14 +150,18 @@ def render(engines: list[dict]) -> dict:
     for e in engines:
         api_key = f"os.environ/{e['api_key_var']}" if e["api_key_var"] else "none"
         for m in e["models"]:
-            model_list.append({
-                "model_name": m["role"],
-                "litellm_params": {
-                    "model": f"openai/{m['model']}",
-                    "api_base": f"os.environ/{e['base_url_var']}",
-                    "api_key": api_key,
-                },
-            })
+            params = {
+                "model": f"openai/{m['model']}",
+                "api_base": f"os.environ/{e['base_url_var']}",
+                "api_key": api_key,
+            }
+            if m.get("thinking") == "off":
+                # extra_body, not reasoning_effort: LiteLLM rejects
+                # reasoning_effort "none" as an unsupported OpenAI parameter
+                # (HTTP 400) but passes extra_body through untouched, and
+                # Ollama honours it.
+                params["extra_body"] = {"reasoning_effort": "none"}
+            model_list.append({"model_name": m["role"], "litellm_params": params})
     return {"model_list": model_list, "litellm_settings": LITELLM_SETTINGS_BLOCK}
 
 

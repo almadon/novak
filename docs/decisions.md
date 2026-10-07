@@ -2714,8 +2714,10 @@ on the router would have to be set in every client (HA, Open WebUI,
 Hindsight) and in the generated router config. Binding the port to the
 host's Tailscale IP gets most of that protection with one setting.
 
-`ROUTER_BIND` and `OLLAMA_BIND` (default `0.0.0.0`, so existing
-deployments are unchanged until they opt in) set the address. A bind to one
+`ROUTER_BIND`, `OLLAMA_BIND` and `MCP_BIND` (the last for every container
+MCP server in the registry, rendered by the reconciler; all default to
+`0.0.0.0`, so existing deployments are unchanged until they opt in) set the
+address. A bind to one
 address does not accept connections to another, so containers must not
 reach these services through the published port (`host.docker.internal`
 resolves to the Docker bridge, not the Tailscale IP). Open WebUI and

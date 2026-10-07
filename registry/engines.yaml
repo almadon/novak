@@ -9,7 +9,7 @@
 # router/config.yaml. See docs/engines.md for what qualifies as an engine
 # (anything that speaks OpenAI-compatible /v1/chat/completions) and
 # docs/decisions.md #28 for why this exists: Novak stopped assuming one
-# Mac mini runs everything.
+# one host runs everything.
 #
 # Schema per engine:
 #   name          required  identifier (a-z0-9-), for humans and error messages

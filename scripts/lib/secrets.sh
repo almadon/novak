@@ -1,7 +1,7 @@
 # Cross-platform secret storage. Sourced by scripts/novak and scripts/up.sh
 # so both ever have exactly one idea of where a secret actually lives.
 #
-# Darwin (Mitochon and any other Mac): the macOS login Keychain, item
+# Darwin (any Mac): the macOS login Keychain, item
 # "novak/<VAR>". The value in .env for these is always the placeholder
 # "set-in-keychain" — never read, never trusted.
 #

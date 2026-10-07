@@ -34,7 +34,7 @@ of what simple size-scaling from the 14B would predict (the CPU-offloaded
 layers dragging the whole batch down).
 
 **`UD-IQ4_XS` (14GB) fits, and is now the `deep`-role model on Spire**
-(decision #33) — replacing oMLX/Mitochon for this role. `ollama ps`
+(decision #33) — replacing oMLX on a Mac for this role. `ollama ps`
 confirms `100% GPU`, no CPU offload at all. Eval rate roughly doubled
 versus the ill-fitting `Q4_K_M` (19.43 vs. ~10 tok/s), and — the more
 consequential number for a memory-constrained card — it no longer

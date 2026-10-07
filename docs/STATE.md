@@ -5,11 +5,11 @@ run a while unattended with nothing below it worth flagging — see "On
 this file's own exit condition" below for why it hasn't been yet.
 
 **Last full rewrite:** 2026-09-10, from Spire (Unraid), covering everything
-since the previous version (2026-08-27, written from the Mac mini
-`Mitochon`). That version is not reproduced here — see git history if the
+since the previous version (2026-08-27, written from the original
+macOS host). That version is not reproduced here — see git history if the
 detail is ever needed again — because almost everything in it is now
 either done, superseded, or simply about the wrong host: Spire, not
-Mitochon, has been the real household deployment since decision #33.
+the macOS host, has been the real household deployment since decision #33.
 
 **Since then (2026-09-22, incremental, not a rewrite):** decisions
 #43-#49 — wake word training actually completed, a real persona drift
@@ -31,7 +31,7 @@ itself the way the rest of the stack has.
 
 - **Spire (Unraid, AMD RDNA4 GPU) is the sole production host.**
   Hindsight, Open WebUI, the console, the router, Ollama, and
-  `openwakeword` all run there (decision #28/#33). Mitochon is kept only
+  `openwakeword` all run there (decision #28/#33). The macOS host is kept only
   for oMLX development; nothing in production depends on it being up.
 - **Home Assistant runs on its own separate hardware** (a Home Assistant
   Yellow), reaching Spire's router over the LAN/tailnet — not part of the
@@ -220,7 +220,7 @@ itself the way the rest of the stack has.
 
 - Login Items, Keychain items, Docker, and Tailscale are **all
   per-account** on macOS. Something set up as the admin user does
-  nothing for `novak`. (Mitochon/oMLX-development-specific; not relevant
+  nothing for `novak`. (macOS/oMLX-development-specific; not relevant
   to Spire, which is Linux.)
 - `HOST_NAME` does not affect what anything binds to; it only builds
   URLs.

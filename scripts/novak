@@ -35,6 +35,11 @@
 #   novak logs [SERVICE]
 #   novak registry [--check]  show the MCP registry as the reconciler sees it
 #                              (--check also live-probes external entries)
+#   novak add [KIND] [NAME]   add another instance of an integration: a Hindsight
+#                              bank (one per person), a second Outline or Tududi,
+#                              another Vikunja, Super Productivity, any MCP URL.
+#                              Asks for what it needs, writes the registry entry,
+#                              and prompts for any new secret.
 #   novak omlx apply          apply registry/omlx.yaml (models, profiles, TTLs)
 #   novak router apply        apply registry/engines.yaml -> router/config.yaml
 #                              (decision #28; run 'novak restart router' after)
@@ -744,6 +749,39 @@ cmd_ports() {
   fi
 }
 
+# Adds another instance of an integration to the deployed registry
+# (reconciler/instances.py has the templates). The helper prompts on stderr and
+# prints one machine-readable line on stdout, "SECRETS: VAR ...", naming
+# credentials that still need a value; they are collected here, with the same
+# no-echo prompt as `novak secret set`, so no secret ever passes through it.
+cmd_add() {
+  need_env
+  local py="$NOVAK_HOME/.venv/bin/python"
+  [ -x "$py" ] || py="$(command -v python3)"
+  local kind="" name="" rest=()
+  if [ $# -ge 1 ] && [[ "$1" != -* ]]; then kind="$1"; shift; fi
+  if [ $# -ge 1 ] && [[ "$1" != -* ]]; then name="$1"; shift; fi
+  [ -n "$kind" ] && rest+=(--kind "$kind")
+  [ -n "$name" ] && rest+=(--name "$name")
+  local out rc=0
+  out="$(NOVAK_HOME="$NOVAK_HOME" "$py" "$REPO_DIR/reconciler/instances.py" add "${rest[@]}" "$@")" || rc=$?
+  [ "$rc" -eq 0 ] || exit "$rc"
+  local vars; vars="$(sed -n 's/^SECRETS: *//p' <<<"$out")"
+  local v
+  for v in $vars; do
+    if [ -n "$(secret_get "$v")" ]; then
+      dim "  $v is already set."
+    else
+      echo
+      ylw "  $v needs a value (the token for this instance)."
+      cmd_secret set "$v" || ylw "  Not stored. Later: novak secret set $v"
+    fi
+  done
+  echo
+  dim "Run 'novak up' to apply, then register the new entry in the client it is"
+  dim "meant for (Open WebUI: Admin -> Settings -> Tools; Home Assistant: MCP client)."
+}
+
 cmd_registry() {
   need_env
   local out
@@ -1261,6 +1299,7 @@ cmd_menu() {
     "Router — apply registry/engines.yaml (decision #28)"
     "Stack — up / update / down / restart / logs"
     "Adopt — pull the repo, then merge the new .env schema"
+    "Add — another instance (memory bank, Outline, Tududi, Vikunja...)"
     "Quit"
   )
   local choice i
@@ -1334,7 +1373,8 @@ cmd_menu() {
         esac
         ;;
       12) tui_run adopt ;;
-      13|0|"") return 0 ;;
+      13) cmd_add ;;
+      14|0|"") return 0 ;;
       *) echo "Not a number on the list."; continue ;;
     esac
     tui_pause || return 0
@@ -1360,6 +1400,7 @@ case "${1:-menu}" in
   restart)  shift; compose restart "$@" ;;
   logs)     shift; compose logs -f --tail=100 "$@" ;;
   registry) shift; cmd_registry "$@" ;;
+  add)      shift; cmd_add "$@" ;;
   -h|--help|help) usage ;;
   *) red "unknown command: $1"; echo; usage; exit 1 ;;
 esac

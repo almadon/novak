@@ -97,9 +97,10 @@ Also: `GET /v1/recordings`, `GET /v1/recordings/<id>`,
 
 1. In `.env` (`novak config`): `INGEST_ENABLED=true`, `INGEST_BIND=<Tailscale
    IP>`, and a token: `novak secret set INGEST_TOKEN --generate`.
-2. Fetch a Whisper model into the models volume, once:
-   `docker compose run --rm --no-deps --entrypoint download-ggml-model.sh stt large-v3-turbo-q5_0 /models`
-   (VERIFY the script's arguments against the image you pulled).
+2. Fetch a Whisper model (574 MB) into the models folder, once. The image does
+   not ship its download script where expected (checked), so use the file
+   directly: `curl -L -o <INGEST_MODELS_DIR>/ggml-large-v3-turbo-q5_0.bin
+   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin`.
 3. `novak up`. The first run builds the `ingest` image (Python plus ffmpeg).
 4. Check what it sees: `docker exec novak-ingest-1 python -m novak_ingest idle`.
 5. Optional sinks, in `registry/ingest.yaml` (the deployed copy under

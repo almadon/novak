@@ -20,9 +20,17 @@ only when no model has been used for a quiet window (180 seconds by default).
 - **The probe** asks Ollama which models are loaded and when each was last
   used (`expires_at` minus the keep-alive). Its own calls are subtracted,
   otherwise finishing one summary would make the box look busy for the next
-  three minutes. VERIFY: that `expires_at` moves at the end of a request as
-  assumed. `docker exec novak-ingest-1 python -m novak_ingest idle` prints
-  what the probe sees right now; check it before and after a chat turn.
+  three minutes. `docker exec novak-ingest-1 python -m novak_ingest idle`
+  prints what the probe sees right now.
+  **Measured on Spire (2026-10-12):** `expires_at` moves when a request
+  *finishes*, not while it runs. A chat turn showed busy ("last use 0 s ago")
+  the moment it ended, and while a request was generating the last use kept
+  growing as if idle. So the probe cannot see a request that is still in
+  flight, nor a model that is still loading (it is not in the list yet). The
+  quiet window covers the ordinary case: ingest can start at most one small
+  unit during a long answer, and Whisper runs at the lowest CPU share. It does
+  not cover a single request longer than the quiet window (a `deep` answer
+  that thinks for over three minutes). A router-side in-flight counter would.
 - **Summaries use the `chat` role, not `deep`.** `chat` is already resident.
   Loading the 27B `deep` model evicts the chat and task models (decision #56),
   which would make the next Open WebUI turn pay a reload. Change `summary.role`

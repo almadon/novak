@@ -19,7 +19,7 @@ def fmt_clock(seconds: float) -> str:
 class Worker:
     def __init__(self, settings, store, gate, stop=lambda: False, log=print,
                  analyse=chunk.analyse, extract=chunk.extract,
-                 transcribe=stt.transcribe, chat=llm.chat, notify_fn=notify.ha_notify):
+                 transcribe=stt.transcribe, chat=llm.chat, notify_fn=None):
         self.s, self.store, self.gate, self.stop, self.log = settings, store, gate, stop, log
         self._analyse, self._extract, self._transcribe = analyse, extract, transcribe
         self._chat, self._notify = chat, notify_fn
@@ -158,11 +158,18 @@ class Worker:
             return
         first = tasks[0]["title"]
         more = f" and {len(tasks) - 1} more" if len(tasks) > 1 else ""
+        title = f"{len(tasks)} task(s) to approve: {result['title']}"[:100]
+        url = f"{self.s.public_url}/review/{tasks[0]['token']}"
         try:
-            self._notify(self.s.ha_url, self.s.ha_token, self.s.ha_target,
-                         f"{len(tasks)} task(s) to approve: {result['title']}"[:100],
-                         f"{first}{more}",
-                         f"{self.s.public_url}/review/{tasks[0]['token']}")
+            if self._notify:                       # injected by tests
+                self._notify(self.s.ha_url, self.s.ha_token, self.s.ha_target, title,
+                             f"{first}{more}", url)
+            elif notify.is_ticker(self.s.ha_target):
+                notify.ticker_notify(self.s.ha_url, self.s.ha_token, self.s.ticker_category,
+                                     title, f"{first}{more}", url)
+            else:
+                notify.ha_notify(self.s.ha_url, self.s.ha_token, self.s.ha_target, title,
+                                 f"{first}{more}", url)
         except Exception as exc:
             self.log(f"notify failed for recording {rid}: {exc}")
 

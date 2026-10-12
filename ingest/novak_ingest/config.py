@@ -90,6 +90,7 @@ class Settings:
     ha_url: str
     ha_token: str
     ha_target: str
+    ticker_category: str
     max_upload_mb: int
     cfg: dict = field(default_factory=dict)
 
@@ -111,6 +112,7 @@ class Settings:
             ha_url=e("INGEST_HA_URL", ""),
             ha_token=unplaceholder(e("INGEST_HA_TOKEN", "")),
             ha_target=e("INGEST_HA_NOTIFY_TARGET", ""),
+            ticker_category=e("INGEST_TICKER_CATEGORY", "") or "general",
             max_upload_mb=int(e("INGEST_MAX_UPLOAD_MB", "512")),
             cfg=load_yaml(e("INGEST_CONFIG", "/registry/ingest.yaml")),
         )

@@ -4,6 +4,11 @@
 design question, what was checked, and the plan, so the next step is a choice
 and not a rediscovery. Items marked VERIFY were not checked.
 
+**Direction confirmed so far (2026-10-12):** a gateway is wanted; a trusted
+header from Open WebUI is acceptable as a fallback; each person supplies their
+own key for services like Tududi so they act as themselves; satellites go
+through the gateway with the household identity. See "Decisions taken" at the end.
+
 ## The goal
 
 A signed-in person is the same person in every part of Novak. `tmeuze` sees
@@ -68,19 +73,44 @@ pipeline holds. The trust is the same as the device itself: whoever holds your
 phone is you. Home Assistant's MCP client takes a URL and no headers, so a
 person's tools there need a per-person URL that carries the credential.
 
+## Pocket ID can be the authorization server
+
+Pocket ID has been adding what MCP's authorization model expects. From its
+release notes and tests (checked on GitHub, latest release v2.18.0): API
+resources, so a token can be issued for a named resource (an audience); OIDC
+clients registered by a client ID metadata document (the MCP client registration
+style); RFC 8414 authorization server metadata (v2.14.0); and a grant with no
+scopes, which is what MCP clients send. It has also published a
+[video on protecting MCP servers with it](https://youtu.be/JjoXz2u5r3Y).
+Dynamic client registration was not found. VERIFY which version runs here.
+
+This changes the gateway's job for the better. Instead of trusting a header, the
+gateway can be an OAuth-protected MCP resource: a client signs the person in
+through Pocket ID, gets a token whose audience is the gateway, and the gateway
+checks the signature and reads the person from it. That identity cannot be
+claimed by a caller; it has to be issued. It also fits Home Assistant, whose MCP
+client speaks OAuth, so a person in the app or web could authenticate to the
+gateway as themselves. Open WebUI can do per-user OAuth 2.1 against an MCP
+connection. VERIFY how each handles a Pocket ID resource (static versus
+dynamic client registration is the likely snag).
+
+A trusted header remains the simpler fallback for Open WebUI, safe only if
+nothing but Open WebUI can reach the gateway.
+
 ## The gateway
 
 The missing piece, and the right place for this: where identity meets tools and
 models. It would:
 
-- authenticate the caller (a per-person key, a Pocket ID token, or a trusted
-  header from a known client),
+- authenticate the caller (a Pocket ID token for the audience of the gateway;
+  failing that, a trusted header from a known client; for the household, a
+  household key),
 - map the caller to a person through a small directory,
 - present that person's tools only, and add their backend credentials
   (their Hindsight bank, their Outline key, their Tududi key) so no client holds
   them,
 - let shared entries (household memory) through for anyone, and
-- log who did what.
+- log who did what (accounting; see below).
 
 It would also close the Hindsight gap: the Hindsight port would be reachable
 only from the gateway, which holds the one shared key and decides which bank a
@@ -88,7 +118,8 @@ caller may open.
 
 ### Three ways to build it
 
-1. **LiteLLM, which already runs as the router.** Its
+1. **LiteLLM, which already runs as the router.** (It would have to accept
+   Pocket ID tokens; whether it does so without a licence is unconfirmed.) Its
    [MCP gateway](https://docs.litellm.ai/docs/mcp) can register MCP servers and
    limit them by key, team or organisation, forward headers, and has per-user
    server variables. A virtual key per person would see only that person's
@@ -104,10 +135,37 @@ caller may open.
    Hindsight. Protects Hindsight only, not Outline or Tududi.
 
 **Recommendation:** spike option 1 first, for half a day: two people, two
-Hindsight banks, one test key each. If a person's key sees only their own
+Hindsight banks, one test key each, and a Pocket ID token as the credential if
+it will take one. If a person's key sees only their own
 servers and the backend key never leaves the router, adopt it and have the
 reconciler render the MCP servers into the router config. If not, build option
 2. Option 3 can still sit in front of the Hindsight port as a second layer.
+
+## Authentication, authorization, accounting
+
+- **Authentication:** who is this. A Pocket ID token (or the fallbacks above).
+- **Authorization:** what may they touch. Their own entries, found through the
+  directory, plus entries marked shared. Nothing else is listed to them, so
+  there is nothing to guess.
+- **Accounting:** what did they do. The gateway logs person, tool, backend,
+  time and outcome (never arguments or secrets). And because each person's own
+  key is used downstream, Tududi and Outline attribute the action to that
+  person in their own history as well.
+
+## Personal credentials
+
+A person supplies their own key for each service, so they act as themselves
+there. Tududi is meant for shared project work and has private workspaces; the
+sharing happens inside Tududi, between accounts, so Novak does not need a
+"shared between two people" kind of entry. The gateway only needs each
+person's own key.
+
+Those keys have to be stored somewhere only the gateway reads, and entered by
+the person. Two ways: an administrator enters them with `novak person` (works
+first), or each person pastes their own key into a write-only form (the
+console is the obvious place, since it already signs people in, but today it
+never handles secrets by design, so that is a decision to take, not an
+assumption).
 
 ## The people directory
 
@@ -141,10 +199,10 @@ owner is shared on purpose.
 2. The gateway spike, then the choice.
 3. Move Open WebUI onto the gateway (headers or token).
 4. Per-person Home Assistant pipelines.
-5. Close the Hindsight port to everything but the gateway. (Home Assistant
-   satellites then reach household memory through the gateway too, which needs
-   a household key for them; this is why the earlier choice not to bind
-   Hindsight to Tailscale only is revisited here, not ignored.)
+5. Close the Hindsight port to everything but the gateway. Satellites then reach
+   household memory through the gateway with a household key, which is what
+   makes closing the port safe for them (the earlier choice not to bind
+   Hindsight to Tailscale only was to protect them, and this keeps that).
 
 ## Costs and risks
 
@@ -155,11 +213,26 @@ owner is shared on purpose.
 - More moving parts than one shared key, in exchange for the property you asked
   for.
 
+## Does this need a reverse proxy?
+
+The gateway is an application server and speaks MCP on its own port, so
+satellites and a tailnet need no proxy in front of it. A proxy (Traefik, which
+is being adopted anyway) becomes necessary if an OAuth client insists on an
+HTTPS address for the resource, or if the gateway is ever exposed beyond the
+tailnet. VERIFY whether Home Assistant's MCP OAuth flow accepts a plain-HTTP
+tailnet address.
+
+## Decisions taken
+
+- A gateway is wanted, and the plan above is liked.
+- A trusted header from Open WebUI is acceptable, but a Pocket ID token is
+  preferred where a client can do it.
+- Each person supplies their own key for services such as Tududi.
+- Satellites go through the gateway with the household identity.
+
 ## Open questions
 
-- Is a header from Open WebUI acceptable, or should the gateway check the Pocket
-  ID token itself?
-- Should any entry be shared between two people but not the household (a shared
-  project list)?
-- Do voice satellites keep reaching household memory directly, or only through
-  the gateway?
+- Which Pocket ID version runs here, and does a client handle a Pocket ID API
+  resource (VERIFY)?
+- Should people paste their own keys into a form (console), or should an admin
+  enter them?

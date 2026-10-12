@@ -213,3 +213,24 @@ class PipelineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DateContextTests(unittest.TestCase):
+    def test_recording_date_reaches_the_model(self):
+        e = Env(self)
+        seen = []
+        e.worker._chat = lambda base, key, model, messages, json_mode=False, **kw: seen.append(messages) or RESULT
+        e.upload(**{"X-Recorded-At": "1760000000"})   # a Sunday in October 2025
+        e.worker.run_once()
+        prompt = seen[-1][1]["content"]
+        self.assertIn("The recording was made on", prompt)
+        self.assertIn("2025-10-0", prompt)
+
+    def test_timings_are_recorded(self):
+        e = Env(self)
+        _, body = e.upload()
+        e.worker.run_once()
+        t = e.store.progress(body["id"])["timings"]
+        self.assertEqual(len(t["stt"]), 2)
+        self.assertIn("summary_s", t)
+        self.assertIn("analyse_s", t)

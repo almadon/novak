@@ -65,7 +65,9 @@ class Worker:
 
         if "plan" not in prog:
             self._wait()
+            t0 = time.time()
             duration, silences = self._analyse(audio)
+            prog.setdefault("timings", {})["analyse_s"] = round(time.time() - t0, 1)
             prog["duration"] = duration
             prog["plan"] = chunk.plan_chunks(duration, silences, cfg["stt"]["chunk_s"],
                                              cfg["stt"]["search_s"])
@@ -80,8 +82,14 @@ class Worker:
             self._wait()
             wav = work / f"{i:04d}.wav"
             self._extract(audio, start, end, wav)
+            t0 = time.time()
             segs = self._transcribe(self.s.stt_url, cfg["stt"]["path"], wav,
                                     cfg["stt"]["language"], cfg["stt"]["extra"])
+            took = time.time() - t0
+            # Seconds taken per second of audio: the number that says whether
+            # transcription keeps up (docs/ingest.md, "First run").
+            prog.setdefault("timings", {}).setdefault("stt", []).append(
+                {"audio_s": round(end - start, 1), "took_s": round(took, 1)})
             wav.unlink(missing_ok=True)
             prog["segments"][str(i)] = [
                 {"start": s["start"] + start, "end": s["end"] + start, "text": s["text"]}
@@ -95,8 +103,11 @@ class Worker:
 
         if "result" not in prog:
             if lines:
+                t0 = time.time()
                 prog["result"] = summarize.summarise(
-                    lines, self._ask, self._wait, cfg["summary"]["window_words"])
+                    lines, self._ask, self._wait, cfg["summary"]["window_words"],
+                    datetime.fromtimestamp(rec["recorded_at"]).strftime("%A %Y-%m-%d %H:%M"))
+                prog.setdefault("timings", {})["summary_s"] = round(time.time() - t0, 1)
             else:
                 prog["result"] = {"title": "No speech detected", "summary": "",
                                   "key_points": [], "decisions": [], "people": [], "tasks": []}

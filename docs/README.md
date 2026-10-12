@@ -38,6 +38,7 @@ directory on purpose:
 | [oMLX settings](omlx-settings.md) | Which models, how to tune them, and the profiles |
 | [Ollama settings](ollama-settings.md) | The Linux/RDNA4 path — real numbers, the same reasoning treatment as oMLX's |
 | [Ingest](ingest.md) | Optional extension: recordings in, notes and proposed tasks out, only while the models are idle |
+| [Gateway](gateway.md) | Optional: one MCP endpoint that knows who is asking, with removals confirmed and everything logged |
 | [Memory setup](memory-setup.md) | Standing up the memory backend |
 | [Home Assistant](home-assistant.md) | Voice setup |
 | [Reverse proxy](proxy.md) | TLS on the LAN via a proxy you run elsewhere, plus the portal: Novak's own, scoped to one page |

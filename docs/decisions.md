@@ -2886,3 +2886,52 @@ The probe turning out unreliable (move activity tracking into the router hook),
 CPU transcription being too slow to keep up with a day of recordings (then
 measure Vulkan, or accept a dedicated box), or a second recorder showing that
 the HTTP contract is missing something.
+
+## 58. The gateway: identity travels with every tool call
+
+[identity.md](identity.md) set out the problem: a credential stood in for a
+person only where a client happened to enforce it, Hindsight had one key for
+every bank, and nothing downstream knew who was asking. Decision #21 had built
+half the answer (the persona) and left the other half ("a verified identity
+travels with the request") open.
+
+### What was decided
+
+A gateway service, optional behind its own profile (`GATEWAY_ENABLED=true`),
+documented in [gateway.md](gateway.md).
+
+- **One MCP endpoint that knows the caller.** A Pocket ID token (preferred), a
+  trusted client naming the user in a header (Open WebUI), or a per-person key
+  (Home Assistant pipelines). Each yields a person, found in `registry/people.yaml`.
+- **Each person sees only their own entries**, namespaced by entry, with their
+  own credentials added by the gateway. Callers never hold backend keys.
+- **Adding is immediate; removal is confirmed.** Removals are held until the
+  person approves on a notification link that shows what will be removed.
+  Satellites (the household) are never offered removals.
+- **Accounting by name only.** Who, what, when, outcome; never arguments or
+  results.
+- **Built here, not on LiteLLM's MCP gateway.** The proposal listed LiteLLM as an
+  option to spike. Building ours was chosen because it needs no database or
+  licence question, keeps identity logic in about a thousand lines we can read,
+  and does the three things required (identity, removal confirmation,
+  accounting) that LiteLLM's key and team model does not obviously provide. This
+  choice was made without running that spike; if LiteLLM turns out to cover it,
+  retire this service.
+- **The gateway gets only the credentials its directory names**, through a
+  generated mode-600 file, not all of `.env`.
+
+### What it costs
+
+- One more service that holds every credential and sits in every request path.
+- An MCP proxy to maintain: only tools, JSON replies only, no resources or prompts.
+- A held removal blocks the calling request while it waits.
+- Hindsight is still open until its port is closed to everything but the
+  gateway; that is a separate, later step.
+
+### What would make it worth revisiting
+
+A mainstream MCP gateway that does per-person credentials, removal confirmation
+and accounting without a database or licence; Open WebUI or Home Assistant
+gaining per-user identity forwarding that makes this redundant; or the Pocket ID
+token path proving unusable with a real client, in which case the trusted-header
+and key paths carry the load and the claim of "issued, not claimed" weakens.

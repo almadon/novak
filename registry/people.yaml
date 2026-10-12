@@ -1,0 +1,26 @@
+# Who exists in Novak and what each person may reach (see docs/gateway.md).
+# This file is a directory, not an auth system: it maps a signed-in identity to
+# the registry entries that belong to that person. `novak person` edits it.
+#
+# SECRETS DO NOT BELONG HERE. `key_sha256` is a hash of a key the person (or the
+# household) presents; the key itself is shown once when it is made and kept
+# nowhere. Credentials for each entry's service live in .env / the Keychain,
+# named by the registry entry's `auth:` field.
+#
+# household  entries anyone may use, including voice satellites. Satellites can
+#            read and add but never remove: removal needs a person to confirm it.
+# people     one block per person:
+#   names    sign-in names that mean this person (Pocket ID `preferred_username`)
+#   emails   addresses a trusted client such as Open WebUI may name them by
+#   entries  registry entries (mcp-servers.yaml) that are THIS person's own. An
+#            entry listed for one person must not be listed for another: it holds
+#            one credential, which stands for one person.
+#   notify   where to ask them to confirm a removal:
+#              {kind: ticker, category: "Novak <name>"}   (Ticker category)
+#              {kind: ha, service: mobile_app_<device>}   (Home Assistant notify)
+
+household:
+  entries: []
+  # key_sha256: set by `novak gateway household-key`
+
+people:

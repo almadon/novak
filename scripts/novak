@@ -40,6 +40,13 @@
 #                              another Vikunja, Super Productivity, any MCP URL.
 #                              Asks for what it needs, writes the registry entry,
 #                              and prompts for any new secret.
+#   novak person add|list|key|attach|detach|share|unshare
+#                             who exists in the gateway and what is theirs. A
+#                             person has a sign-in name, their own entries (their
+#                             memory bank, their Outline and Tududi keys) and a
+#                             place to be asked to confirm removals.
+#   novak gateway client NAME trusted client key (Open WebUI) | household-key |
+#                             status | check | audit [person]
 #   novak omlx apply          apply registry/omlx.yaml (models, profiles, TTLs)
 #   novak router apply        apply registry/engines.yaml -> router/config.yaml
 #                              (decision #28; run 'novak restart router' after)
@@ -789,6 +796,38 @@ cmd_add() {
   dim "meant for (Open WebUI: Admin -> Settings -> Tools; Home Assistant: MCP client)."
 }
 
+# People and the gateway (reconciler/people.py). Keys are printed once by the
+# helper, to the terminal, and never stored anywhere but as a hash.
+cmd_person() {
+  need_env
+  local py="$NOVAK_HOME/.venv/bin/python"; [ -x "$py" ] || py="$(command -v python3)"
+  NOVAK_HOME="$NOVAK_HOME" "$py" "$REPO_DIR/reconciler/people.py" "$@"
+  case "${1:-}" in
+    add|attach|detach|share|unshare|key)
+      echo
+      dim "Run 'novak up' so the gateway picks up new credentials (it re-reads the directory itself)." ;;
+  esac
+}
+
+cmd_gateway() {
+  need_env
+  local py="$NOVAK_HOME/.venv/bin/python"; [ -x "$py" ] || py="$(command -v python3)"
+  case "${1:-status}" in
+    client|household-key)
+      NOVAK_HOME="$NOVAK_HOME" "$py" "$REPO_DIR/reconciler/people.py" "$@" ;;
+    status)
+      local port bind code
+      port="$(envval GATEWAY_PORT)"; bind="$(envval GATEWAY_BIND)"
+      case "${bind:-0.0.0.0}" in 0.0.0.0|"") bind=127.0.0.1 ;; esac
+      code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://${bind}:${port:-13410}/healthz" 2>/dev/null || true)"
+      if [ "$code" = "200" ]; then grn "gateway: up on ${bind}:${port:-13410}"; else red "gateway: not answering (got ${code:-none})"; fi
+      compose exec -T gateway python -m novak_gateway check 2>&1 | sed 's/^/  /' || true ;;
+    check)  compose exec -T gateway python -m novak_gateway check ;;
+    audit)  shift; compose exec -T gateway python -m novak_gateway audit "$@" ;;
+    *) red "unknown: novak gateway $1"; dim "  novak gateway status | check | audit [person] | client NAME | household-key"; exit 1 ;;
+  esac
+}
+
 cmd_registry() {
   need_env
   local out
@@ -1408,6 +1447,8 @@ case "${1:-menu}" in
   logs)     shift; compose logs -f --tail=100 "$@" ;;
   registry) shift; cmd_registry "$@" ;;
   add)      shift; cmd_add "$@" ;;
+  person)   shift; cmd_person "$@" ;;
+  gateway)  shift; cmd_gateway "$@" ;;
   -h|--help|help) usage ;;
   *) red "unknown command: $1"; echo; usage; exit 1 ;;
 esac

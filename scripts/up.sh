@@ -39,6 +39,11 @@ if [ ! -f "$NOVAK_HOME/registry/mcp-servers.yaml" ]; then
   echo "📄 seeded $NOVAK_HOME/registry/mcp-servers.yaml — edit it there, not in the repo"
 fi
 
+if [ ! -f "$NOVAK_HOME/registry/ingest.yaml" ]; then
+  cp "$REPO_DIR/registry/ingest.yaml" "$NOVAK_HOME/registry/ingest.yaml"
+  echo "📄 seeded $NOVAK_HOME/registry/ingest.yaml — edit it there, not in the repo"
+fi
+
 cd "$NOVAK_HOME"
 ENV_FILE="$NOVAK_HOME/.env"
 
@@ -107,6 +112,16 @@ done
 for var in "${ROUTER_SECRETS[@]}"; do
   v="${!var:-$(envval "$var")}"
   case "$v" in ""|set-in-keychain|changeme) router_missing+=("$var") ;; esac
+done
+
+ingest_missing=()
+for var in "${INGEST_EDITS[@]}"; do
+  v="$(envval "$var")"
+  case "$v" in ""|EDIT-ME|changeme) ingest_missing+=("$var") ;; esac
+done
+for var in "${INGEST_SECRETS[@]}"; do
+  v="${!var:-$(envval "$var")}"
+  case "$v" in ""|set-in-keychain|changeme) ingest_missing+=("$var") ;; esac
 done
 
 unedited=()
@@ -244,6 +259,17 @@ PYEOF
 )"
 if [ "$ollama_wanted" = "yes" ]; then
   profiles+=(ollama)
+fi
+# Ingest is an extension, so it is opt-in (INGEST_ENABLED=true) as well as
+# needing its token; unlike the profiles above, leaving it unset is not an
+# unconfigured feature worth warning about.
+if [ "$(envval INGEST_ENABLED)" = "true" ]; then
+  if [ ${#ingest_missing[@]} -eq 0 ]; then
+    profiles+=(ingest)
+  else
+    echo "skipped:  ingest — not configured: ${ingest_missing[*]}" >&2
+    echo "          everything else starts; set those and re-run to add it." >&2
+  fi
 fi
 if [ ${#profiles[@]} -gt 0 ]; then
   export COMPOSE_PROFILES

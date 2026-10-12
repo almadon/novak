@@ -2833,3 +2833,53 @@ first request after a restart or a 24 hour idle still pays the load.
 
 More than two people using chat at once, a card with more or less memory, or
 a different model mix (the arithmetic above is the thing to redo).
+
+## 57. Ingest is an optional extension that works only while the models are idle
+
+A voice recorder produces long audio nobody is waiting on. Turning it into a
+note, a summary and proposed tasks is useful, but it needs the same two
+resources chat and voice need: the CPU, and the language model on a 16 GB GPU
+that decision #56 budgeted for chat and task together.
+
+### What was decided
+
+A new optional service, `ingest`, behind its own compose profile
+(`INGEST_ENABLED=true`), documented in [ingest.md](ingest.md).
+
+- **Passive always yields to active.** It starts a unit of work (one 60 second
+  audio chunk, one model call) only after no model has been used for a quiet
+  window, found by asking Ollama which models are loaded and when they were
+  last used. Progress is saved per unit.
+- **Summaries use the resident `chat` role, not `deep`.** Loading `deep`
+  evicts the chat and task models (decision #56), so it would turn a background
+  job into a slow next chat turn.
+- **Whisper runs on the CPU at the lowest CPU share** (whisper.cpp in its own
+  container, `stt`), so it cannot take VRAM from the models. A Vulkan build is
+  documented as an unmeasured experiment, not the default.
+- **Hardware-agnostic core.** The service takes audio over HTTP or a watched
+  folder and knows nothing about any recorder. Device adapters live outside it.
+- **Tasks are proposals.** A person approves them, first through a Home
+  Assistant notification that opens a review page, later through the console
+  on the same API. A misheard word cannot write to a task tracker.
+- **Sinks are declared in `registry/ingest.yaml`** and call MCP tools with
+  templated arguments. They ship disabled, because their tool names must be
+  checked against the live servers first.
+
+### What it costs
+
+- A second container image to build (Python and ffmpeg) rather than a pinned
+  pull, and a second one to pin (whisper.cpp), so two more entries in the
+  decision #45 refresh list.
+- CPU transcription is slower than real time on some models. VERIFY the actual
+  ratio on Spire; nothing here measures it yet.
+- The idle probe infers "in use" from Ollama's `expires_at`, which is indirect.
+  VERIFY it on a live Ollama. A router-side activity signal would be sturdier.
+- A very long chat or a busy household can starve it for hours. That is the
+  intended trade.
+
+### What would make it worth revisiting
+
+The probe turning out unreliable (move activity tracking into the router hook),
+CPU transcription being too slow to keep up with a day of recordings (then
+measure Vulkan, or accept a dedicated box), or a second recorder showing that
+the HTTP contract is missing something.

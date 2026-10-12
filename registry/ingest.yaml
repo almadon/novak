@@ -1,0 +1,59 @@
+# Ingest service behaviour (decision #57). Optional: nothing here runs unless
+# INGEST_ENABLED=true in .env. Validate with:
+#   python3 -m novak_ingest check registry/ingest.yaml   (from ingest/)
+#
+# SECRETS DO NOT BELONG HERE. A sink names the environment variable that holds
+# its token (`token_env`); the value lives in .env / the Keychain like every
+# other secret in this repo.
+#
+# Passive work always yields to active work: the worker starts a unit of work
+# (one chunk of audio, one model call) only after no model has been used for
+# `quiet_s` seconds, so Open WebUI chat and Home Assistant voice are never
+# queued behind a recording.
+
+ingest:
+  idle:
+    probe: ollama       # ollama | none (none = never wait; only for a dedicated box)
+    quiet_s: 180        # how long the models must be unused before passive work starts
+    poll_s: 15
+  stt:
+    path: /inference    # whisper.cpp server. An OpenAI-style server: /v1/audio/transcriptions
+    language: auto
+    chunk_s: 60         # one unit of work; cuts land on silences within search_s of this
+    search_s: 15
+  summary:
+    # `chat`, not `deep`: it is already resident, so summarising never evicts
+    # the models someone is waiting on. `deep` (27B) would swap them out.
+    role: chat
+    window_words: 2500  # transcripts longer than this are summarised in parts
+
+  # Sinks call an MCP tool. kind: note (a finished note), memory (text to
+  # remember), task (called only after a person approves a proposed task).
+  # Placeholders: note {title} {body} {summary} {recorded} {recording_id};
+  # memory {title} {text} {summary} {recording_id}; task {title} {detail} {due}.
+  # All three are disabled until the tool names are checked against the live
+  # server, which is one command:
+  #   docker exec novak-ingest-1 python -m novak_ingest mcp-tools <url> <TOKEN_ENV>
+  # Tasks are never written without approval. Notes land on disk
+  # (/data/notes) whether or not any sink is enabled.
+  sinks:
+    - name: outline-note
+      kind: note
+      enabled: false
+      mcp: {url_env: INGEST_OUTLINE_MCP_URL, token_env: OUTLINE_EVERYTHING_API_KEY}
+      tool: create_document          # VERIFY against tools/list
+      args: {title: "{title}", text: "{body}", publish: false}
+
+    - name: hindsight-memory
+      kind: memory
+      enabled: false
+      mcp: {url_env: INGEST_HINDSIGHT_MCP_URL, token_env: HINDSIGHT_API_KEY}
+      tool: retain                   # VERIFY against tools/list
+      args: {content: "Recording {recorded}: {title}. {text}"}
+
+    - name: tududi-task
+      kind: task
+      enabled: false
+      mcp: {url_env: INGEST_TUDUDI_MCP_URL, token_env: TUDUDI_API_TOKEN}
+      tool: create_task              # VERIFY against tools/list
+      args: {name: "{title}", note: "{detail}", due_date: "{due}"}

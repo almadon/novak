@@ -27,6 +27,8 @@ SECRET_VARS=(
   HA_MCP_TOKEN
   HA_DRIFT_TOKEN
   TINYAUTH_OIDC_CLIENT_SECRET
+  INGEST_TOKEN
+  INGEST_HA_TOKEN
 )
 
 # HOST_NAME alone: every service builds its URLs from it. VIKUNJA_URL used to
@@ -51,6 +53,12 @@ PORTAL_SECRETS=(TINYAUTH_OIDC_CLIENT_SECRET)
 # under set -u, same as every other optional profile.
 ROUTER_EDITS=()
 ROUTER_SECRETS=(OMLX_API_KEY)
+# Ingest (decision #57) is an optional extension: INGEST_ENABLED=true turns it
+# on, and INGEST_TOKEN (the bearer token adapters send) must exist. The Home
+# Assistant token is only for the approval notification, so it degrades on its
+# own and is not required here.
+INGEST_EDITS=()
+INGEST_SECRETS=(INGEST_TOKEN)
 
 # Secrets without which the stack must not start at all.
 CORE_SECRETS=(HINDSIGHT_API_KEY)
@@ -96,11 +104,12 @@ EXTERNAL_SECRETS=(
   VIKUNJA_API_TOKEN
   BRAVE_API_KEY
   TINYAUTH_OIDC_CLIENT_SECRET
+  INGEST_HA_TOKEN
 )
 # OPEN_TERMINAL_API_KEY is the same shape as HINDSIGHT_API_KEY: we generate
 # it, the container reads it, and a human then has to paste the same value
 # into Open WebUI's Admin -> Settings -> Integrations -> Open Terminal —
 # there's no registry-driven wiring for it, see registry/mcp-servers.yaml.
-SHARED_SECRETS=(HINDSIGHT_API_KEY OPEN_TERMINAL_API_KEY)
+SHARED_SECRETS=(HINDSIGHT_API_KEY OPEN_TERMINAL_API_KEY INGEST_TOKEN)
 
 PLACEHOLDERS='^(EDIT-ME|set-in-keychain|changeme)$'

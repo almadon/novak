@@ -144,6 +144,12 @@ itself the way the rest of the stack has.
   Superseded by the router existing at all (decision #23); not going to
   be built.
 
+- **Ingest (decision #57) is built and tested offline, not deployed.** An
+  optional extension that turns recordings into notes and proposed tasks,
+  working only while the models are idle. Unit and pipeline tests pass; nothing
+  has run against Spire's Ollama or a real Whisper model yet. See
+  [ingest.md](ingest.md) for what to measure first.
+
 ## Open VERIFY items
 
 - Whether Hindsight has a trash, before trusting `delete` to be

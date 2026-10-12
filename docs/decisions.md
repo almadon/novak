@@ -2873,7 +2873,10 @@ A new optional service, `ingest`, behind its own compose profile
 - CPU transcription is slower than real time on some models. VERIFY the actual
   ratio on Spire; nothing here measures it yet.
 - The idle probe infers "in use" from Ollama's `expires_at`, which is indirect.
-  VERIFY it on a live Ollama. A router-side activity signal would be sturdier.
+  Measured on Spire: it moves when a request ends, so a request still running
+  (or a model still loading) looks idle until it finishes. The quiet window
+  absorbs this for normal chat; a single request longer than the window is
+  not covered. A router-side in-flight counter would be sturdier.
 - A very long chat or a busy household can starve it for hours. That is the
   intended trade.
 

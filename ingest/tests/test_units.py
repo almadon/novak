@@ -230,6 +230,11 @@ class MCPTests(unittest.TestCase):
 
 
 class ConfigTests(unittest.TestCase):
+    def test_placeholder_secret_counts_as_unset(self):
+        from novak_ingest.config import unplaceholder
+        self.assertEqual(unplaceholder("set-in-keychain"), "")
+        self.assertEqual(unplaceholder("abc"), "abc")
+
     def test_parse_duration_accepts_ollama_spellings(self):
         for text, want in [("300", 300), ("20m", 1200), ("24h", 86400), ("1h30m", 5400), ("", 7)]:
             self.assertEqual(parse_duration(text, 7), want)

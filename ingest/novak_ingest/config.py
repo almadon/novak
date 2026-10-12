@@ -18,6 +18,11 @@ DEFAULTS = {
 SINK_KINDS = ("note", "memory", "task")
 
 
+def unplaceholder(value: str) -> str:
+    """A secret still holding its .env.example placeholder is not a secret."""
+    return "" if value in ("set-in-keychain", "EDIT-ME", "changeme") else value
+
+
 def parse_duration(value: str, default: float) -> float:
     """Ollama keep-alive spellings: 300, 5m, 24h, 1h30m, -1 (never unload)."""
     import re
@@ -104,7 +109,7 @@ class Settings:
             keep_alive_s=parse_duration(
                 e("INGEST_KEEP_ALIVE") or e("OLLAMA_KEEP_ALIVE", ""), 300.0),
             ha_url=e("INGEST_HA_URL", ""),
-            ha_token=e("INGEST_HA_TOKEN", ""),
+            ha_token=unplaceholder(e("INGEST_HA_TOKEN", "")),
             ha_target=e("INGEST_HA_NOTIFY_TARGET", ""),
             max_upload_mb=int(e("INGEST_MAX_UPLOAD_MB", "512")),
             cfg=load_yaml(e("INGEST_CONFIG", "/registry/ingest.yaml")),

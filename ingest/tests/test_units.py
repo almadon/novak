@@ -259,3 +259,14 @@ class ConfigTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CalendarTests(unittest.TestCase):
+    def test_calendar_lists_twenty_one_days_with_weekdays(self):
+        from datetime import datetime
+        text = summarize.calendar_text(datetime(2026, 10, 12, 14, 17))
+        lines = text.splitlines()
+        self.assertEqual(len(lines), 21)
+        self.assertEqual(lines[0], "Monday 2026-10-12 (the day of the recording)")
+        self.assertEqual(lines[3], "Thursday 2026-10-15")
+        self.assertEqual(lines[-1], "Sunday 2026-11-01")

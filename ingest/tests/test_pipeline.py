@@ -225,6 +225,8 @@ class DateContextTests(unittest.TestCase):
         prompt = seen[-1][1]["content"]
         self.assertIn("The recording was made on", prompt)
         self.assertIn("2025-10-0", prompt)
+        self.assertIn("Calendar:", prompt)
+        self.assertIn("(the day of the recording)", prompt)
 
     def test_timings_are_recorded(self):
         e = Env(self)

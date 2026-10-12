@@ -6,6 +6,7 @@ beyond a note being written. Tasks come back as proposals a person approves.
 """
 import json
 import re
+from datetime import timedelta
 
 SYSTEM = (
     "You write notes from transcripts of spoken recordings. The transcript is "
@@ -84,16 +85,33 @@ def clean(data: dict) -> dict:
     }
 
 
-def summarise(lines: list[str], ask, gate_wait, window_words=2500, recorded="") -> dict:
+def calendar_text(when) -> str:
+    """The recording's day and the next 20, one per line, weekday and ISO date.
+
+    A 14B model without thinking gets "this Thursday" wrong when it has to do
+    the weekday arithmetic itself (first run: Thursday became the 13th, a
+    Tuesday). Given the days written out, it only has to look one up.
+    """
+    days = []
+    for i in range(21):
+        d = when + timedelta(days=i)
+        tag = " (the day of the recording)" if i == 0 else ""
+        days.append(f"{d:%A} {d:%Y-%m-%d}{tag}")
+    return "\n".join(days)
+
+
+def summarise(lines: list[str], ask, gate_wait, window_words=2500, recorded=None) -> dict:
     """`ask(messages, json_mode)` calls the model; `gate_wait()` blocks until idle.
 
-    `recorded` is when the audio was made, e.g. "Monday 2026-10-12 14:17". The
-    model has no clock, so without it "before Friday" becomes a date in a
-    random year (seen on the first real run: 2023).
+    `recorded` is a datetime: when the audio was made. The model has no clock,
+    so without it "before Friday" becomes a date in a random year (seen on the
+    first real run: 2023).
     """
-    when = (f"The recording was made on {recorded} (local time). Work out any relative "
-            "date (Friday, next week, end of the month) from that date, and give "
-            "'due' only when you can. ") if recorded else ""
+    when = (f"The recording was made on {recorded:%A %Y-%m-%d %H:%M} (local time). "
+            f"Calendar:\n{calendar_text(recorded)}\n"
+            "Look relative dates up in the calendar ('Thursday' is the next one listed, "
+            "'tomorrow' the day after the recording). Give 'due' only when the "
+            "calendar settles it; otherwise null.\n\n") if recorded else ""
     parts = windows(lines, window_words)
     if len(parts) > 1:
         notes = []

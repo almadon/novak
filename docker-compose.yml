@@ -348,6 +348,8 @@ services:
       # Home Assistant, a phone) reaches it.
       - "${INGEST_BIND:-0.0.0.0}:${INGEST_PORT:-13409}:8000"
     environment:
+      # Local time, so "Friday" in a recording resolves against the right day.
+      TZ: "${INGEST_TZ:-UTC}"
       INGEST_TOKEN: "${INGEST_TOKEN:-}"
       INGEST_PUBLIC_URL: "${INGEST_PUBLIC_URL:-http://${HOST_NAME:-localhost}:${INGEST_PORT:-13409}}"
       INGEST_LLM_BASE_URL: "${INGEST_LLM_BASE_URL:-http://router:4000/v1}"

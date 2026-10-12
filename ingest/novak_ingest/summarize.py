@@ -22,7 +22,7 @@ FINAL = (
     '"tasks": [{"title": "imperative, max 12 words", "detail": "context", '
     '"due": "ISO date or null"}]}\n'
     "Only list a task when someone clearly committed to or was asked to do "
-    "something. Empty lists are fine. Write in the language of the transcript."
+    "something; name who in the title when it is not the speaker. Empty lists are fine. Write in the language of the transcript."
 )
 
 MAP = (
@@ -84,8 +84,16 @@ def clean(data: dict) -> dict:
     }
 
 
-def summarise(lines: list[str], ask, gate_wait, window_words=2500) -> dict:
-    """`ask(messages, json_mode)` calls the model; `gate_wait()` blocks until idle."""
+def summarise(lines: list[str], ask, gate_wait, window_words=2500, recorded="") -> dict:
+    """`ask(messages, json_mode)` calls the model; `gate_wait()` blocks until idle.
+
+    `recorded` is when the audio was made, e.g. "Monday 2026-10-12 14:17". The
+    model has no clock, so without it "before Friday" becomes a date in a
+    random year (seen on the first real run: 2023).
+    """
+    when = (f"The recording was made on {recorded} (local time). Work out any relative "
+            "date (Friday, next week, end of the month) from that date, and give "
+            "'due' only when you can. ") if recorded else ""
     parts = windows(lines, window_words)
     if len(parts) > 1:
         notes = []
@@ -101,7 +109,7 @@ def summarise(lines: list[str], ask, gate_wait, window_words=2500) -> dict:
     gate_wait()
     reply = ask(
         [{"role": "system", "content": SYSTEM},
-         {"role": "user", "content": f"{FINAL}\n\n<transcript>\n{material}\n</transcript>"}],
+         {"role": "user", "content": f"{when}{FINAL}\n\n<transcript>\n{material}\n</transcript>"}],
         True)
     return clean(parse_json(reply))
 

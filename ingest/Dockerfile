@@ -8,7 +8,7 @@ FROM python@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ffmpeg \
  && rm -rf /var/lib/apt/lists/* \
- && pip install --no-cache-dir pyyaml==6.0.2
+ && pip install --no-cache-dir pyyaml==6.0.3
 
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 PYTHONPATH=/app

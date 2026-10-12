@@ -12,7 +12,7 @@ from novak_ingest.config import DEFAULTS, Settings, _merge
 from novak_ingest.store import Store
 from novak_ingest.worker import Worker
 from test_units import FakeMCP
-from http.server import HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 RESULT = json.dumps({
     "title": "Plan the move", "summary": "They discussed moving house.",
@@ -30,6 +30,7 @@ class Env:
             data=self.dir, token="secret", public_url="http://spire:13409", stt_url="http://stt",
             llm_base_url="http://router", llm_api_key="none", ollama_url="http://ollama",
             keep_alive_s=86400, ha_url="http://ha", ha_token="t", ha_target="mobile_app_x",
+            ticker_category="general",
             max_upload_mb=1, cfg=cfg)
         self.store = Store(str(self.dir / "db.sqlite"))
         self.busy = busy
@@ -236,3 +237,39 @@ class DateContextTests(unittest.TestCase):
         self.assertEqual(len(t["stt"]), 2)
         self.assertIn("summary_s", t)
         self.assertIn("analyse_s", t)
+
+
+class TickerTests(unittest.TestCase):
+    def test_target_detection(self):
+        from novak_ingest.notify import is_ticker
+        self.assertTrue(is_ticker("ticker"))
+        self.assertTrue(is_ticker("notify.ticker"))
+        self.assertFalse(is_ticker("mobile_app_pixel"))
+
+    def test_ticker_call_shape_and_worker_routing(self):
+        seen = []
+
+        class HA(BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+            def do_POST(self):
+                seen.append((self.path, self.headers["Authorization"],
+                             json.loads(self.rfile.read(int(self.headers["Content-Length"])))))
+                self.send_response(200); self.send_header("Content-Length", "2"); self.end_headers()
+                self.wfile.write(b"[]")
+
+        srv = HTTPServer(("127.0.0.1", 0), HA)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        e = Env(self)
+        e.settings.ha_url = f"http://127.0.0.1:{srv.server_port}"
+        e.settings.ha_target = "notify.ticker"
+        e.settings.ticker_category = "novak"
+        e.worker._notify = None                      # use the real notifier
+        e.upload()
+        e.worker.run_once()
+        path, auth, body = seen[0]
+        self.assertEqual((path, auth), ("/api/services/ticker/notify", "Bearer t"))
+        self.assertEqual(body["category"], "novak")
+        self.assertIn("2 task(s) to approve", body["title"])
+        self.assertTrue(body["data"]["url"].startswith("http://spire:13409/review/"))
+        self.assertEqual(body["data"]["url"], body["data"]["clickAction"])

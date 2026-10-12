@@ -90,8 +90,14 @@ Also: `GET /v1/recordings`, `GET /v1/recordings/<id>`,
 ## Approving tasks
 
 - **Home Assistant notification (first channel).** Set `INGEST_HA_TOKEN` (a
-  long-lived token) and `INGEST_HA_NOTIFY_TARGET` (a notify service such as
-  `mobile_app_pixel`). The notification's action opens a review page with
+  long-lived token) and `INGEST_HA_NOTIFY_TARGET`: a notify service such as
+  `mobile_app_pixel`, or `ticker` to route through the
+  [Ticker](https://github.com/analytix-energy-solutions/ticker) integration.
+  For Ticker, ingest calls `ticker.notify` (not `notify.ticker`, which only
+  forwards a message and title) with the category in `INGEST_TICKER_CATEGORY`,
+  so create that category in Ticker (or leave the default `general`) and
+  subscribe to it. The tap-to-open link rides in Ticker's `data`; VERIFY on a
+  phone that it arrives, since Ticker builds the final mobile payload. The notification's action opens a review page with
   Approve and Reject buttons. The link carries an unguessable token and works
   without a login; the port is meant to be tailnet-only (`INGEST_BIND`).
   VERIFY: the action URL on a real phone.

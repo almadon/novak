@@ -358,6 +358,7 @@ services:
       INGEST_HA_URL: "${INGEST_HA_URL:-${HA_URL:-}}"
       INGEST_HA_TOKEN: "${INGEST_HA_TOKEN:-}"
       INGEST_HA_NOTIFY_TARGET: "${INGEST_HA_NOTIFY_TARGET:-}"
+      INGEST_TICKER_CATEGORY: "${INGEST_TICKER_CATEGORY:-general}"
       INGEST_MAX_UPLOAD_MB: "${INGEST_MAX_UPLOAD_MB:-512}"
       # Names listed in registry/ingest.yaml's sinks. Blank is fine: a sink
       # whose variable is unset is reported and skipped, not fatal.

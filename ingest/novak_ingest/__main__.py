@@ -78,9 +78,13 @@ def main():
         import os
         url, token = sys.argv[2], os.environ.get(sys.argv[3]) if len(sys.argv) > 3 else None
         for t in MCPClient(url, token).list_tools():
-            print(t["name"], "-", (t.get("description") or "")[:90].replace("\n", " "))
+            props = (t.get("inputSchema") or {}).get("properties") or {}
+            need = set((t.get("inputSchema") or {}).get("required") or [])
+            args = ", ".join(f"{k}{'*' if k in need else ''}" for k in props)
+            print(f"{t['name']}({args})")
+            print("    " + (t.get("description") or "").strip().split("\n")[0][:110])
     else:
-        sys.exit("usage: python -m novak_ingest serve | check [file] | idle | mcp-tools URL [TOKEN_ENV]")
+        sys.exit("usage: python -m novak_ingest serve | check [file] | idle | mcp-tools URL [TOKEN_ENV]  (names, with * marking required arguments)")
 
 
 if __name__ == "__main__":

@@ -186,10 +186,14 @@ cmd_secret() {
     list)
       bold "Secrets   ($(secrets_backend_label))"
       echo
-      local v
+      local v val desc
       for v in "${SECRET_VARS[@]}"; do
-        if [ -n "$(secret_get "$v")" ]; then printf '  %-30s %s\n' "$v" "$(grn present)"
-        else printf '  %-30s %s\n' "$v" "$(red missing)"; fi
+        val="$(secret_get "$v")"
+        # A placeholder from .env.example is not a secret: it must not read as set.
+        if [ -z "$val" ] || [[ "$val" =~ $PLACEHOLDERS ]]; then state="$(red missing)"; else state="$(grn present)"; fi
+        desc="$(secret_desc "$v" 2>/dev/null || true)"
+        [ -n "$desc" ] || desc="$("$NOVAK_HOME/.venv/bin/python" "$REPO_DIR/reconciler/instances.py" describe "$v" 2>/dev/null || true)"
+        printf '  %-30s %-17s %s\n' "$v" "$state" "$(dim "$desc")"
       done
       echo
       if [ "$PLATFORM" = "Darwin" ]; then
@@ -769,7 +773,10 @@ cmd_add() {
   local vars; vars="$(sed -n 's/^SECRETS: *//p' <<<"$out")"
   local v
   for v in $vars; do
-    if [ -n "$(secret_get "$v")" ]; then
+    # This process read the registry before the entry existed, so teach it the
+    # new variable, or `secret set` below refuses it as unknown.
+    SECRET_VARS+=("$v"); EXTERNAL_SECRETS+=("$v")
+    if [ -n "$(secret_get "$v")" ] && ! [[ "$(secret_get "$v")" =~ $PLACEHOLDERS ]]; then
       dim "  $v is already set."
     else
       echo

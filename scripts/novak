@@ -46,6 +46,7 @@
 #                             memory bank, their Outline and Tududi keys) and a
 #                             place to be asked to confirm removals.
 #   novak gateway client NAME trusted client key (Open WebUI) | household-key |
+#                             banks (create missing Hindsight banks) |
 #                             status | check | audit [person]
 #   novak omlx apply          apply registry/omlx.yaml (models, profiles, TTLs)
 #   novak router apply        apply registry/engines.yaml -> router/config.yaml
@@ -801,7 +802,7 @@ cmd_add() {
 cmd_person() {
   need_env
   local py="$NOVAK_HOME/.venv/bin/python"; [ -x "$py" ] || py="$(command -v python3)"
-  NOVAK_HOME="$NOVAK_HOME" "$py" "$REPO_DIR/reconciler/people.py" "$@"
+  HINDSIGHT_API_KEY="$(secret_get HINDSIGHT_API_KEY)" NOVAK_HOME="$NOVAK_HOME" "$py" "$REPO_DIR/reconciler/people.py" "$@"
   case "${1:-}" in
     add|attach|detach|share|unshare|key)
       echo
@@ -815,6 +816,8 @@ cmd_gateway() {
   case "${1:-status}" in
     client|household-key)
       NOVAK_HOME="$NOVAK_HOME" "$py" "$REPO_DIR/reconciler/people.py" "$@" ;;
+    banks)
+      HINDSIGHT_API_KEY="$(secret_get HINDSIGHT_API_KEY)" NOVAK_HOME="$NOVAK_HOME" "$py" "$REPO_DIR/reconciler/people.py" banks ;;
     status)
       local port bind code
       port="$(envval GATEWAY_PORT)"; bind="$(envval GATEWAY_BIND)"
@@ -824,7 +827,7 @@ cmd_gateway() {
       compose exec -T gateway python -m novak_gateway check 2>&1 | sed 's/^/  /' || true ;;
     check)  compose exec -T gateway python -m novak_gateway check ;;
     audit)  shift; compose exec -T gateway python -m novak_gateway audit "$@" ;;
-    *) red "unknown: novak gateway $1"; dim "  novak gateway status | check | audit [person] | client NAME | household-key"; exit 1 ;;
+    *) red "unknown: novak gateway $1"; dim "  novak gateway status | check | audit [person] | client NAME | household-key | banks"; exit 1 ;;
   esac
 }
 

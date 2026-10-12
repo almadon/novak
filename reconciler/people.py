@@ -9,6 +9,7 @@
   people.py detach NAME ENTRY...
   people.py share ENTRY...        household entries (anyone, incl. satellites)
   people.py unshare ENTRY...
+  people.py banks                 create any Hindsight bank the registry names but Hindsight lacks
   people.py client NAME           trusted client (Open WebUI): new key, shown once
   people.py household-key         new household key, shown once
 
@@ -117,6 +118,50 @@ def registry_entries() -> list[str]:
     return [e["name"] for e in (load(REGISTRY).get("servers") or []) if e.get("name")]
 
 
+def hindsight_banks() -> dict[str, str]:
+    """bank -> base URL, for every Hindsight entry (one bank per URL path)."""
+    out = {}
+    for e in load(REGISTRY).get("servers") or []:
+        m = re.match(r"^(https?://[^/]+)/mcp/([A-Za-z0-9_-]+)/?$", e.get("url") or "")
+        if m and "EDIT-ME" not in m.group(1):
+            out[m.group(2)] = m.group(1)
+    return out
+
+
+def ensure_banks(only=None) -> int:
+    """Hindsight creates a bank on its first write, so a new person's bank (or the
+    household's) does not exist yet and every recall says 'Bank not found'. Create
+    the missing ones now. Needs HINDSIGHT_API_KEY in the environment; says so and
+    carries on if it cannot (the bank then appears with the first memory)."""
+    import json
+    import urllib.error
+    import urllib.request
+    key = os.environ.get("HINDSIGHT_API_KEY", "")
+    banks = {b: u for b, u in hindsight_banks().items() if not only or b in only}
+    if not banks:
+        return 0
+    if not key or key in ("set-in-keychain", "EDIT-ME", "changeme"):
+        say("HINDSIGHT_API_KEY not available here: banks will be created by their first memory.")
+        return 0
+    def call(base, method, path, body=None):
+        r = urllib.request.Request(base + path, data=json.dumps(body).encode() if body is not None else None,
+                                   method=method, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+        with urllib.request.urlopen(r, timeout=15) as resp:
+            return json.load(resp)
+    done = 0
+    for bank, base in banks.items():
+        try:
+            have = {b["bank_id"] for b in call(base, "GET", "/v1/default/banks").get("banks", [])}
+            if bank in have:
+                continue
+            call(base, "PUT", f"/v1/default/banks/{bank}", {})
+            say(f"Created Hindsight bank '{bank}'.")
+            done += 1
+        except (urllib.error.URLError, OSError, ValueError) as exc:
+            say(f"Could not reach Hindsight at {base} to create '{bank}' ({exc}); it will appear with its first memory.")
+    return done
+
+
 def need_files():
     if not PEOPLE.exists():
         raise SystemExit(f"No {PEOPLE}: run 'novak up' once to seed it.")
@@ -153,6 +198,7 @@ def cmd_add(a):
         if r.returncode != 0:
             raise SystemExit("could not add the memory bank; person not created")
         entries.append(f"hindsight-{name}")
+        ensure_banks([name])
 
     free = [e for e in registry_entries() if e not in owned_entries(d) and e not in entries]
     if free and not a.yes and not a.entries:
@@ -277,6 +323,11 @@ def cmd_household_key(a):
     return 0
 
 
+def cmd_banks(a):
+    ensure_banks()
+    return 0
+
+
 def cmd_client(a):
     if not GATEWAY.exists():
         raise SystemExit(f"No {GATEWAY}: run 'novak up' once to seed it.")
@@ -315,11 +366,12 @@ def main():
         x = sub.add_parser(c); x.add_argument("entries", nargs="+")
     c = sub.add_parser("client"); c.add_argument("name")
     sub.add_parser("household-key")
+    sub.add_parser("banks")
     a = ap.parse_args()
     return {"add": cmd_add, "list": cmd_list, "key": cmd_key, "attach": lambda a: cmd_attach(a),
             "detach": lambda a: cmd_attach(a, True), "share": lambda a: cmd_share(a),
             "unshare": lambda a: cmd_share(a, True), "client": cmd_client,
-            "household-key": cmd_household_key}[a.cmd](a)
+            "household-key": cmd_household_key, "banks": cmd_banks}[a.cmd](a)
 
 
 if __name__ == "__main__":

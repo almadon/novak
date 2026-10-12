@@ -153,3 +153,45 @@ class GatewayEnvTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BankTests(unittest.TestCase):
+    def test_missing_banks_are_created_and_existing_ones_left_alone(self):
+        import json
+        import threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        calls = []
+
+        class H(BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+            def _reply(self, obj):
+                body = json.dumps(obj).encode()
+                self.send_response(200); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+            def do_GET(self):
+                calls.append(("GET", self.path, self.headers["Authorization"]))
+                self._reply({"banks": [{"bank_id": "tmeuze"}]})
+            def do_PUT(self):
+                self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                calls.append(("PUT", self.path, self.headers["Authorization"]))
+                self._reply({"bank_id": "ushy"})
+
+        srv = HTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        h = Home(self)
+        base = f"http://127.0.0.1:{srv.server_port}"
+        reg = yaml.safe_load((h.dir / "registry" / "mcp-servers.yaml").read_text())
+        reg["servers"] += [{"name": "hindsight-tmeuze", "kind": "external", "url": f"{base}/mcp/tmeuze/", "auth": "HINDSIGHT_API_KEY", "enabled": True},
+                           {"name": "hindsight-ushy", "kind": "external", "url": f"{base}/mcp/ushy/", "auth": "HINDSIGHT_API_KEY", "enabled": True}]
+        (h.dir / "registry" / "mcp-servers.yaml").write_text(yaml.safe_dump(reg))
+        r = h.run("banks", env={"HINDSIGHT_API_KEY": "tenant-key"})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Created Hindsight bank 'ushy'", r.stderr)
+        puts = [c for c in calls if c[0] == "PUT"]
+        self.assertEqual([c[1] for c in puts], ["/v1/default/banks/ushy"])          # tmeuze already existed
+        self.assertTrue(all(c[2] == "Bearer tenant-key" for c in calls))
+
+    def test_no_key_means_a_clear_note_and_no_failure(self):
+        h = Home(self)
+        r = h.run("banks", env={"HINDSIGHT_API_KEY": ""})
+        self.assertEqual(r.returncode, 0)

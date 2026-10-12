@@ -291,3 +291,45 @@ class SinkValuesTests(unittest.TestCase):
         self.assertEqual(call["document_id"], f"recording-{body['id']}")
         self.assertRegex(call["timestamp"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d$")
         self.assertEqual(call["tags"], ["ingest"])
+
+
+class AutoTaskTests(unittest.TestCase):
+    def sink(self, test):
+        FakeMCP.sse, FakeMCP.seen = False, []
+        srv = HTTPServer(("127.0.0.1", 0), FakeMCP)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        test.addCleanup(srv.shutdown)
+        return {"name": "t", "kind": "task", "enabled": True, "tool": "create_task",
+                "mcp": {"url": f"http://127.0.0.1:{srv.server_port}/mcp"}, "args": {"name": "{title}"}}
+
+    def test_auto_mode_adds_tasks_without_asking_and_says_so(self):
+        e = Env(self, sinks=[self.sink(self)])
+        e.upload()
+        e.worker.run_once()
+        calls = [s[3]["arguments"]["name"] for s in FakeMCP.seen if s[0] == "tools/call"]
+        self.assertEqual(calls, ["Call Sam about the keys", "Cancel the internet"])
+        self.assertEqual(e.store.proposals("pending"), [])
+        self.assertIn("2 task(s) added", e.calls["notify"][0][3])
+
+    def test_confirm_mode_still_waits(self):
+        e = Env(self, sinks=[self.sink(self)])
+        e.settings.cfg["tasks"]["mode"] = "confirm"
+        e.upload()
+        e.worker.run_once()
+        self.assertEqual([s for s in FakeMCP.seen if s[0] == "tools/call"], [])
+        self.assertEqual(len(e.store.proposals("pending")), 2)
+        self.assertIn("task(s) to approve", e.calls["notify"][0][3])
+
+    def test_no_task_sink_means_tasks_wait_even_in_auto(self):
+        e = Env(self)
+        e.upload()
+        e.worker.run_once()
+        self.assertEqual(len(e.store.proposals("pending")), 2)
+
+    def test_a_failing_sink_leaves_that_task_pending(self):
+        sink = {"name": "t", "kind": "task", "enabled": True, "tool": "x", "mcp": {"url": "http://127.0.0.1:1/mcp"}}
+        e = Env(self, sinks=[sink])
+        e.upload()
+        e.worker.run_once()
+        self.assertEqual(len(e.store.proposals("pending")), 2)
+        self.assertIn("task(s) to approve", e.calls["notify"][0][3])

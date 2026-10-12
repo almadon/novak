@@ -11,6 +11,9 @@ DEFAULTS = {
     "stt": {"path": "/inference", "language": "auto", "chunk_s": 60, "search_s": 15,
             "extra": {}},
     "summary": {"role": "chat", "window_words": 2500},
+    # auto: a task sink creates each task at once (adding is not destructive).
+    # confirm: every task waits for a person to approve it.
+    "tasks": {"mode": "auto"},
     "inbox_poll_s": 10,
     "max_attempts": 3,
     "sinks": [],
@@ -55,6 +58,8 @@ def validate(cfg: dict) -> dict:
         raise ConfigError("idle.probe must be 'ollama' or 'none'")
     if cfg["idle"]["quiet_s"] < 0 or cfg["stt"]["chunk_s"] < 10:
         raise ConfigError("idle.quiet_s must be >= 0 and stt.chunk_s >= 10")
+    if cfg["tasks"]["mode"] not in ("auto", "confirm"):
+        raise ConfigError("tasks.mode must be 'auto' or 'confirm'")
     seen = set()
     for s in cfg["sinks"]:
         name = s.get("name")

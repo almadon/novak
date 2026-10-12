@@ -41,15 +41,25 @@ ingest:
       kind: note
       enabled: false
       mcp: {url_env: INGEST_OUTLINE_MCP_URL, token_env: OUTLINE_EVERYTHING_API_KEY}
-      tool: create_document          # VERIFY against tools/list
+      tool: create_document          # checked against et.a64.one/mcp (2026-10-12)
+      # collectionId is the collection the note lands in. Without it Outline
+      # decides; set it to one of your collection ids (list_collections).
       args: {title: "{title}", text: "{body}", publish: false}
 
     - name: hindsight-memory
       kind: memory
       enabled: false
       mcp: {url_env: INGEST_HINDSIGHT_MCP_URL, token_env: HINDSIGHT_API_KEY}
-      tool: retain                   # VERIFY against tools/list
-      args: {content: "Recording {recorded}: {title}. {text}"}
+      tool: retain                   # checked against Hindsight's tools/list (2026-10-12)
+      # document_id makes a re-run replace the memory instead of duplicating it.
+      # Point INGEST_HINDSIGHT_MCP_URL at ONE bank: a personal bank
+      # (/mcp/<name>/), never household, which voice satellites can read.
+      args:
+        content: "Recording {recorded}: {title}. {text}"
+        context: "Voice recording transcribed by Novak ingest"
+        document_id: "recording-{recording_id}"
+        timestamp: "{recorded_iso}"
+        tags: [ingest]
 
     - name: tududi-task
       kind: task

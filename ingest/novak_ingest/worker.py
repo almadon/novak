@@ -143,6 +143,7 @@ class Worker:
                 continue
             values = {"title": result["title"], "body": note, "summary": result["summary"],
                       "recording_id": rid, "recorded": meta["recorded"],
+                      "recorded_iso": datetime.fromtimestamp(rec["recorded_at"]).astimezone().isoformat(timespec="seconds"),
                       "text": result["summary"] + "\n" + "\n".join(result["key_points"])}
             try:
                 sink.send(values)

@@ -273,3 +273,21 @@ class TickerTests(unittest.TestCase):
         self.assertIn("2 task(s) to approve", body["title"])
         self.assertTrue(body["data"]["url"].startswith("http://spire:13409/review/"))
         self.assertEqual(body["data"]["url"], body["data"]["clickAction"])
+
+
+class SinkValuesTests(unittest.TestCase):
+    def test_note_sink_gets_iso_timestamp_and_list_args_render(self):
+        FakeMCP.sse, FakeMCP.seen = False, []
+        srv = HTTPServer(("127.0.0.1", 0), FakeMCP)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        e = Env(self, sinks=[{"name": "m", "kind": "memory", "enabled": True, "tool": "retain",
+                              "mcp": {"url": f"http://127.0.0.1:{srv.server_port}/mcp"},
+                              "args": {"content": "{title}", "document_id": "recording-{recording_id}",
+                                       "timestamp": "{recorded_iso}", "tags": ["ingest"]}}])
+        _, body = e.upload()
+        e.worker.run_once()
+        call = [s for s in FakeMCP.seen if s[0] == "tools/call"][0][3]["arguments"]
+        self.assertEqual(call["document_id"], f"recording-{body['id']}")
+        self.assertRegex(call["timestamp"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d$")
+        self.assertEqual(call["tags"], ["ingest"])

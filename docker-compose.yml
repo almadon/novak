@@ -323,11 +323,13 @@ services:
     profiles: ["ingest"]
     image: "${INGEST_STT_IMAGE:-ghcr.io/ggml-org/whisper.cpp@sha256:263c5980a8a24eb0847ef7be1b8e5b99829128d9625412def3ee6b130bd64f6c}"
     restart: unless-stopped
-    # One string, not a list: this image's entrypoint is `bash -c`, which
-    # takes the first argument as the whole script and treats the rest as
-    # positional parameters. A list silently ran whisper-server with no flags
-    # (its bundled base.en model, listening on loopback only).
-    command: "whisper-server --model /models/ggml-${INGEST_WHISPER_MODEL:-large-v3-turbo-q5_0}.bin --host 0.0.0.0 --port 8080 --threads ${INGEST_STT_THREADS:-4}"
+    # ONE list element holding the whole command line. This image's entrypoint
+    # is `bash -c`, which takes its first argument as the script and treats the
+    # rest as positional parameters. A list of words, and equally a plain
+    # string (compose splits it into words), ran whisper-server with no flags:
+    # its bundled base.en model, listening on loopback only.
+    command:
+      - "whisper-server --model /models/ggml-${INGEST_WHISPER_MODEL:-large-v3-turbo-q5_0}.bin --host 0.0.0.0 --port 8080 --threads ${INGEST_STT_THREADS:-4}"
     cpu_shares: 64
     devices:
       - /dev/dri:/dev/dri

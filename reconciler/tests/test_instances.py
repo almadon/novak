@@ -142,3 +142,12 @@ class AddTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DescribeTests(unittest.TestCase):
+    def test_describes_registry_credentials(self):
+        h = Home(self)
+        h.run("add", "--kind", "tududi", "--name", "ushy", "--set", "url=https://t.example/api/mcp", "--yes")
+        out = h.run("describe", "TUDUDI_USHY_API_TOKEN").stdout.strip()
+        self.assertEqual(out, "used by tududi-ushy (MCP endpoint)")
+        self.assertEqual(h.run("describe", "NOT_A_THING").stdout.strip(), "")

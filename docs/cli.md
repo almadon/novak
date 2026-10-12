@@ -106,6 +106,20 @@ its reasons and asks you to accept them, which records who and when, as before.
 `--yes` takes defaults, `--set field=value` answers a prompt, `--dry-run`
 shows the entry without writing it.
 
+Naming: an instance is named for who or what it is for, not a number. The
+name is the join key across the registry entry (`tududi-ushy`), the credential
+(`TUDUDI_USHY_API_TOKEN`), and where one exists, the Hindsight bank (`ushy`) and
+the person's sign-in. A number such as `_2` stops meaning anything once one is
+removed, and nothing then says whose it was. The shape is always
+`<SERVICE>_<INSTANCE>_<API_KEY or API_TOKEN>`, following what that service calls
+its credential. For Tududi and Outline an instance usually means an account,
+because one server serves many accounts and each account has its own key.
+
+Check what you have with `novak secret list` (each one says what it belongs to,
+and a leftover placeholder reads as missing) and `novak registry --check` (a real
+call per endpoint with its key: 200 means it authenticates, 401 means the key is
+wrong).
+
 Two things worth knowing:
 
 - **A Hindsight bank is not a container.** All banks live in the one Hindsight

@@ -310,6 +310,17 @@ def secret_vars(path=None) -> list[str]:
     return sorted(set(names))
 
 
+def describe(var_name: str, path=None) -> str:
+    """Which registry entries use a credential variable, in plain words."""
+    users = []
+    for e in load_entries(path):
+        if e.get("auth") == var_name:
+            users.append(f"{e['name']} (MCP endpoint)")
+        elif any((i.partition("=")[2] or i) == var_name for i in e.get("env") or []):
+            users.append(f"{e['name']} (container)")
+    return "used by " + ", ".join(users) if users else ""
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -322,11 +333,16 @@ def main():
     add.add_argument("--dry-run", action="store_true")
     sub.add_parser("kinds")
     sub.add_parser("secret-vars")
+    d = sub.add_parser("describe")
+    d.add_argument("var")
     args = ap.parse_args()
     try:
         if args.cmd == "kinds":
             for k, (label, _) in TEMPLATES.items():
                 print(f"{k:20} {label}")
+            return 0
+        if args.cmd == "describe":
+            print(describe(args.var))
             return 0
         if args.cmd == "secret-vars":
             print("\n".join(secret_vars()))

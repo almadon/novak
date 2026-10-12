@@ -131,4 +131,25 @@ if [ -n "${NOVAK_HOME:-}" ] && [ -f "${NOVAK_HOME}/registry/mcp-servers.yaml" ] 
   unset _novak_py _novak_v
 fi
 
+# What each built-in secret belongs to, for `novak secret list`. Variables
+# added by `novak add` are described from the registry instead.
+secret_desc() {
+  case "$1" in
+    OMLX_API_KEY)               echo "oMLX inference engine key (Mac host only)" ;;
+    HINDSIGHT_API_KEY)          echo "Hindsight: the one tenant key every bank, the console, Open WebUI and HA use" ;;
+    BRAVE_API_KEY)              echo "Brave Search: key for the web-search tool" ;;
+    OPEN_TERMINAL_API_KEY)      echo "Open Terminal (code sandbox): also pasted into Open WebUI" ;;
+    CONSOLE_AUTH_SECRET)        echo "Konzol (console): signs its login session cookies. Internal, never typed anywhere" ;;
+    OIDC_CLIENT_SECRET)         echo "Konzol (console): its client secret in Pocket ID. Copy from Pocket ID" ;;
+    OWUI_OIDC_CLIENT_SECRET)    echo "Open WebUI: its client secret in Pocket ID. Copy from Pocket ID" ;;
+    WEBUI_SECRET_KEY)           echo "Open WebUI: signs its session tokens. Internal, keeps logins across restarts" ;;
+    TINYAUTH_OIDC_CLIENT_SECRET) echo "Portal (TinyAuth): its client secret in Pocket ID. Copy from Pocket ID" ;;
+    HA_MCP_TOKEN)               echo "Home Assistant: long-lived token for the ha-mcp server" ;;
+    HA_DRIFT_TOKEN)             echo "Home Assistant: read-only token for 'novak drift --live'" ;;
+    INGEST_TOKEN)               echo "Ingest: bearer token recorders and adapters send" ;;
+    INGEST_HA_TOKEN)            echo "Ingest: Home Assistant token for approval notifications" ;;
+    *)                          return 1 ;;
+  esac
+}
+
 PLACEHOLDERS='^(EDIT-ME|set-in-keychain|changeme)$'

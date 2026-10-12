@@ -106,7 +106,7 @@ class Worker:
                 t0 = time.time()
                 prog["result"] = summarize.summarise(
                     lines, self._ask, self._wait, cfg["summary"]["window_words"],
-                    datetime.fromtimestamp(rec["recorded_at"]).strftime("%A %Y-%m-%d %H:%M"))
+                    datetime.fromtimestamp(rec["recorded_at"]))
                 prog.setdefault("timings", {})["summary_s"] = round(time.time() - t0, 1)
             else:
                 prog["result"] = {"title": "No speech detected", "summary": "",

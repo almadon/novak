@@ -27,3 +27,26 @@ jobs:
       - name: Validate registry and risk acceptances
         # --dry-run validates and renders without touching containers.
         run: python3 reconciler/reconcile.py --dry-run
+
+  ingest:
+    name: Ingest tests and image build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ffmpeg and PyYAML
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          pip install --quiet pyyaml
+
+      - name: Registry file is valid
+        working-directory: ingest
+        run: python3 -m novak_ingest check ../registry/ingest.yaml
+
+      - name: Unit and pipeline tests
+        working-directory: ingest
+        run: python3 -m unittest discover -s tests
+
+      - name: Image builds
+        run: docker build ingest

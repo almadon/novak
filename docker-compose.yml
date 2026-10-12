@@ -310,6 +310,72 @@ services:
       - ${REPO_DIR}/persona/server.py:/app/server.py:ro
       - ${REPO_DIR}/prompts:/prompts:ro
 
+  # ── Ingest (optional extension, decision #57) ────────────────────────
+  # Recordings in, notes and proposed tasks out. Off unless INGEST_ENABLED=true
+  # (up.sh adds the "ingest" profile). Passive by rule: it works only when the
+  # models have been idle for a while, so chat and voice never wait on it.
+  #
+  # stt is whisper.cpp on the CPU by default, at the lowest CPU share, so a
+  # transcription cannot compete with the GPU model for VRAM and yields CPU to
+  # everything else. For the Vulkan build see docs/ingest.md (unmeasured).
+  # Pinned to the digest :main resolved to on 2026-10-12 (decision #45).
+  stt:
+    profiles: ["ingest"]
+    image: "${INGEST_STT_IMAGE:-ghcr.io/ggml-org/whisper.cpp@sha256:263c5980a8a24eb0847ef7be1b8e5b99829128d9625412def3ee6b130bd64f6c}"
+    restart: unless-stopped
+    command:
+      - whisper-server
+      - --model
+      - /models/ggml-${INGEST_WHISPER_MODEL:-large-v3-turbo-q5_0}.bin
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --threads
+      - "${INGEST_STT_THREADS:-4}"
+    cpu_shares: 64
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      - ${INGEST_MODELS_DIR:-whisper-models}:/models
+
+  ingest:
+    profiles: ["ingest"]
+    build:
+      context: ${REPO_DIR}/ingest
+    image: novak-ingest:local
+    restart: unless-stopped
+    depends_on: [stt]
+    ports:
+      # INGEST_BIND: this host's Tailscale IP, so only the tailnet (adapters,
+      # Home Assistant, a phone) reaches it.
+      - "${INGEST_BIND:-0.0.0.0}:${INGEST_PORT:-13409}:8000"
+    environment:
+      INGEST_TOKEN: "${INGEST_TOKEN:-}"
+      INGEST_PUBLIC_URL: "${INGEST_PUBLIC_URL:-http://${HOST_NAME:-localhost}:${INGEST_PORT:-13409}}"
+      INGEST_LLM_BASE_URL: "${INGEST_LLM_BASE_URL:-http://router:4000/v1}"
+      INGEST_OLLAMA_URL: "${INGEST_OLLAMA_URL:-http://ollama:11434}"
+      OLLAMA_KEEP_ALIVE: "${OLLAMA_KEEP_ALIVE:-20m}"
+      INGEST_HA_URL: "${INGEST_HA_URL:-${HA_URL:-}}"
+      INGEST_HA_TOKEN: "${INGEST_HA_TOKEN:-}"
+      INGEST_HA_NOTIFY_TARGET: "${INGEST_HA_NOTIFY_TARGET:-}"
+      INGEST_MAX_UPLOAD_MB: "${INGEST_MAX_UPLOAD_MB:-512}"
+      # Names listed in registry/ingest.yaml's sinks. Blank is fine: a sink
+      # whose variable is unset is reported and skipped, not fatal.
+      INGEST_OUTLINE_MCP_URL: "${INGEST_OUTLINE_MCP_URL:-}"
+      INGEST_HINDSIGHT_MCP_URL: "${INGEST_HINDSIGHT_MCP_URL:-}"
+      INGEST_TUDUDI_MCP_URL: "${INGEST_TUDUDI_MCP_URL:-}"
+      OUTLINE_EVERYTHING_API_KEY: "${OUTLINE_EVERYTHING_API_KEY:-}"
+      HINDSIGHT_API_KEY: "${HINDSIGHT_API_KEY:-}"
+      TUDUDI_API_TOKEN: "${TUDUDI_API_TOKEN:-}"
+    volumes:
+      - ${INGEST_DATA_DIR:-ingest-data}:/data
+      # Code from the checkout (${REPO_DIR}, same rule as persona and the
+      # router); behaviour from the deployed registry copy that up.sh seeds,
+      # which is yours to edit, like mcp-servers.yaml.
+      - ${REPO_DIR}/ingest/novak_ingest:/app/novak_ingest:ro
+      - ./registry/ingest.yaml:/registry/ingest.yaml:ro
+
   # ── Portal (single glass pane over Open WebUI and Konzol) ─────────────
   # Optional, and gated behind a compose profile for the same reason the
   # console is: a missing OIDC client must skip this, not refuse to start
@@ -529,3 +595,5 @@ volumes:
   hindsight:
   tinyauth:
   ollama:
+  ingest-data:
+  whisper-models:

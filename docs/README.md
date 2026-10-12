@@ -24,6 +24,7 @@ directory on purpose:
 | | |
 |---|---|
 | [Architecture](architecture.md) | How the pieces fit, and why each is where it is |
+| [Identity (proposal)](identity.md) | One person, their own credentials everywhere: what carries identity today, the gateway, and the plan |
 | [Decisions](decisions.md) | Every significant choice, with reasoning and cost |
 | [Agent capability decision tree](agent-capability-decision-tree.md) | Evaluating Claude Code, OpenCode, and similar: risk, RBAC, where each one runs |
 | [Security](security.md) | Secrets, permissions, and what the risks actually are |

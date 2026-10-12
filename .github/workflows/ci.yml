@@ -50,3 +50,15 @@ jobs:
 
       - name: Image builds
         run: docker build ingest
+
+  instances:
+    name: novak add (instance templates)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install PyYAML
+        run: pip install --quiet pyyaml
+
+      - name: Tests
+        run: python3 -m unittest discover -s reconciler/tests

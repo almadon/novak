@@ -75,12 +75,54 @@ works identically on both platforms.
 | `novak restart [SERVICE]` | restart everything, or one service |
 | `novak logs [SERVICE]` | follow logs |
 | `novak registry` | what the reconciler thinks it should start |
+| `novak add [KIND] [NAME]` | add another instance of an integration (see "More than one of anything" below) |
 | `novak drift` | where this deployment differs from the repo (aliases: `verify`, `check`) |
 | `novak drift --live` | also greps router logs for persona injection silently skipped (decision #38) |
 | `novak omlx apply` | apply `registry/omlx.yaml` — models, profiles, TTLs |
 | `novak router apply` | apply `registry/engines.yaml` -> `router/config.yaml` (decision #28); needs `novak restart router` after |
 
 ---
+
+## More than one of anything
+
+`novak add` adds another instance of an integration without hand-editing
+the registry. Run it bare for a menu, or name what you want:
+
+```bash
+novak add hindsight ushy        # a memory bank for another person
+novak add outline work          # a second Outline
+novak add tududi partner        # another Tududi account
+novak add vikunja partner       # another Vikunja (its own container)
+novak add super-productivity home
+novak add mcp                   # any other MCP server, by URL
+```
+
+It asks only what that kind needs, appends an entry to
+`$NOVAK_HOME/registry/mcp-servers.yaml` (comments above it are left alone, and
+the old file is kept as `.bak-<time>`), validates the result with the
+reconciler and puts the old file back if it does not load, then prompts for any
+new secret with the usual no-echo prompt. Anything above standard risk shows
+its reasons and asks you to accept them, which records who and when, as before.
+`--yes` takes defaults, `--set field=value` answers a prompt, `--dry-run`
+shows the entry without writing it.
+
+Two things worth knowing:
+
+- **A Hindsight bank is not a container.** All banks live in the one Hindsight
+  container; the bank is a path in the URL (`/mcp/<bank>/`) and every bank
+  shares the one tenant key. Adding a person is a registry entry, not more
+  memory use. Say whether it is safe for voice satellites (a shared bank) or
+  personal; personal banks must never go on the Home Assistant pipeline. The
+  console maps a signed-in person to the bank of the same name.
+- **Per-instance credentials** are named `<KIND>_<NAME>_API_KEY` (or `_TOKEN`),
+  for example `OUTLINE_WORK_API_KEY`. `novak secret` learns them from the
+  registry, so they can be set, shown and verified like any other. Services
+  that read their own credential inside a container (ingest sinks) still need
+  that variable passed through in `docker-compose.yml`.
+
+Super Productivity has no official MCP server; the community ones need its
+desktop app running, so `novak add super-productivity` points at an endpoint you
+run yourself and says so.
 
 ## The menu
 

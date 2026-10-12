@@ -57,6 +57,19 @@ OUTPUT = (NOVAK_HOME if _deployed.exists() else REPO_DIR) / "docker-compose.mcp.
 
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$")
 ENV_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
+# A container env item is NAME (host variable of that name, passed through) or
+# INNER=SOURCE: the container sees INNER, filled from the host variable SOURCE.
+# The second form is what lets one image run twice with different credentials
+# (two Vikunja instances both need VIKUNJA_URL inside, from different places).
+ENV_ITEM_RE = re.compile(r"^[A-Z_][A-Z0-9_]*(=[A-Z_][A-Z0-9_]*)?$")
+
+
+def env_inner(item: str) -> str:
+    return item.partition("=")[0]
+
+
+def env_source(item: str) -> str:
+    return item.partition("=")[2] or item
 IMAGE_RE = re.compile(r"^[A-Za-z0-9._/:@-]+$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -204,8 +217,10 @@ def validate(entry: dict, seen_names: set[str], seen_ports: set[int]) -> dict:
         command = " ".join(command.split()) or None
 
     env = entry.get("env", [])
-    if not isinstance(env, list) or not all(isinstance(e, str) and ENV_RE.match(e) for e in env):
-        raise ValidationError(f"[{name}] env must be a list of UPPER_SNAKE variable names")
+    if not isinstance(env, list) or not all(isinstance(e, str) and ENV_ITEM_RE.match(e) for e in env):
+        raise ValidationError(
+            f"[{name}] env must be a list of UPPER_SNAKE variable names, "
+            "each NAME or INNER=SOURCE (the container sees INNER, filled from SOURCE)")
 
     risk = validate_risk(name, entry, enabled)
 
@@ -224,7 +239,7 @@ def validate(entry: dict, seen_names: set[str], seen_ports: set[int]) -> dict:
 
 def missing_vars(server: dict, configured: set[str]) -> list[str]:
     """Declared variables for this server that nobody has filled in."""
-    return [v for v in server.get("env") or [] if v not in configured]
+    return [env_source(v) for v in server.get("env") or [] if env_source(v) not in configured]
 
 
 def unedited_url(server: dict) -> bool:
@@ -268,7 +283,8 @@ def render(servers: list[dict], configured: set[str]) -> dict:
         if s["env"]:
             # Values resolved by compose from the host env at up-time; the
             # reconciler never reads them.
-            svc["environment"] = {k: f"${{{k}}}" for k in s["env"]}
+            svc["environment"] = {
+                env_inner(e): f"${{{env_source(e)}}}" for e in s["env"]}
         services[f"{s['name']}-mcp"] = svc
     return {"name": "novak", "services": services}
 

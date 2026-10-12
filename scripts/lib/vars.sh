@@ -112,4 +112,23 @@ EXTERNAL_SECRETS=(
 # there's no registry-driven wiring for it, see registry/mcp-servers.yaml.
 SHARED_SECRETS=(HINDSIGHT_API_KEY OPEN_TERMINAL_API_KEY INGEST_TOKEN)
 
+# Credentials added with `novak add` (a second Outline, another Tududi) live in
+# the deployed registry, not in the lists above, so the CLI would not know they
+# are secrets. Read their names from the registry. They belong to other
+# systems, so they can be stored but never generated. Needs PyYAML (the
+# deployment's venv has it); silently adds nothing if it cannot run.
+if [ -n "${NOVAK_HOME:-}" ] && [ -f "${NOVAK_HOME}/registry/mcp-servers.yaml" ] && [ -n "${REPO_DIR:-}" ]; then
+  _novak_py="$NOVAK_HOME/.venv/bin/python"
+  [ -x "$_novak_py" ] || _novak_py="$(command -v python3 || true)"
+  if [ -n "$_novak_py" ]; then
+    while IFS= read -r _novak_v; do
+      [ -n "$_novak_v" ] || continue
+      case " ${SECRET_VARS[*]} " in *" $_novak_v "*) ;; *)
+        SECRET_VARS+=("$_novak_v"); EXTERNAL_SECRETS+=("$_novak_v") ;;
+      esac
+    done < <(NOVAK_HOME="$NOVAK_HOME" "$_novak_py" "$REPO_DIR/reconciler/instances.py" secret-vars 2>/dev/null || true)
+  fi
+  unset _novak_py _novak_v
+fi
+
 PLACEHOLDERS='^(EDIT-ME|set-in-keychain|changeme)$'

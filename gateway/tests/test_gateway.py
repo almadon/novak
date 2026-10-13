@@ -143,6 +143,14 @@ class IsolationTests(unittest.TestCase):
         self.assertTrue(r["result"]["isError"])
         self.assertEqual([m for m, *_ in w.seen["hs-household"] if m == "tools/call"], [])
 
+    def test_household_key_in_the_url_for_clients_that_cannot_send_headers(self):
+        w = World(self)
+        code, t = w.tools(path=f"/mcp/household/k/{w.keys['household']}")
+        self.assertEqual(code, 200)
+        self.assertEqual(sorted(t), ["hs_household__recall", "hs_household__retain"])
+        self.assertEqual(w.tools(path="/mcp/household/k/wrong-key-value")[0], 401)
+        self.assertEqual(w.tools(path=f"/mcp/household/k/{w.keys['tmeuze']}")[0], 401)   # a person key is not the household's
+
     def test_a_person_key_does_not_open_the_household_and_vice_versa(self):
         w = World(self)
         self.assertEqual(w.tools(token=w.keys["tmeuze"], path="/mcp/household")[0], 401)

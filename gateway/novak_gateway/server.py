@@ -87,12 +87,14 @@ def make_server(gw, oidc, host="0.0.0.0", port=8000, admin_key_hash=None):
                 body = json.loads(self.rfile.read(length))
             except ValueError:
                 return self._send(400, {"error": "not JSON"})
-            household = path == "/mcp/household"
+            hm = re.fullmatch(r"/mcp/household(?:/k/([\w-]+))?", path)   # key in the URL for clients that cannot send headers
+            household = hm is not None
             km = re.fullmatch(r"/mcp/k/([\w-]+)", path)
             if not (path == "/mcp" or household or km):
                 return self._send(404, {"error": "not found"})
             try:
-                ident = authenticate(gw.dir, self.headers, oidc, km.group(1) if km else None, household)
+                ident = authenticate(gw.dir, self.headers, oidc,
+                                     km.group(1) if km else (hm.group(1) if hm else None), household)
             except AuthError as exc:
                 return self._auth_failure(exc)
             msgs = body if isinstance(body, list) else [body]

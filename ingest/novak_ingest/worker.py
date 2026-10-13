@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import chunk, llm, notify, stt, summarize
+from .api import decide_proposal
 from .sinks import build_sinks
 
 
@@ -126,6 +127,7 @@ class Worker:
         if not self.store._all("SELECT id FROM proposals WHERE recording_id=?", (rid,)):
             for t in result["tasks"]:
                 self.store.add_proposal(rid, t["title"], t["detail"], t["due"])
+            self._auto_add(rid)
             self._announce(rid, rec, result)
         self.store.update_recording(
             rid, status="done", title=result["title"], note_path=str(note_path),
@@ -153,13 +155,30 @@ class Worker:
                 problems.append(f"{sink.name}: {exc}")
         return problems
 
+    def _auto_add(self, rid):
+        """Adding a task is not destructive, so by default it just happens. Only
+        proposals a task sink actually accepted are marked approved; one that
+        fails, or a deployment with no task sink, stays pending for a person."""
+        if self.s.cfg["tasks"]["mode"] != "auto":
+            return
+        if not any(s["kind"] == "task" and s.get("enabled") for s in self.s.cfg["sinks"]):
+            return
+        for p in self.store._all("SELECT * FROM proposals WHERE recording_id=? AND status='pending'", (rid,)):
+            code, msg = decide_proposal(self.s, self.store, p, "approve")
+            if code != 200:
+                self.log(f"recording {rid}: task '{p['title']}' not added automatically: {msg}")
+
     def _announce(self, rid, rec, result):
         tasks = self.store._all("SELECT * FROM proposals WHERE recording_id=? ORDER BY id", (rid,))
         if not tasks or not (self.s.ha_url and self.s.ha_token and self.s.ha_target):
             return
-        first = tasks[0]["title"]
-        more = f" and {len(tasks) - 1} more" if len(tasks) > 1 else ""
-        title = f"{len(tasks)} task(s) to approve: {result['title']}"[:100]
+        pending = [t for t in tasks if t["status"] == "pending"]
+        first = (pending or tasks)[0]["title"]
+        more = f" and {len(pending or tasks) - 1} more" if len(pending or tasks) > 1 else ""
+        if pending:
+            title = f"{len(pending)} task(s) to approve: {result['title']}"[:100]
+        else:
+            title = f"{len(tasks)} task(s) added: {result['title']}"[:100]
         url = f"{self.s.public_url}/review/{tasks[0]['token']}"
         try:
             if self._notify:                       # injected by tests

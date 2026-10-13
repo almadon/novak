@@ -21,6 +21,13 @@ ingest:
     language: auto
     chunk_s: 60         # one unit of work; cuts land on silences within search_s of this
     search_s: 15
+  tasks:
+    # auto: a task sink creates each task at once. Adding is not destructive, so
+    # it is not held; the notification just says what was added. Removing things
+    # is a different matter and goes through the gateway's confirmation.
+    # confirm: every task waits for approval (a review link in the notification).
+    # With no task sink enabled, tasks wait either way.
+    mode: auto
   summary:
     # `chat`, not `deep`: it is already resident, so summarising never evicts
     # the models someone is waiting on. `deep` (27B) would swap them out.

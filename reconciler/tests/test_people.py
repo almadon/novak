@@ -195,3 +195,31 @@ class BankTests(unittest.TestCase):
         h = Home(self)
         r = h.run("banks", env={"HINDSIGHT_API_KEY": ""})
         self.assertEqual(r.returncode, 0)
+
+
+class ExistingBankTests(unittest.TestCase):
+    def test_adding_a_person_whose_bank_entry_already_exists_reuses_it(self):
+        h = Home(self)
+        reg = yaml.safe_load((h.dir / "registry" / "mcp-servers.yaml").read_text())
+        reg["servers"].append({"name": "hindsight-ushy", "kind": "external", "url": "http://hs:8888/mcp/ushy/",
+                               "auth": "HINDSIGHT_API_KEY", "enabled": True})
+        (h.dir / "registry" / "mcp-servers.yaml").write_text(yaml.safe_dump(reg))
+        r = h.run("add", "ushy", "--yes", "--bank", env={"HINDSIGHT_API_KEY": ""})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Using the existing memory bank entry hindsight-ushy", r.stderr)
+        self.assertEqual(h.load()["people"]["ushy"]["entries"], ["hindsight-ushy"])
+        self.assertEqual(sum(1 for e in yaml.safe_load((h.dir / "registry" / "mcp-servers.yaml").read_text())["servers"]
+                             if e["name"] == "hindsight-ushy"), 1)
+
+    def test_set_changes_emails_and_channel_without_touching_entries_or_key(self):
+        h = Home(self)
+        h.run("add", "tmeuze", "--yes", "--entries", "tududi-tui")
+        before = h.load()["people"]["tmeuze"]
+        r = h.run("set", "tmeuze", "--emails", "a@example.com,b@example.com", "--ticker", "Novak")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        p = h.load()["people"]["tmeuze"]
+        self.assertEqual(p["emails"], ["a@example.com", "b@example.com"])
+        self.assertEqual(p["notify"], {"kind": "ticker", "category": "Novak"})
+        self.assertEqual((p["entries"], p["key_sha256"]), (before["entries"], before["key_sha256"]))
+        h.run("set", "tmeuze", "--no-notify")
+        self.assertNotIn("notify", h.load()["people"]["tmeuze"])

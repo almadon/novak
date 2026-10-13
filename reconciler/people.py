@@ -4,6 +4,7 @@
   people.py add NAME [--names a,b] [--emails x,y] [--entries e1,e2]
                      [--bank] [--ticker CATEGORY | --ha-service SERVICE] [--yes]
   people.py list
+  people.py set NAME [--names a,b] [--emails x,y] [--ticker CATEGORY | --ha-service SERVICE | --no-notify]
   people.py key NAME              new gateway key for a person (shown once)
   people.py attach NAME ENTRY...  give a person registry entries
   people.py detach NAME ENTRY...
@@ -191,7 +192,15 @@ def cmd_add(a):
     if not a.yes and not emails:
         emails = [e for e in instances.ask(answers, "emails", "Email(s) Open WebUI knows them by, comma separated (blank for none)", "").split(",") if e]
 
-    if a.bank or (not a.yes and instances.yn(answers, "bank", f"Create a Hindsight memory bank '{name}'?", True)):
+    bank_entry = f"hindsight-{name}"
+    if bank_entry in registry_entries():
+        # The entry is already in the registry (made earlier with `novak add`, or by
+        # a previous attempt). Reuse it: this person's bank is that entry.
+        say(f"Using the existing memory bank entry {bank_entry}.")
+        if bank_entry not in entries:
+            entries.append(bank_entry)
+        ensure_banks([name])
+    elif a.bank or (not a.yes and instances.yn(answers, "bank", f"Create a Hindsight memory bank '{name}'?", True)):
         cmd = [sys.executable, str(Path(instances.__file__)), "add", "--kind", "hindsight", "--name", name,
                "--set", "voice_safe=n", "--accepted-by", a.accepted_by or os.environ.get("USER", "admin"), "--yes"]
         r = subprocess.run(cmd, env={**os.environ, "NOVAK_HOME": str(NOVAK_HOME)})
@@ -229,6 +238,27 @@ def cmd_add(a):
         say("Use it as a bearer token, or in a URL for clients that cannot send headers:")
         say(f"  <gateway>/mcp/k/{key}")
     print("KEY_MADE" if key else "NO_KEY")
+    return 0
+
+
+def cmd_set(a):
+    """Change a person's sign-in names, emails or confirmation channel."""
+    need_files()
+    d = load(PEOPLE)
+    p = person_or_die(d, a.name)
+    if a.names:
+        p["names"] = [n for n in a.names.split(",") if n]
+    if a.emails is not None:
+        p["emails"] = [e for e in a.emails.split(",") if e]
+    if a.ticker:
+        p["notify"] = {"kind": "ticker", "category": a.ticker}
+    elif a.ha_service:
+        p["notify"] = {"kind": "ha", "service": a.ha_service}
+    elif a.no_notify:
+        p.pop("notify", None)
+    backup(PEOPLE)
+    write_block(PEOPLE, a.name, 2, p)
+    say(f"{a.name}: names {p.get('names')}, emails {p.get('emails')}, notify {p.get('notify') or 'none'}")
     return 0
 
 
@@ -359,6 +389,9 @@ def main():
     s.add_argument("--accepted-by"); s.add_argument("--no-key", action="store_true")
     s.add_argument("--set", action="append"); s.add_argument("--yes", action="store_true")
     sub.add_parser("list")
+    st = sub.add_parser("set"); st.add_argument("name")
+    st.add_argument("--names"); st.add_argument("--emails")
+    st.add_argument("--ticker"); st.add_argument("--ha-service"); st.add_argument("--no-notify", action="store_true")
     k = sub.add_parser("key"); k.add_argument("name")
     for c in ("attach", "detach"):
         x = sub.add_parser(c); x.add_argument("name"); x.add_argument("entries", nargs="+")
@@ -368,7 +401,7 @@ def main():
     sub.add_parser("household-key")
     sub.add_parser("banks")
     a = ap.parse_args()
-    return {"add": cmd_add, "list": cmd_list, "key": cmd_key, "attach": lambda a: cmd_attach(a),
+    return {"add": cmd_add, "list": cmd_list, "set": cmd_set, "key": cmd_key, "attach": lambda a: cmd_attach(a),
             "detach": lambda a: cmd_attach(a, True), "share": lambda a: cmd_share(a),
             "unshare": lambda a: cmd_share(a, True), "client": cmd_client,
             "household-key": cmd_household_key, "banks": cmd_banks}[a.cmd](a)

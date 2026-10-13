@@ -23,12 +23,13 @@ name: novak
 
 services:
   # ── Chat frontend ─────────────────────────────────────────────────────
-  # Pinned to the digest :main resolved to on 2026-09-22 (decision #45) —
-  # not the moving tag. Refresh: resolve :main again, confirm the persona
-  # capabilities fix (decision #38) still holds against the new build
-  # through the real chat UI, then update this line in its own commit.
+  # Pinned to the digest the v0.12.0 release tag resolved to on 2026-10-13
+  # (decision #45), replacing the 2026-09-22 :main pin (v0.11.4). A release tag,
+  # not :main, so the version is nameable. Refresh: resolve the tag again,
+  # confirm the persona capabilities fix (decision #38) still holds against the
+  # new build through the real chat UI, then update this line in its own commit.
   open-webui:
-    image: ghcr.io/open-webui/open-webui@sha256:8b432fe0a65b91116afc7961365c6cca5379cc923171386a96691f3471f3cae9
+    image: ghcr.io/open-webui/open-webui@sha256:1565038903151ced924b5a3226f73f40f16963df4b910441f6391f10144afdaa
     restart: unless-stopped
     ports:
       - "${OPENWEBUI_PORT:-13400}:8080"

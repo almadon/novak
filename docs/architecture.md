@@ -301,6 +301,7 @@ All external ports below are Spire's, in the `134xx` range by convention
 | Console | `13401` (`CONSOLE_PORT`) |
 | Wyoming openWakeWord | `13407` (`OPENWAKEWORD_PORT`) |
 | Persona server (HA pulls) | `13408` (`PERSONA_PORT`, bound by `PERSONA_BIND`) |
+| Gateway (optional extension) | `13410` (`GATEWAY_PORT`, bound by `GATEWAY_BIND`); see [gateway.md](gateway.md) |
 | Ingest (optional extension) | `13409` (`INGEST_PORT`, bound by `INGEST_BIND`); see [ingest.md](ingest.md) |
 
 The router, Ollama and the persona server take a `*_BIND` address (`ROUTER_BIND`, `OLLAMA_BIND`, `PERSONA_BIND`); set them to the host's Tailscale IP so only the tailnet can reach them (decision #54). Containers in the stack reach each other by service name, not through these published ports.

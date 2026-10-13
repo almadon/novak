@@ -29,6 +29,7 @@ SECRET_VARS=(
   TINYAUTH_OIDC_CLIENT_SECRET
   INGEST_TOKEN
   INGEST_HA_TOKEN
+  GATEWAY_HA_TOKEN
 )
 
 # HOST_NAME alone: every service builds its URLs from it. VIKUNJA_URL used to
@@ -105,6 +106,7 @@ EXTERNAL_SECRETS=(
   BRAVE_API_KEY
   TINYAUTH_OIDC_CLIENT_SECRET
   INGEST_HA_TOKEN
+  GATEWAY_HA_TOKEN
 )
 # OPEN_TERMINAL_API_KEY is the same shape as HINDSIGHT_API_KEY: we generate
 # it, the container reads it, and a human then has to paste the same value
@@ -148,6 +150,7 @@ secret_desc() {
     HA_DRIFT_TOKEN)             echo "Home Assistant: read-only token for 'novak drift --live'" ;;
     INGEST_TOKEN)               echo "Ingest: bearer token recorders and adapters send" ;;
     INGEST_HA_TOKEN)            echo "Ingest: Home Assistant token for approval notifications" ;;
+    GATEWAY_HA_TOKEN)           echo "Gateway: Home Assistant token for removal-confirmation notifications" ;;
     *)                          return 1 ;;
   esac
 }

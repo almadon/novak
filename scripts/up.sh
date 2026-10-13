@@ -39,6 +39,12 @@ if [ ! -f "$NOVAK_HOME/registry/mcp-servers.yaml" ]; then
   echo "📄 seeded $NOVAK_HOME/registry/mcp-servers.yaml — edit it there, not in the repo"
 fi
 
+for f in people.yaml gateway.yaml; do
+  if [ ! -f "$NOVAK_HOME/registry/$f" ]; then
+    cp "$REPO_DIR/registry/$f" "$NOVAK_HOME/registry/$f"
+    echo "📄 seeded $NOVAK_HOME/registry/$f — edit it there, not in the repo"
+  fi
+done
 if [ ! -f "$NOVAK_HOME/registry/ingest.yaml" ]; then
   cp "$REPO_DIR/registry/ingest.yaml" "$NOVAK_HOME/registry/ingest.yaml"
   echo "📄 seeded $NOVAK_HOME/registry/ingest.yaml — edit it there, not in the repo"
@@ -270,6 +276,12 @@ if [ "$(envval INGEST_ENABLED)" = "true" ]; then
     echo "skipped:  ingest — not configured: ${ingest_missing[*]}" >&2
     echo "          everything else starts; set those and re-run to add it." >&2
   fi
+fi
+# The gateway is an extension too: opt-in with GATEWAY_ENABLED=true. It is given
+# only the credentials its directory names, in a mode-600 file.
+if [ "$(envval GATEWAY_ENABLED)" = "true" ]; then
+  profiles+=(gateway)
+  NOVAK_HOME="$NOVAK_HOME" "$PY" "$REPO_DIR/reconciler/gateway_env.py" || echo "note:     could not write gateway.env" >&2
 fi
 if [ ${#profiles[@]} -gt 0 ]; then
   export COMPOSE_PROFILES

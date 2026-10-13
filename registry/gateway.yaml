@@ -1,0 +1,26 @@
+# Gateway behaviour (see docs/gateway.md). Seeded by `novak up`; yours to edit.
+#
+# SECRETS DO NOT BELONG HERE: clients are listed by the hash of their key.
+
+gateway:
+  # Which Pocket ID claim names the person. The issuer and audience come from
+  # GATEWAY_OIDC_ISSUER and GATEWAY_OIDC_AUDIENCE in .env (blank issuer = OIDC off).
+  username_claim: preferred_username
+
+  # Kinds of action held until the person confirms on their phone. Appending
+  # (create, add, retain) is never held; removing is. Add `modify` to also hold
+  # updates and moves.
+  confirm: [destructive]
+  confirm_timeout_s: 180
+
+  # Used when a person has no notify block of their own.
+  notify_default: {}
+
+  # Clients trusted to name the user in a header (Open WebUI). Only as safe as
+  # the network: nothing but that client may be able to reach the gateway.
+  # `novak gateway client open-webui` adds one and shows its key once.
+  clients: []
+
+  # Classify a tool by hand where its name misleads. read | append | modify |
+  # destructive. Keyed by registry entry name.
+  tool_overrides: {}

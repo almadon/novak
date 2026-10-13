@@ -376,6 +376,35 @@ services:
       - ${REPO_DIR}/ingest/novak_ingest:/app/novak_ingest:ro
       - ./registry/ingest.yaml:/registry/ingest.yaml:ro
 
+  # ── Gateway (optional, decision #58) ──────────────────────────────────
+  # One MCP endpoint that knows who is asking: shows each person only their own
+  # tools, adds their own credentials on the way to each service, holds removals
+  # until they confirm, and logs who did what. Off unless GATEWAY_ENABLED=true.
+  # Holds credentials, so it gets only the ones its directory names
+  # (gateway.env, written by reconciler/gateway_env.py), not all of .env.
+  gateway:
+    profiles: ["gateway"]
+    build:
+      context: ${REPO_DIR}/gateway
+    image: novak-gateway:local
+    restart: unless-stopped
+    ports:
+      # GATEWAY_BIND: this host's Tailscale IP. Open WebUI reaches it by service
+      # name, so nothing else needs the published port except HA and satellites.
+      - "${GATEWAY_BIND:-0.0.0.0}:${GATEWAY_PORT:-13410}:8000"
+    env_file:
+      - path: ./gateway.env
+        required: false
+    environment:
+      GATEWAY_PUBLIC_URL: "${GATEWAY_PUBLIC_URL:-http://${HOST_NAME:-localhost}:${GATEWAY_PORT:-13410}}"
+      GATEWAY_HA_URL: "${GATEWAY_HA_URL:-${HA_URL:-}}"
+      GATEWAY_OIDC_ISSUER: "${GATEWAY_OIDC_ISSUER:-}"
+      GATEWAY_OIDC_AUDIENCE: "${GATEWAY_OIDC_AUDIENCE:-}"
+    volumes:
+      - ${GATEWAY_DATA_DIR:-gateway-data}:/data
+      - ${REPO_DIR}/gateway/novak_gateway:/app/novak_gateway:ro
+      - ./registry:/registry:ro
+
   # ── Portal (single glass pane over Open WebUI and Konzol) ─────────────
   # Optional, and gated behind a compose profile for the same reason the
   # console is: a missing OIDC client must skip this, not refuse to start
@@ -597,3 +626,4 @@ volumes:
   ollama:
   ingest-data:
   whisper-models:
+  gateway-data:

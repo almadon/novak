@@ -150,6 +150,11 @@ itself the way the rest of the stack has.
   has run against Spire's Ollama or a real Whisper model yet. See
   [ingest.md](ingest.md) for what to measure first.
 
+- **The gateway (decision #58) is built and tested offline.** It shows each
+  person only their own tools with their own credentials, holds removals until
+  they confirm, and logs who did what. See [gateway.md](gateway.md) for what is
+  and is not verified against live services.
+
 ## Open VERIFY items
 
 - Whether Hindsight has a trash, before trusting `delete` to be

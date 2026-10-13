@@ -51,7 +51,7 @@ Strongest first.
    Assistant pipeline. `novak person add` and `novak person key` print it once.
    A person's key cannot be used to claim to be someone else.
 
-Household: `/mcp/household` with the household key (`novak gateway
+Household: `/mcp/household` with the household key (or `/mcp/household/k/<key>` for clients that cannot send headers) (`novak gateway
 household-key`), for satellites.
 
 ## Setting it up

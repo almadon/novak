@@ -40,7 +40,7 @@
 #                              another Vikunja, Super Productivity, any MCP URL.
 #                              Asks for what it needs, writes the registry entry,
 #                              and prompts for any new secret.
-#   novak person add|list|key|attach|detach|share|unshare
+#   novak person add|list|set|key|attach|detach|share|unshare
 #                             who exists in the gateway and what is theirs. A
 #                             person has a sign-in name, their own entries (their
 #                             memory bank, their Outline and Tududi keys) and a
@@ -804,7 +804,7 @@ cmd_person() {
   local py="$NOVAK_HOME/.venv/bin/python"; [ -x "$py" ] || py="$(command -v python3)"
   HINDSIGHT_API_KEY="$(secret_get HINDSIGHT_API_KEY)" NOVAK_HOME="$NOVAK_HOME" "$py" "$REPO_DIR/reconciler/people.py" "$@"
   case "${1:-}" in
-    add|attach|detach|share|unshare|key)
+    add|attach|detach|share|unshare|key|set)
       echo
       dim "Run 'novak up' so the gateway picks up new credentials (it re-reads the directory itself)." ;;
   esac

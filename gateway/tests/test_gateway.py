@@ -341,3 +341,64 @@ class NotifyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FilterTests(unittest.TestCase):
+    def filters(self, w, filters):
+        g = yaml.safe_load((w.dir / "gateway.yaml").read_text())
+        g["gateway"]["tool_filters"] = filters
+        (w.dir / "gateway.yaml").write_text(yaml.safe_dump(g))
+        import os
+        os.utime(w.dir / "gateway.yaml", (time.time() + 5, time.time() + 5))
+
+    def test_allow_list_limits_what_is_offered_and_callable(self):
+        w = World(self)
+        self.filters(w, [{"entries": "hs-*", "allow": ["recall", "delete_*"]}])
+        _, t = w.tools(token=w.keys["tmeuze"])
+        self.assertEqual(sorted(t), ["hs_tmeuze__delete_document", "hs_tmeuze__recall"])
+        code, r = w.call("hs_tmeuze__retain", {"content": "x"}, token=w.keys["tmeuze"])      # hidden means not callable
+        self.assertTrue(r["result"]["isError"])
+        self.assertEqual([m for m, *_ in w.seen["hs-tmeuze"] if m == "tools/call"], [])
+
+    def test_deny_removes_tools_and_unmatched_entries_are_untouched(self):
+        w = World(self)
+        self.filters(w, [{"entries": "hs-tmeuze", "deny": ["delete_*"]}])
+        _, t = w.tools(token=w.keys["tmeuze"])
+        self.assertNotIn("hs_tmeuze__delete_document", t)
+        _, u = w.tools(token=w.keys["ushy"])
+        self.assertIn("hs_ushy__delete_document", u)
+
+    def test_unit(self):
+        f = [{"entries": "a-*", "allow": ["x"]}, {"entries": "*", "deny": ["y"]}]
+        self.assertTrue(directory.tool_allowed(f, "a-1", "x"))
+        self.assertFalse(directory.tool_allowed(f, "a-1", "z"))
+        self.assertFalse(directory.tool_allowed(f, "b-1", "y"))   # first match decides
+        self.assertTrue(directory.tool_allowed(f, "b-1", "z"))
+        self.assertTrue(directory.tool_allowed([], "anything", "anything"))
+
+    def test_the_shipped_defaults_keep_the_useful_tools(self):
+        from pathlib import Path as P
+        shipped = yaml.safe_load((P(__file__).resolve().parents[2] / "registry" / "gateway.yaml").read_text())["gateway"]["tool_filters"]
+        for tool in ("recall", "retain", "reflect", "delete_document"):
+            self.assertTrue(directory.tool_allowed(shipped, "hindsight-tmeuze", tool), tool)
+        for tool in ("delete_bank", "clear_memories", "update_bank", "create_directive", "cancel_operation"):
+            self.assertFalse(directory.tool_allowed(shipped, "hindsight-tmeuze", tool), tool)
+        for tool in ("create_document", "list_collections", "delete_document"):
+            self.assertTrue(directory.tool_allowed(shipped, "outline-everything", tool), tool)
+        self.assertFalse(directory.tool_allowed(shipped, "outline-everything", "delete_collection"))
+        self.assertTrue(directory.tool_allowed(shipped, "tududi-tui", "anything"))            # no filter for Tududi yet
+
+
+class NotifyErrorTests(unittest.TestCase):
+    def test_home_assistant_refusal_reason_is_reported(self):
+        from novak_gateway import notify
+        srv = HTTPServer(("127.0.0.1", 0), type("H", (BaseHTTPRequestHandler,), {
+            "log_message": lambda *a: None,
+            "do_POST": lambda s: (s.rfile.read(int(s.headers["Content-Length"])), s.send_response(400),
+                                  s.send_header("Content-Length", "50"), s.end_headers(),
+                                  s.wfile.write(b'{"message":"Category Novak not found. Check it"}  '))[0]}))
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        with self.assertRaises(RuntimeError) as cm:
+            notify._post(f"http://127.0.0.1:{srv.server_port}", "t", "/x", {})
+        self.assertIn("Category Novak not found", str(cm.exception))

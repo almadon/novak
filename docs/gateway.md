@@ -77,6 +77,19 @@ household-key`), for satellites.
    `<gateway>/mcp/k/<their key>`. The household pipeline for satellites uses
    `/mcp/household`. Identity comes from which pipeline a device selects.
 
+## Which tools each entry offers
+
+A model given every tool a service has does worse: it spends its context on
+definitions and goes exploring. On the first live use through Open WebUI a
+read-only question made a 14B model reach for `delete_knowledge_node` among 55
+tools (the gateway held it and nothing was removed, which is the point of the
+hold, but it should not have been offered the chance so readily). `tool_filters`
+in `gateway.yaml` limits each kind of entry to the tools people use, by glob on
+the entry name: `allow` keeps only the listed tools, `deny` removes more. A
+filtered tool is not listed and cannot be called by name. Removal tools that
+stay on the list still need confirmation. The shipped defaults give Hindsight
+16 tools and Outline 11; Tududi is unfiltered until its tool list is seen.
+
 ## Entries and people
 
 An entry (in `mcp-servers.yaml`) holds one credential, so it belongs to one

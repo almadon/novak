@@ -70,6 +70,8 @@ class Gateway:
                 self.audit.record(identity, entry.name, "tools/list", "read", "error", exc)
                 continue          # one dead backend must not hide the others
             for t in tools:
+                if not directory.tool_allowed(self.dir.settings.get("tool_filters"), entry.name, t["name"]):
+                    continue
                 kind = self._kind(entry, t["name"])
                 if identity.kind == "household" and kind == "destructive":
                     continue      # nobody to confirm it: not offered at all
@@ -89,6 +91,9 @@ class Gateway:
         entry, tool = self._resolve(identity, namespaced)
         if not entry:
             self.audit.record(identity, None, namespaced, None, "denied", "not one of this caller's tools", args=args)
+            return text_result(f"Unknown tool '{namespaced}'.", True)
+        if not directory.tool_allowed(self.dir.settings.get("tool_filters"), entry.name, tool):
+            self.audit.record(identity, entry.name, tool, None, "denied", "not offered", args=args)
             return text_result(f"Unknown tool '{namespaced}'.", True)
         kind = self._kind(entry, tool)
         if kind in self.dir.settings.get("confirm", ["destructive"]):

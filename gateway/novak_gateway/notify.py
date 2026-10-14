@@ -1,6 +1,7 @@
 """Tell a person something is waiting for them. Their own channel first:
 Ticker category per person, or a Home Assistant notify service per person."""
 import json
+import urllib.error
 import urllib.request
 
 
@@ -8,8 +9,12 @@ def _post(ha_url, token, path, body, timeout=15):
     req = urllib.request.Request(
         f"{ha_url.rstrip('/')}{path}", data=json.dumps(body).encode(),
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        r.read()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            r.read()
+    except urllib.error.HTTPError as exc:
+        # Home Assistant says why in the body (an unknown Ticker category, say).
+        raise RuntimeError(f"Home Assistant refused ({exc.code}): {exc.read().decode()[:200]}") from exc
 
 
 def send(person_notify: dict, default: dict, ha_url: str, ha_token: str,

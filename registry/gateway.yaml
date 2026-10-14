@@ -21,6 +21,21 @@ gateway:
   # `novak gateway client open-webui` adds one and shows its key once.
   clients: []
 
+  # Which tools each kind of entry offers. A model given 36 tools for one memory
+  # bank explores them (a read-only question once reached for a delete); given
+  # the dozen people use, it behaves. First filter whose `entries` glob matches
+  # decides; `allow` limits to those tools, `deny` removes more. Removal tools
+  # kept here still need confirmation. Delete this block to offer everything.
+  tool_filters:
+    - entries: "hindsight-*"
+      allow: [recall, retain, sync_retain, reflect, list_memories, get_memory, update_memory,
+              invalidate_memory, list_documents, get_document, delete_document, list_tags,
+              get_bank, search_knowledge_base, get_knowledge_page, get_knowledge_base_tree]
+    - entries: "outline-*"
+      allow: [list_collections, list_documents, list_collection_documents, fetch, create_document,
+              update_document, move_document, delete_document, restore_document, create_comment,
+              list_comments]
+
   # Classify a tool by hand where its name misleads. read | append | modify |
   # destructive. Keyed by registry entry name.
   tool_overrides: {}

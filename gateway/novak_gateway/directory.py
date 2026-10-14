@@ -77,6 +77,25 @@ class Directory:
         return [self.entries[n] for n in names if n in self.entries]
 
 
+def tool_allowed(filters: list, entry_name: str, tool: str) -> bool:
+    """Whether a model may be offered (and may call) this tool.
+
+    `tool_filters` is a list of {entries: <glob>, allow: [globs], deny: [globs]},
+    applied in order; the first filter whose `entries` glob matches the entry
+    decides. With `allow`, only matching tools pass; `deny` then removes tools. A
+    large tool list costs a small model its context and its judgement, so each
+    kind of entry should offer the handful of tools people actually use.
+    """
+    import fnmatch
+    for f in filters or []:
+        if fnmatch.fnmatch(entry_name, f.get("entries", "*")):
+            allow, deny = f.get("allow"), f.get("deny") or []
+            if allow is not None and not any(fnmatch.fnmatch(tool, g) for g in allow):
+                return False
+            return not any(fnmatch.fnmatch(tool, g) for g in deny)
+    return True
+
+
 def _load_yaml(path: Path) -> dict:
     return (yaml.safe_load(path.read_text()) or {}) if path.exists() else {}
 
@@ -101,6 +120,7 @@ DEFAULT_SETTINGS = {
     "confirm": ["destructive"],
     "confirm_timeout_s": 180,
     "tool_overrides": {},
+    "tool_filters": [],
     "clients": [],
     "oidc": {},
     "notify_default": {},

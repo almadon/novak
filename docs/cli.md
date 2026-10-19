@@ -70,7 +70,7 @@ works identically on both platforms.
 | `novak secret verify` | do they read back unattended, or would a prompt hang boot? |
 | `novak secret show KEY` | print one, for pasting into a client |
 | `novak up` | apply config and start |
-| `novak update [SERVICE...]` | pull new images and recreate what changed |
+| `novak update [SERVICE...]` | adopt (pull the checkout and add new settings), pull the images it pins, recreate what changed; `--no-adopt` skips the git step |
 | `novak down` | stop, keep data |
 | `novak restart [SERVICE]` | restart everything, or one service |
 | `novak logs [SERVICE]` | follow logs |
@@ -82,6 +82,16 @@ works identically on both platforms.
 | `novak router apply` | apply `registry/engines.yaml` -> `router/config.yaml` (decision #28); needs `novak restart router` after |
 
 ---
+
+## Code that is mounted, not built
+
+Ingest, the gateway, the persona server and the router hook run from files in
+the checkout, so a pull changes them without changing their image or their
+compose config, and `docker compose up` would leave the running container on the
+old code. `up.sh` therefore gives each of those services the git revision that
+last changed its code (`GATEWAY_CODE_REV` and so on), which makes a code change a
+config change and recreates that one service, and only it, on the next `up` or
+`update`.
 
 ## Reading `novak up`
 
@@ -415,16 +425,22 @@ be open to anything that can reach the port.
 
 ### Updating
 
-Every image in `docker-compose.yml` is unpinned (`:latest`, `:main`), and
-`up` never pulls, so a new release sitting on the registry does not reach a
-running stack on its own. `update` is the missing half:
+Every image in `docker-compose.yml` is pinned by digest (decision #45), and
+`up` never pulls, so a new release does not reach a running stack until a pin
+moves in the repo and something pulls it. `update` is that something:
 
 ```bash
-novak update              # pull every image, recreate whatever changed
-novak update open-webui   # just one
+novak update              # adopt, pull every pinned image, recreate whatever changed
+novak update open-webui   # just one image
+novak update --no-adopt   # skip the git step
 ```
 
-It runs `docker compose pull`, then re-runs `up.sh`, which is what actually
+It runs `adopt` first (a fast-forward `git pull` and any new `.env` settings,
+which it only ever adds), because the pins and the compose file are in the
+checkout and pulling images against a stale one is a half update. Adopt refuses,
+rather than guesses, over uncommitted changes or diverged history; when it does,
+`update` says so and carries on with the checkout as it is. Then it runs
+`docker compose pull`, then re-runs `up.sh`, which is what actually
 recreates containers, re-applies the MCP registry, and re-applies the oMLX
 profiles. That last part matters more than it looks: pulling a newer app
 image and skipping the reapply is how a stack ends up running new code

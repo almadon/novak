@@ -2,8 +2,10 @@
 FROM python@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f
 
 # PyJWT and cryptography check Pocket ID tokens; PyYAML reads the registry.
-# Application code is mounted, not copied, so a code change is a restart.
-RUN pip install --no-cache-dir pyyaml==6.0.3 pyjwt==2.15.1 cryptography==50.0.2
+# Application code is mounted, not copied, so a code change is a restart. The pip
+# cache is a BuildKit cache mount (persists on the builder, never in the image).
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install pyyaml==6.0.3 pyjwt==2.15.1 cryptography==50.0.2
 
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 PYTHONPATH=/app

@@ -14,6 +14,7 @@
 
 SECRET_VARS=(
   OMLX_API_KEY
+  ROUTER_API_KEY
   HINDSIGHT_API_KEY
   OUTLINE_EVERYTHING_API_KEY
   TUDUDI_API_TOKEN
@@ -45,15 +46,16 @@ CONSOLE_SECRETS=(CONSOLE_AUTH_SECRET OIDC_CLIENT_SECRET)
 PORTAL_EDITS=(PORTAL_APPURL TINYAUTH_OIDC_CLIENT_ID TINYAUTH_OIDC_AUTH_URL
   TINYAUTH_OIDC_TOKEN_URL TINYAUTH_OIDC_USERINFO_URL)
 PORTAL_SECRETS=(TINYAUTH_OIDC_CLIENT_SECRET)
-# The router (decision #21) needs only what oMLX itself already needs —
-# OMLX_API_KEY is already SECRET_VARS/EXTERNAL_SECRETS, not duplicated
-# here. ROUTER_EDITS is empty on purpose, not omitted: OMLX_PORT and
+# The router (decision #21) needs its own key (decision #59): LiteLLM refuses to
+# start without one, and clients present it. An oMLX engine still needs
+# OMLX_API_KEY, which the router passes through. ROUTER_EDITS is empty on
+# purpose, not omitted: OMLX_PORT and
 # ROUTER_PORT both have safe defaults, so nothing about this integration
 # needs a human to type a value in before it can start, only the one
 # secret to exist — but up.sh's gating loop expects the array to exist
 # under set -u, same as every other optional profile.
 ROUTER_EDITS=()
-ROUTER_SECRETS=(OMLX_API_KEY)
+ROUTER_SECRETS=(ROUTER_API_KEY)
 # Ingest (decision #57) is an optional extension: INGEST_ENABLED=true turns it
 # on, and INGEST_TOKEN (the bearer token adapters send) must exist. The Home
 # Assistant token is only for the approval notification, so it degrades on its
@@ -112,7 +114,7 @@ EXTERNAL_SECRETS=(
 # it, the container reads it, and a human then has to paste the same value
 # into Open WebUI's Admin -> Settings -> Integrations -> Open Terminal —
 # there's no registry-driven wiring for it, see registry/mcp-servers.yaml.
-SHARED_SECRETS=(HINDSIGHT_API_KEY OPEN_TERMINAL_API_KEY INGEST_TOKEN)
+SHARED_SECRETS=(HINDSIGHT_API_KEY OPEN_TERMINAL_API_KEY INGEST_TOKEN ROUTER_API_KEY)
 
 # Credentials added with `novak add` (a second Outline, another Tududi) live in
 # the deployed registry, not in the lists above, so the CLI would not know they
@@ -138,6 +140,7 @@ fi
 secret_desc() {
   case "$1" in
     OMLX_API_KEY)               echo "oMLX inference engine key (Mac host only)" ;;
+    ROUTER_API_KEY)             echo "Router: the one key Open WebUI, Hindsight, ingest and HA present to it" ;;
     HINDSIGHT_API_KEY)          echo "Hindsight: the one tenant key every bank, the console, Open WebUI and HA use" ;;
     BRAVE_API_KEY)              echo "Brave Search: key for the web-search tool" ;;
     OPEN_TERMINAL_API_KEY)      echo "Open Terminal (code sandbox): also pasted into Open WebUI" ;;

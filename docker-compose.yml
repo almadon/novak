@@ -45,7 +45,8 @@ services:
       # gated behind its own compose profile, and this line has no way to
       # know whether that profile is active.
       OPENAI_API_BASE_URL: "${OWUI_INFERENCE_BASE_URL:-${DEFAULT_ENGINE_BASE_URL}}"
-      OPENAI_API_KEY: "${OMLX_API_KEY:-none}"
+      # The router key when there is one (decision #59), else the engine key.
+      OPENAI_API_KEY: "${ROUTER_API_KEY:-${OMLX_API_KEY:-none}}"
       ENABLE_OLLAMA_API: "false"
       # Router-only: router/config.yaml exposes a `task` model built for
       # exactly this — Open WebUI's own background calls (title, tags,
@@ -247,7 +248,7 @@ services:
       # engine directly (see .env.example). Blank means Hindsight uses
       # DEFAULT_ENGINE_BASE_URL, same as everything else.
       HINDSIGHT_API_LLM_BASE_URL: "${HINDSIGHT_LLM_BASE_URL:-${DEFAULT_ENGINE_BASE_URL}}"
-      HINDSIGHT_API_LLM_API_KEY: "${OMLX_API_KEY:-none}"
+      HINDSIGHT_API_LLM_API_KEY: "${ROUTER_API_KEY:-${OMLX_API_KEY:-none}}"
       # Without this Hindsight asks for its own default, gpt-4o-mini, which a
       # local server will never have — startup verification fails with "Model
       # not found. Available models: (none)" and extraction is dead. The name
@@ -360,6 +361,7 @@ services:
       INGEST_TOKEN: "${INGEST_TOKEN:-}"
       INGEST_PUBLIC_URL: "${INGEST_PUBLIC_URL:-http://${HOST_NAME:-localhost}:${INGEST_PORT:-13409}}"
       INGEST_LLM_BASE_URL: "${INGEST_LLM_BASE_URL:-http://router:4000/v1}"
+      INGEST_LLM_API_KEY: "${INGEST_LLM_API_KEY:-${ROUTER_API_KEY:-none}}"
       INGEST_OLLAMA_URL: "${INGEST_OLLAMA_URL:-http://ollama:11434}"
       OLLAMA_KEEP_ALIVE: "${OLLAMA_KEEP_ALIVE:-20m}"
       INGEST_HA_URL: "${INGEST_HA_URL:-${HA_URL:-}}"
@@ -564,6 +566,10 @@ services:
     # it's the existing one, in the one place it was still missing.
     environment:
       - ROUTER_CODE_REV   # changes when router/ does, so a pull recreates it (scripts/lib/rev.sh)
+      # LiteLLM 1.105 and later refuse to start without a master key (every request
+      # would be unauthenticated). One shared key, ROUTER_API_KEY, is what Open WebUI,
+      # Hindsight, ingest and Home Assistant present. Decision #59.
+      - LITELLM_MASTER_KEY=${ROUTER_API_KEY}
       - OMLX_API_KEY
     volumes:
       # config.yaml is the ONE exception to "everything the router needs

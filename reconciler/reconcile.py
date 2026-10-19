@@ -41,6 +41,9 @@ try:
 except ImportError:
     sys.exit("PyYAML required:  pip3 install --user pyyaml")
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import ui  # noqa: E402
+
 REPO_DIR = Path(__file__).resolve().parent.parent
 
 # Runtime state lives outside the git checkout so the repo is never written to
@@ -289,6 +292,58 @@ def render(servers: list[dict], configured: set[str]) -> dict:
     return {"name": "novak", "services": services}
 
 
+def report_plain(running, disabled, skipped, external, external_skipped, enabled, configured):
+    """The original line format. `novak registry --check` parses the external lines."""
+    print(f"running:  {', '.join(s['name'] for s in running) or '(none)'}")
+    print(f"disabled: {', '.join(s['name'] for s in disabled) or '(none)'}")
+    for s in skipped:
+        print(f"skipped:  {s['name']} — not configured: {', '.join(missing_vars(s, configured))}",
+              file=sys.stderr)
+    for s in external_skipped:
+        print(f"skipped:  {s['name']} — url still has EDIT-ME: {s['url']}", file=sys.stderr)
+    for s in external:
+        auth = f"  [token: {s['auth']}]" if s.get("auth") else ""
+        print(f"external: {s['name']} -> {s['url']}{auth}")
+    # Surface accepted risk on every run, so a `dangerous` server that was
+    # accepted months ago doesn't quietly fade into the background.
+    for s in enabled:
+        level = s["risk"]["level"]
+        if level != "standard":
+            who, when = s["risk"]["accepted_by"], s["risk"]["accepted_on"]
+            print(f"  ! {s['name']}: {level} — accepted by {who} on {when}")
+            for reason in s["risk"]["why"]:
+                print(f"      {reason}")
+
+
+def report_pretty(running, disabled, skipped, external, external_skipped, enabled, configured):
+    """The same facts for a person: sections, colour, and an emoji per kind of line."""
+    c = lambda n, t: ui.c(n, t, True)
+    print(ui.section("🔌", "MCP servers", True))
+    if running:
+        print(f"  ✅ {c('green', 'running')}   {', '.join(s['name'] for s in running)}")
+    if disabled:
+        print(f"  ⏸️  {c('dim', 'disabled')}  {c('dim', ', '.join(s['name'] for s in disabled))}")
+    for s in external:
+        auth = f"  {c('dim', 'token ' + s['auth'])}" if s.get("auth") else ""
+        print(f"  🔗 {c('cyan', 'external')}  {s['name']} {c('dim', '→')} {c('dim', s['url'])}{auth}")
+    for s in skipped:
+        print(f"  ⏭️  {c('yellow', 'skipped')}   {s['name']} {c('dim', '— not configured:')} "
+              f"{', '.join(missing_vars(s, configured))}")
+    for s in external_skipped:
+        print(f"  ⏭️  {c('yellow', 'skipped')}   {s['name']} {c('dim', '— url still has EDIT-ME:')} {s['url']}")
+
+    risky = [s for s in enabled if s["risk"]["level"] != "standard"]
+    if risky:
+        print(ui.section("⚠️ ", "Accepted risk", True))
+        for s in risky:
+            level, who, when = s["risk"]["level"], s["risk"]["accepted_by"], s["risk"]["accepted_on"]
+            icon, tone = ("🚨", "boldred") if level == "dangerous" else ("⚠️ ", "boldyellow")
+            print(f"  {icon} {c(tone, level.ljust(9))} {c('bold', s['name'])}  "
+                  f"{c('dim', f'accepted by {who} on {when}')}")
+            for reason in s["risk"]["why"]:
+                print(f"       {c('dim', '↳')} {reason}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true",
@@ -330,39 +385,22 @@ def main() -> int:
     external_skipped = [s for s in external_all if unedited_url(s)]
     external = [s for s in external_all if not unedited_url(s)]
 
-    print(f"running:  {', '.join(s['name'] for s in running) or '(none)'}")
-    print(f"disabled: {', '.join(s['name'] for s in disabled) or '(none)'}")
-    for s in skipped:
-        print(
-            f"skipped:  {s['name']} — not configured: "
-            f"{', '.join(missing_vars(s, configured))}",
-            file=sys.stderr,
-        )
-    for s in external_skipped:
-        print(
-            f"skipped:  {s['name']} — url still has EDIT-ME: {s['url']}",
-            file=sys.stderr,
-        )
-    for s in external:
-        auth = f"  [token: {s['auth']}]" if s.get("auth") else ""
-        print(f"external: {s['name']} -> {s['url']}{auth}")
-
-    # Surface accepted risk on every run, so a `dangerous` server that was
-    # accepted months ago doesn't quietly fade into the background.
-    for s in enabled:
-        level = s["risk"]["level"]
-        if level != "standard":
-            who, when = s["risk"]["accepted_by"], s["risk"]["accepted_on"]
-            print(f"  ! {s['name']}: {level} — accepted by {who} on {when}")
-            for reason in s["risk"]["why"]:
-                print(f"      {reason}")
+    pretty = ui.pretty()
+    if pretty:
+        report_pretty(running, disabled, skipped, external, external_skipped, enabled, configured)
+    else:
+        report_plain(running, disabled, skipped, external, external_skipped, enabled, configured)
 
     if args.dry_run:
         print(f"\n--- would write {OUTPUT} ---\n{header}{rendered}")
         return 0
 
     OUTPUT.write_text(header + rendered)
-    print(f"wrote {OUTPUT}")
+    if pretty:
+        print(f"  {ui.c('dim', '📝 wrote ' + str(OUTPUT), True)}")
+        print(ui.section("🐳", "Containers", True), flush=True)
+    else:
+        print(f"wrote {OUTPUT}")
 
     # --project-directory is what separates runtime from the checkout: every
     # relative bind in docker-compose.yml (./registry, ./wakeword/models)

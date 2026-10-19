@@ -303,6 +303,8 @@ services:
     image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
     restart: unless-stopped
     command: ["python", "-u", "/app/server.py"]
+    environment:
+      PERSONA_CODE_REV: "${PERSONA_CODE_REV:-}"   # see scripts/lib/rev.sh
     ports:
       - "${PERSONA_BIND:-0.0.0.0}:${PERSONA_PORT:-13408}:8000"
     volumes:
@@ -351,6 +353,7 @@ services:
     environment:
       # Local time, so "Friday" in a recording resolves against the right day.
       TZ: "${INGEST_TZ:-UTC}"
+      INGEST_CODE_REV: "${INGEST_CODE_REV:-}"   # see GATEWAY_CODE_REV
       INGEST_TOKEN: "${INGEST_TOKEN:-}"
       INGEST_PUBLIC_URL: "${INGEST_PUBLIC_URL:-http://${HOST_NAME:-localhost}:${INGEST_PORT:-13409}}"
       INGEST_LLM_BASE_URL: "${INGEST_LLM_BASE_URL:-http://router:4000/v1}"
@@ -401,6 +404,9 @@ services:
       GATEWAY_HA_URL: "${GATEWAY_HA_URL:-${HA_URL:-}}"
       GATEWAY_OIDC_ISSUER: "${GATEWAY_OIDC_ISSUER:-}"
       GATEWAY_OIDC_AUDIENCE: "${GATEWAY_OIDC_AUDIENCE:-}"
+      # Changes when the mounted gateway code does, so compose recreates the
+      # container after a pull instead of leaving it on the old code (lib/rev.sh).
+      GATEWAY_CODE_REV: "${GATEWAY_CODE_REV:-}"
     volumes:
       - ${GATEWAY_DATA_DIR:-gateway-data}:/data
       - ${REPO_DIR}/gateway/novak_gateway:/app/novak_gateway:ro
@@ -553,6 +559,7 @@ services:
     # SECRET_VARS in scripts/lib/vars.sh — this isn't a new constraint,
     # it's the existing one, in the one place it was still missing.
     environment:
+      - ROUTER_CODE_REV   # changes when router/ does, so a pull recreates it (scripts/lib/rev.sh)
       - OMLX_API_KEY
     volumes:
       # config.yaml is the ONE exception to "everything the router needs

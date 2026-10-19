@@ -29,7 +29,9 @@
 #   novak secret list         which secrets are present (never their values)
 #   novak secret verify       do they read back unattended, without a prompt?
 #   novak up                  apply config and start
-#   novak update [SERVICE...] pull new images and recreate what changed
+#   novak update [SERVICE...] adopt (git pull + new settings), pull the images the
+#                             checkout pins, and recreate what changed.
+#                             --no-adopt skips the git step
 #   novak down                stop, keep data
 #   novak restart [SERVICE]
 #   novak logs [SERVICE]
@@ -67,7 +69,10 @@ if [ "$PLATFORM" = "Darwin" ]; then
   # `tailscale` in particular lives only in /opt/homebrew/bin, and when it is
   # absent `novak ports` reports no Tailscale address on a machine that is
   # perfectly online — indistinguishable from the real thing.
-  export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.orbstack/bin:$PATH"
+  # Appended, not prepended: a directory the caller already put first (a test
+  # stub, a specific docker) keeps winning, and the Homebrew and OrbStack ones
+  # are still found when the caller had no Homebrew on PATH at all.
+  export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:$HOME/.orbstack/bin"
 fi
 # Linux (Unraid): docker, git, python3 and tailscale all ship on PATH
 # already (verified directly on Spire, Unraid 7.3.2) — no per-account
@@ -493,7 +498,8 @@ cmd_adopt() {
   drift_adopt
 
   echo
-  dim "Run 'novak up' to apply any of this."
+  # `novak update` applies it straight after, so the reminder would only mislead.
+  [ -n "${NOVAK_FROM_UPDATE:-}" ] || dim "Run 'novak up' to apply any of this."
 }
 
 cmd_drift() {
@@ -900,10 +906,32 @@ cmd_update() {
     red "Docker isn't responding — $(docker_hint)"
     exit 1
   fi
-  # Every image in docker-compose.yml is unpinned (:latest, :main) on purpose
-  # for now — see docs/credits.md. `up.sh` never pulls, so a new release
-  # sitting on the registry doesn't reach a running stack until something
-  # calls `docker compose pull`. This is that something.
+  # Adopt first: the compose file, registry templates and new .env settings are
+  # all in the checkout, so updating images against a stale checkout is the
+  # half-update this used to leave behind. Adopt is non-destructive by its own
+  # rules (it refuses to pull over uncommitted changes or diverged history and
+  # only adds missing settings), so when it refuses, update carries on with the
+  # checkout as it is and says so, instead of failing the image update too.
+  # `novak update --no-adopt` skips it.
+  local adopt=1 args=()
+  for a in "$@"; do
+    if [ "$a" = "--no-adopt" ]; then adopt=0; else args+=("$a"); fi
+  done
+  set -- ${args[@]+"${args[@]}"}
+  if [ "$adopt" -eq 1 ]; then
+    if ( NOVAK_FROM_UPDATE=1 cmd_adopt ); then
+      echo
+    else
+      echo
+      ylw "  ⚠️  Adopt did not run, so this updates images against the checkout as it is."
+      dim "     Fix what it said above (or use --no-adopt to skip it on purpose)."
+      echo
+    fi
+  fi
+  # Every image in docker-compose.yml is pinned by digest (decision #45), so a
+  # new release only reaches a running stack when someone moves a pin. `up.sh`
+  # never pulls, so this pulls whatever the checkout now pins, which is what
+  # makes adopting first matter.
   bold "Pulling images"
   compose pull "$@" || { red "pull failed — see above."; exit 1; }
   echo
@@ -970,7 +998,7 @@ compose() {
   # running — none of these create containers, so this cannot start an
   # unconfigured one. Only up.sh decides that, and only when a given
   # profile's config is actually complete.
-  local all_profiles="console,portal,router,ollama"
+  local all_profiles="console,portal,router,ollama,ingest,gateway"
   if [ "$PLATFORM" != "Darwin" ] && [ -f "$NOVAK_HOME/profiles" ]; then
     # On Unraid, Compose Manager's own `profiles` file (a JSON array,
     # written by its UI/CLI) already says which profiles this deployment

@@ -224,9 +224,10 @@ services:
   # "bank", and the tools have no bank parameter to override it. That is the
   # property that keeps one person's memories out of another's context, and
   # out of reach of anything a model reads. See docs/how-memory-works.md.
-  # Pinned to the digest :latest resolved to on 2026-09-22 (decision #45).
+  # Pinned to the digest the 0.10.3 release tag resolved to on 2026-10-14
+  # (decision #45); was :latest of 2026-09-22.
   hindsight:
-    image: ghcr.io/vectorize-io/hindsight@sha256:b4d3b76f363aa40cf348450e7f8f52a50653008731b99824b14623a196182e73
+    image: ghcr.io/vectorize-io/hindsight@sha256:b5da1a9aece1f53a15f12821fb1470f358ed6c74dfaa0c4b1a39c3f3ae93e002
     restart: unless-stopped
     ports:
       - "${HINDSIGHT_PORT:-13403}:8888"   # API + MCP
@@ -303,6 +304,8 @@ services:
     image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
     restart: unless-stopped
     command: ["python", "-u", "/app/server.py"]
+    environment:
+      PERSONA_CODE_REV: "${PERSONA_CODE_REV:-}"   # see scripts/lib/rev.sh
     ports:
       - "${PERSONA_BIND:-0.0.0.0}:${PERSONA_PORT:-13408}:8000"
     volumes:
@@ -353,6 +356,7 @@ services:
     environment:
       # Local time, so "Friday" in a recording resolves against the right day.
       TZ: "${INGEST_TZ:-UTC}"
+      INGEST_CODE_REV: "${INGEST_CODE_REV:-}"   # see GATEWAY_CODE_REV
       INGEST_TOKEN: "${INGEST_TOKEN:-}"
       INGEST_PUBLIC_URL: "${INGEST_PUBLIC_URL:-http://${HOST_NAME:-localhost}:${INGEST_PORT:-13409}}"
       INGEST_LLM_BASE_URL: "${INGEST_LLM_BASE_URL:-http://router:4000/v1}"
@@ -404,6 +408,9 @@ services:
       GATEWAY_HA_URL: "${GATEWAY_HA_URL:-${HA_URL:-}}"
       GATEWAY_OIDC_ISSUER: "${GATEWAY_OIDC_ISSUER:-}"
       GATEWAY_OIDC_AUDIENCE: "${GATEWAY_OIDC_AUDIENCE:-}"
+      # Changes when the mounted gateway code does, so compose recreates the
+      # container after a pull instead of leaving it on the old code (lib/rev.sh).
+      GATEWAY_CODE_REV: "${GATEWAY_CODE_REV:-}"
     volumes:
       - ${GATEWAY_DATA_DIR:-gateway-data}:/data
       - ${REPO_DIR}/gateway/novak_gateway:/app/novak_gateway:ro
@@ -556,6 +563,7 @@ services:
     # SECRET_VARS in scripts/lib/vars.sh — this isn't a new constraint,
     # it's the existing one, in the one place it was still missing.
     environment:
+      - ROUTER_CODE_REV   # changes when router/ does, so a pull recreates it (scripts/lib/rev.sh)
       - OMLX_API_KEY
     volumes:
       # config.yaml is the ONE exception to "everything the router needs
@@ -586,10 +594,11 @@ services:
   # Point registry/engines.yaml's base_url_var at
   # http://ollama:11434/v1 (in-network) or http://<host>:${OLLAMA_PORT}/v1
   # (from outside) once this profile is enabled. See docs/ollama-settings.md.
-  # Pinned to the digest :latest resolved to on 2026-09-22 (decision #45).
+  # Pinned to the digest the 0.40.3 release tag resolved to on 2026-10-14
+  # (decision #45); was :latest of 2026-09-22.
   ollama:
     profiles: ["ollama"]
-    image: ollama/ollama@sha256:da6e0dc5651df159e45686fd663c4dbe1624a52c44d7280eeac1551d8f865532
+    image: ollama/ollama@sha256:adca95a12c2b386a8f9a995e7fa0600e187e3323b5e5522f5a6c3b1ec73eff99
     restart: unless-stopped
     ports:
       - "${OLLAMA_BIND:-0.0.0.0}:${OLLAMA_PORT:-11434}:11434"

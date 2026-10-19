@@ -10,6 +10,8 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export REPO_DIR
 # shellcheck source=lib/ui.sh
 source "$REPO_DIR/scripts/lib/ui.sh"
+# shellcheck source=lib/rev.sh
+source "$REPO_DIR/scripts/lib/rev.sh"
 
 PLATFORM="$(uname -s)"
 
@@ -298,6 +300,13 @@ if [ ${#ui_skipped_names[@]} -gt 0 ]; then
   for i in "${!ui_skipped_names[@]}"; do ui_skip "${ui_skipped_names[$i]}" "${ui_skipped_why[$i]}"; done
   ui_hint "everything else starts; set those and re-run to add them."
 fi
+
+# Bind-mounted code (see lib/rev.sh): a pull that changes it must recreate its service.
+export GATEWAY_CODE_REV INGEST_CODE_REV PERSONA_CODE_REV ROUTER_CODE_REV
+GATEWAY_CODE_REV="$(code_rev gateway/novak_gateway gateway/Dockerfile)"
+INGEST_CODE_REV="$(code_rev ingest/novak_ingest ingest/Dockerfile)"
+PERSONA_CODE_REV="$(code_rev persona/server.py)"
+ROUTER_CODE_REV="$(code_rev router)"
 
 NOVAK_HOME="$NOVAK_HOME" "$PY" "$REPO_DIR/reconciler/reconcile.py"
 

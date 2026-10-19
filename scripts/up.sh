@@ -8,6 +8,8 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export REPO_DIR
+# shellcheck source=lib/ui.sh
+source "$REPO_DIR/scripts/lib/ui.sh"
 
 PLATFORM="$(uname -s)"
 
@@ -20,9 +22,9 @@ if [ -z "${NOVAK_HOME:-}" ]; then
   elif [ -f /boot/config/novak/novak_home ]; then
     NOVAK_HOME="$(cat /boot/config/novak/novak_home)"
   else
-    echo "✋ NOVAK_HOME is not set, and no /boot/config/novak/novak_home marker" >&2
-    echo "   exists to default it from. Run scripts/bootstrap-unraid.sh once," >&2
-    echo "   or export NOVAK_HOME explicitly." >&2
+    ui_err "NOVAK_HOME is not set, and no /boot/config/novak/novak_home marker"
+    ui_hint "exists to default it from. Run scripts/bootstrap-unraid.sh once,"
+    ui_hint "or export NOVAK_HOME explicitly."
     exit 1
   fi
 fi
@@ -32,22 +34,22 @@ fi
 mkdir -p "$NOVAK_HOME/registry" "$NOVAK_HOME/wakeword/models"
 if [ ! -f "$NOVAK_HOME/.env" ]; then
   cp "$REPO_DIR/.env.example" "$NOVAK_HOME/.env"
-  echo "📄 seeded $NOVAK_HOME/.env from .env.example — fill it in before this will start"
+  ui_seeded "$NOVAK_HOME/.env" "(from .env.example: fill it in before this will start)"
 fi
 if [ ! -f "$NOVAK_HOME/registry/mcp-servers.yaml" ]; then
   cp "$REPO_DIR/registry/mcp-servers.yaml" "$NOVAK_HOME/registry/mcp-servers.yaml"
-  echo "📄 seeded $NOVAK_HOME/registry/mcp-servers.yaml — edit it there, not in the repo"
+  ui_seeded "$NOVAK_HOME/registry/mcp-servers.yaml" "(edit it there, not in the repo)"
 fi
 
 for f in people.yaml gateway.yaml; do
   if [ ! -f "$NOVAK_HOME/registry/$f" ]; then
     cp "$REPO_DIR/registry/$f" "$NOVAK_HOME/registry/$f"
-    echo "📄 seeded $NOVAK_HOME/registry/$f — edit it there, not in the repo"
+    ui_seeded "$NOVAK_HOME/registry/$f" "(edit it there, not in the repo)"
   fi
 done
 if [ ! -f "$NOVAK_HOME/registry/ingest.yaml" ]; then
   cp "$REPO_DIR/registry/ingest.yaml" "$NOVAK_HOME/registry/ingest.yaml"
-  echo "📄 seeded $NOVAK_HOME/registry/ingest.yaml — edit it there, not in the repo"
+  ui_seeded "$NOVAK_HOME/registry/ingest.yaml" "(edit it there, not in the repo)"
 fi
 
 cd "$NOVAK_HOME"
@@ -62,16 +64,21 @@ source "$REPO_DIR/scripts/lib/vars.sh"
 # shellcheck source=lib/secrets.sh
 source "$REPO_DIR/scripts/lib/secrets.sh"
 
+loaded_secrets=()
 for var in "${SECRET_VARS[@]}"; do
   if val="$(secret_get "$var")" && [ -n "$val" ]; then
     export "${var}=${val}"
-    if [ "$PLATFORM" = "Darwin" ]; then
-      echo "🔑 ${var}: loaded from Keychain"
-    else
-      echo "🔑 ${var}: loaded from ${ENV_FILE}"
-    fi
+    loaded_secrets+=("$var")
   fi
 done
+ui_section "🔐" "Secrets"
+if [ "$PLATFORM" = "Darwin" ]; then _secret_src="the Keychain"; else _secret_src="$ENV_FILE"; fi
+ui_ok "${#loaded_secrets[@]} loaded from ${_secret_src}"
+if [ "${NOVAK_VERBOSE:-}" = "1" ]; then
+  for var in "${loaded_secrets[@]}"; do ui_dim "🔑 ${var}"; done
+else
+  ui_dim "${loaded_secrets[*]}"
+fi
 
 # Two different kinds of unconfigured value, reported separately because the
 # fix differs: EDIT-ME means "put a real value in .env", set-in-keychain means
@@ -111,7 +118,7 @@ for var in "${PORTAL_SECRETS[@]}"; do
 done
 
 router_missing=()
-for var in "${ROUTER_EDITS[@]}"; do
+for var in ${ROUTER_EDITS[@]+"${ROUTER_EDITS[@]}"}; do
   v="$(envval "$var")"
   case "$v" in ""|EDIT-ME|changeme) router_missing+=("$var") ;; esac
 done
@@ -121,7 +128,7 @@ for var in "${ROUTER_SECRETS[@]}"; do
 done
 
 ingest_missing=()
-for var in "${INGEST_EDITS[@]}"; do
+for var in ${INGEST_EDITS[@]+"${INGEST_EDITS[@]}"}; do
   v="$(envval "$var")"
   case "$v" in ""|EDIT-ME|changeme) ingest_missing+=("$var") ;; esac
 done
@@ -137,12 +144,12 @@ for var in "${REQUIRED_EDITS[@]}"; do
 done
 if [ ${#unedited[@]} -gt 0 ]; then
   echo "" >&2
-  echo "✋ These need real values in $NOVAK_HOME/.env:" >&2
-  printf '     %s\n' "${unedited[@]}" >&2
+  ui_err "These need real values in $NOVAK_HOME/.env:"
+  for var in "${unedited[@]}"; do ui_cmd "$var"; done
   echo "" >&2
-  echo "   HOST_NAME is how other machines reach this one (a Tailscale name works" >&2
-  echo "   well). See the comments in that file — it says which lines to edit and" >&2
-  echo "   which to leave alone." >&2
+  ui_hint "HOST_NAME is how other machines reach this one (a Tailscale name works"
+  ui_hint "well). See the comments in that file — it says which lines to edit and"
+  ui_hint "which to leave alone."
   echo "" >&2
   exit 1
 fi
@@ -160,17 +167,17 @@ done
 if [ ${#missing[@]} -gt 0 ]; then
   echo "" >&2
   if [ "$PLATFORM" = "Darwin" ]; then
-    echo "✋ These secrets were not found in the Keychain:" >&2
+    ui_err "These secrets were not found in the Keychain:"
     for var in "${missing[@]}"; do
-      echo "     security add-generic-password -s \"novak/${var}\" -a $(whoami) -w" >&2
+      ui_cmd "security add-generic-password -s \"novak/${var}\" -a $(whoami) -w"
     done
     echo "" >&2
-    echo "   Run those as $(whoami) — the login keychain is per-user, so items" >&2
-    echo "   added under another account are invisible here." >&2
+    ui_hint "Run those as $(whoami) — the login keychain is per-user, so items"
+    ui_hint "added under another account are invisible here."
   else
-    echo "✋ These secrets are not set:" >&2
+    ui_err "These secrets are not set:"
     for var in "${missing[@]}"; do
-      echo "     novak secret set ${var}" >&2
+      ui_cmd "novak secret set ${var}"
     done
   fi
   echo "" >&2
@@ -189,27 +196,28 @@ if [ ! -x "$PY" ] || ! "$PY" -c 'import yaml' 2>/dev/null; then
   SYS_PY=$(command -v python3 || true)
   if [ -z "$SYS_PY" ]; then
     if [ "$PLATFORM" = "Darwin" ]; then
-      echo "✋ python3 not found. Install Xcode command line tools:" >&2
-      echo "     xcode-select --install" >&2
+      ui_err "python3 not found. Install Xcode command line tools:"
+      ui_cmd "xcode-select --install"
     else
-      echo "✋ python3 not found. Unraid ships it at /usr/bin/python3 —" >&2
-      echo "   check PATH, or install a Python plugin via Community Applications." >&2
+      ui_err "python3 not found. Unraid ships it at /usr/bin/python3 —"
+      ui_hint "check PATH, or install a Python plugin via Community Applications."
     fi
     exit 1
   fi
-  echo "🐍 preparing $VENV (one-off)"
+  ui_section "🐍" "Python"
+  ui_info "preparing $VENV (one-off)"
   if ! "$SYS_PY" -m venv "$VENV" 2>/dev/null; then
-    echo "✋ could not create a virtualenv with $SYS_PY" >&2
-    echo "   Try: $SYS_PY -m ensurepip --upgrade" >&2
+    ui_err "could not create a virtualenv with $SYS_PY"
+    ui_hint "Try: $SYS_PY -m ensurepip --upgrade"
     exit 1
   fi
   if ! "$PY" -m pip install --quiet --upgrade pyyaml; then
-    echo "✋ could not install PyYAML into $VENV" >&2
-    echo "   If this machine is offline, install it manually:" >&2
-    echo "     $PY -m pip install pyyaml" >&2
+    ui_err "could not install PyYAML into $VENV"
+    ui_hint "If this machine is offline, install it manually:"
+    ui_cmd "$PY -m pip install pyyaml"
     exit 1
   fi
-  echo "🐍 PyYAML ready"
+  ui_ok "PyYAML ready"
 fi
 # Compose reads COMPOSE_PROFILES from the environment, and the reconciler is
 # what runs `docker compose up`, so this is all it takes to include or omit
@@ -220,20 +228,17 @@ profiles=()
 if [ ${#console_missing[@]} -eq 0 ]; then
   profiles+=(console)
 else
-  echo "skipped:  console — not configured: ${console_missing[*]}" >&2
-  echo "          everything else starts; set those and re-run to add it." >&2
+  ui_skip_later "console" "not configured: ${console_missing[*]}"
 fi
 if [ ${#portal_missing[@]} -eq 0 ]; then
   profiles+=(portal)
 else
-  echo "skipped:  portal — not configured: ${portal_missing[*]}" >&2
-  echo "          everything else starts; set those and re-run to add it." >&2
+  ui_skip_later "portal" "not configured: ${portal_missing[*]}"
 fi
 if [ ${#router_missing[@]} -eq 0 ]; then
   profiles+=(router)
 else
-  echo "skipped:  router — not configured: ${router_missing[*]}" >&2
-  echo "          everything else starts; set those and re-run to add it." >&2
+  ui_skip_later "router" "not configured: ${router_missing[*]}"
 fi
 # Ollama is the Linux/GPU engine (docker-compose.yml's ollama service), so it
 # is part of the stack whenever an engine in registry/engines.yaml actually
@@ -273,19 +278,25 @@ if [ "$(envval INGEST_ENABLED)" = "true" ]; then
   if [ ${#ingest_missing[@]} -eq 0 ]; then
     profiles+=(ingest)
   else
-    echo "skipped:  ingest — not configured: ${ingest_missing[*]}" >&2
-    echo "          everything else starts; set those and re-run to add it." >&2
+    ui_skip_later "ingest" "not configured: ${ingest_missing[*]}"
   fi
 fi
 # The gateway is an extension too: opt-in with GATEWAY_ENABLED=true. It is given
 # only the credentials its directory names, in a mode-600 file.
 if [ "$(envval GATEWAY_ENABLED)" = "true" ]; then
   profiles+=(gateway)
-  NOVAK_HOME="$NOVAK_HOME" "$PY" "$REPO_DIR/reconciler/gateway_env.py" || echo "note:     could not write gateway.env" >&2
+  NOVAK_HOME="$NOVAK_HOME" "$PY" "$REPO_DIR/reconciler/gateway_env.py" || ui_warn "could not write gateway.env: the gateway will start without credentials"
 fi
 if [ ${#profiles[@]} -gt 0 ]; then
   export COMPOSE_PROFILES
   COMPOSE_PROFILES="$(IFS=,; echo "${profiles[*]}")"
+fi
+
+ui_section "🧩" "Optional services"
+if [ ${#profiles[@]} -gt 0 ]; then ui_ok "$(ui_c 32 "on:") ${profiles[*]}"; else ui_info "none enabled"; fi
+if [ ${#ui_skipped_names[@]} -gt 0 ]; then
+  for i in "${!ui_skipped_names[@]}"; do ui_skip "${ui_skipped_names[$i]}" "${ui_skipped_why[$i]}"; done
+  ui_hint "everything else starts; set those and re-run to add them."
 fi
 
 NOVAK_HOME="$NOVAK_HOME" "$PY" "$REPO_DIR/reconciler/reconcile.py"
@@ -295,15 +306,56 @@ NOVAK_HOME="$NOVAK_HOME" "$PY" "$REPO_DIR/reconciler/reconcile.py"
 # Failing the whole stack because an inference server is not ready yet would be
 # the same mistake as the console gate. It is a no-op when nothing differs, so
 # running it every time costs nothing and never restarts oMLX needlessly.
-if [ -f "$REPO_DIR/reconciler/omlx_apply.py" ]; then
+#
+# Only when an engine actually points at oMLX: a deployment on Ollama (Spire)
+# has no oMLX to reach, and reporting "cannot reach oMLX" on every run was noise.
+omlx_wanted="$("$PY" - "$NOVAK_HOME" <<'PYEOF'
+import os, re, sys
+import yaml
+home = sys.argv[1]
+env = {}
+for line in open(os.path.join(home, ".env")):
+    m = re.match(r"([A-Z0-9_]+)=(.*)", line.strip())
+    if m:
+        env[m.group(1)] = m.group(2)
+port = env.get("OMLX_PORT", "8000")
+urls = [env.get("DEFAULT_ENGINE_BASE_URL", "")]
+names = []
+for path in (os.path.join(home, "registry", "engines.yaml"),):
+    if os.path.exists(path):
+        for e in (yaml.safe_load(open(path)) or {}).get("engines") or []:
+            names.append(e.get("name", ""))
+            urls.append(env.get(e.get("base_url_var", ""), ""))
+for url in urls:
+    m = re.match(r"https?://([^:/]+)(?::(\d+))?", url or "")
+    if m and m.group(1) != "ollama" and (m.group(2) or "80") == port:
+        print("yes"); break
+else:
+    if any("omlx" in n.lower() for n in names):
+        print("yes")
+PYEOF
+)"
+if [ "$omlx_wanted" = "yes" ] && [ -f "$REPO_DIR/reconciler/omlx_apply.py" ]; then
+  ui_section "🧠" "oMLX"
   if ! NOVAK_HOME="$NOVAK_HOME" "$PY" "$REPO_DIR/reconciler/omlx_apply.py"; then
-    echo "note:     oMLX profiles not applied — run 'novak omlx apply' once it is up." >&2
+    ui_warn "oMLX profiles not applied: run 'novak omlx apply' once it is up."
   fi
 fi
 
-docker compose \
+ui_section "📋" "Status"
+_ps="$(docker compose \
   --project-directory "$NOVAK_HOME" \
   --env-file "$NOVAK_HOME/.env" \
   -f "$REPO_DIR/docker-compose.yml" \
   -f "$NOVAK_HOME/docker-compose.mcp.yml" \
-  ps
+  ps --format 'table {{.Service}}\t{{.Status}}\t{{.Ports}}')"
+if ui_color; then
+  # header bold; healthy/up green; anything unhealthy, restarting or exited red.
+  printf '%s\n' "$_ps" | awk '
+    NR == 1 { printf "\033[1m%s\033[0m\n", $0; next }
+    /unhealthy|Exited|Restarting|Dead/ { printf "\033[31m✗ %s\033[0m\n", $0; next }
+    /healthy|Up/ { printf "\033[32m✓\033[0m %s\n", $0; next }
+    { printf "  %s\n", $0 }' | sed 's/^\(\x1b\[1m\)/  \1/'
+else
+  printf '%s\n' "$_ps"
+fi

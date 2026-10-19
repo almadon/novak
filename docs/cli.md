@@ -83,6 +83,20 @@ works identically on both platforms.
 
 ---
 
+## Reading `novak up`
+
+`novak up` prints in sections, each with an icon and colour: 📄 first-run files
+it seeded, 🔐 secrets (a count and the names, never values), 🧩 optional services
+(on, and skipped with the reason), 🔌 MCP servers, ⚠️ accepted risk (each elevated
+or dangerous entry, who accepted it and when, and the reasons under it; 🚨 for
+dangerous), 🐳 containers, and 📋 status (✓ up, ✗ unhealthy or exited). The oMLX
+step only appears on a deployment that actually uses oMLX.
+
+Colour is on at a terminal and off when output is piped; `NO_COLOR=1` forces it
+off and `FORCE_COLOR=1` forces it on (useful over `ssh` without a terminal).
+`NOVAK_VERBOSE=1` lists every secret on its own line. Piped output keeps the plain
+`running:` / `external:` lines that `novak registry --check` reads.
+
 ## More than one of anything
 
 `novak add` adds another instance of an integration without hand-editing

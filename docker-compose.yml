@@ -224,9 +224,10 @@ services:
   # "bank", and the tools have no bank parameter to override it. That is the
   # property that keeps one person's memories out of another's context, and
   # out of reach of anything a model reads. See docs/how-memory-works.md.
-  # Pinned to the digest :latest resolved to on 2026-09-22 (decision #45).
+  # Pinned to the digest the 0.10.3 release tag resolved to on 2026-10-14
+  # (decision #45); was :latest of 2026-09-22.
   hindsight:
-    image: ghcr.io/vectorize-io/hindsight@sha256:b4d3b76f363aa40cf348450e7f8f52a50653008731b99824b14623a196182e73
+    image: ghcr.io/vectorize-io/hindsight@sha256:b5da1a9aece1f53a15f12821fb1470f358ed6c74dfaa0c4b1a39c3f3ae93e002
     restart: unless-stopped
     ports:
       - "${HINDSIGHT_PORT:-13403}:8888"   # API + MCP

@@ -341,7 +341,9 @@ services:
     profiles: ["ingest"]
     build:
       context: ${REPO_DIR}/ingest
-    image: novak-ingest:local
+    # Pulled when INGEST_IMAGE names a published image (see .github/workflows/images.yml),
+    # built from ./ingest otherwise.
+    image: "${INGEST_IMAGE:-novak-ingest:local}"
     restart: unless-stopped
     depends_on: [stt]
     ports:
@@ -387,7 +389,8 @@ services:
     profiles: ["gateway"]
     build:
       context: ${REPO_DIR}/gateway
-    image: novak-gateway:local
+    # Same as ingest: GATEWAY_IMAGE pulls a published image, otherwise it is built.
+    image: "${GATEWAY_IMAGE:-novak-gateway:local}"
     restart: unless-stopped
     ports:
       # GATEWAY_BIND: this host's Tailscale IP. Open WebUI reaches it by service

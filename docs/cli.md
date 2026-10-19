@@ -83,6 +83,21 @@ works identically on both platforms.
 
 ---
 
+## Images for the extensions
+
+Ingest (ffmpeg) and the gateway (PyJWT) each have a small Dockerfile. Building
+them on the deployment host means apt and pip downloads every time one changes,
+so CI builds them instead (`.github/workflows/images.yml`, on a push that changes
+a Dockerfile) and publishes them to `ghcr.io/almadon/novak-ingest` and
+`novak-gateway`, printing the digest to pin. Set `INGEST_IMAGE` /
+`GATEWAY_IMAGE` in `.env` to that digest (or pin it in `docker-compose.yml`,
+decision #45) and `novak update` pulls it; with them unset, compose builds the
+image locally as before. The first publish creates each package private: make it
+public once in the package settings, or the host needs registry credentials.
+Both Dockerfiles also use BuildKit cache mounts for apt and pip, so a local
+rebuild reuses downloads (measured on a fast link: 24 s cold, 15 s with the apt
+layer changed and the cache warm; slower links gain more).
+
 ## Reading `novak up`
 
 `novak up` prints in sections, each with an icon and colour: 📄 first-run files

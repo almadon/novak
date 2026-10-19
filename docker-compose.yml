@@ -584,10 +584,11 @@ services:
   # Point registry/engines.yaml's base_url_var at
   # http://ollama:11434/v1 (in-network) or http://<host>:${OLLAMA_PORT}/v1
   # (from outside) once this profile is enabled. See docs/ollama-settings.md.
-  # Pinned to the digest :latest resolved to on 2026-09-22 (decision #45).
+  # Pinned to the digest the 0.40.3 release tag resolved to on 2026-10-14
+  # (decision #45); was :latest of 2026-09-22.
   ollama:
     profiles: ["ollama"]
-    image: ollama/ollama@sha256:da6e0dc5651df159e45686fd663c4dbe1624a52c44d7280eeac1551d8f865532
+    image: ollama/ollama@sha256:adca95a12c2b386a8f9a995e7fa0600e187e3323b5e5522f5a6c3b1ec73eff99
     restart: unless-stopped
     ports:
       - "${OLLAMA_BIND:-0.0.0.0}:${OLLAMA_PORT:-11434}:11434"

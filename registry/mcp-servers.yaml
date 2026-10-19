@@ -142,10 +142,11 @@ servers:
   #     level: standard
 
   # Tududi serves MCP itself at /api/mcp — streamable HTTP, no wrapper and no
-  # second container. It is on by default since v1.0.0 (Tududi's
-  # docs/14-mcp-integration.md; no flag to set). A v1.5.0 server was probed
-  # unauthenticated and answered 401 at /api/mcp, which is what a live
-  # endpoint that wants a token looks like.
+  # second container. Tududi's current docs (docs/14-mcp-integration.md, v1.9)
+  # say it is on by default, but a live v1.5.0 server answered 403 "MCP feature is
+  # not enabled: set FF_ENABLE_MCP=true" to a valid token (its REST API accepted
+  # the same token), so an older server needs FF_ENABLE_MCP=true in its .env, or an
+  # upgrade. Unauthenticated, /api/mcp answers 401, which only proves the route.
   #
   # AUTH: the user's own API key (Profile -> API Keys) as a bearer token. The
   # same per-user key authenticates the REST API and MCP; it is scoped to that

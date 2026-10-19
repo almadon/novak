@@ -31,7 +31,9 @@ in between.
 Settings:
 
 - URL: `http://<engine-host-ts-ip>:<ROUTER_PORT>` (`13402` by default) — no
-  `/v1` suffix, no API key needed if the router doesn't enforce one.
+  `/v1` suffix. **The API key is the router's key** (`novak secret show
+  ROUTER_API_KEY`, decision #59): the router enforces one, so without it every
+  call is a 401. Rotating the key means pasting the new one here too.
 - Per conversation agent (Settings → Devices & Services → LiteLLM → **Add
   conversation agent**): pick the role (**`ha-voice`** for this pipeline),
   set **Instructions** to the template in "Persona: HA pulls it" below

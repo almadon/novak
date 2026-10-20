@@ -38,9 +38,10 @@ class Deployment:
         env = (REPO / ".env.example").read_text().replace("set-in-keychain", "testvalue").replace("HOST_NAME=EDIT-ME", "HOST_NAME=spire")
         (self.home / ".env").write_text(env)
         (self.home / ".venv" / "bin").mkdir(parents=True)
-        py = self.home / ".venv" / "bin" / "python3"          # a wrapper: a bare symlink would lose this interpreter's packages
-        py.write_text(f'#!/usr/bin/env bash\nexec "{sys.executable}" "$@"\n')
-        py.chmod(0o755)
+        for name in ("python3", "python"):                      # wrappers: a bare symlink would lose this interpreter's packages
+            py = self.home / ".venv" / "bin" / name
+            py.write_text(f'#!/usr/bin/env bash\nexec "{sys.executable}" "$@"\n')
+            py.chmod(0o755)
         shim = self.root / "shim"
         shim.mkdir()
         d = shim / "docker"
@@ -132,3 +133,23 @@ class CodeRevTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HelperEnvironmentTests(unittest.TestCase):
+    def test_every_python_helper_the_scripts_call_is_given_novak_home(self):
+        """NOVAK_HOME is a plain shell variable in these scripts (resolved from $HOME or a
+        marker file on Unraid), not an exported one, so a helper that reads the environment
+        sees its own default (~/.novak) unless it is passed the value explicitly. Forgetting
+        that left every registry-derived description in `novak secret list` blank on Spire,
+        where the two differ. A static check, because the difference cannot be reproduced
+        without a marker file."""
+        import re as _re
+        helper = _re.compile(r"reconciler/(instances|people|gateway_env|reconcile|omlx_apply|router_apply)\.py")
+        missing = []
+        for f in ["scripts/novak", "scripts/up.sh", "scripts/lib/vars.sh", "scripts/lib/secrets.sh"]:
+            for n, line in enumerate((REPO / f).read_text().splitlines(), 1):
+                code = line.split("#", 1)[0]
+                if helper.search(code) and "python" in code.lower() or (helper.search(code) and '"$py"' in code):
+                    if "NOVAK_HOME=" not in code and "NOVAK_HOME=" not in (REPO / f).read_text().splitlines()[n - 2]:
+                        missing.append(f"{f}:{n}: {line.strip()[:110]}")
+        self.assertEqual(missing, [], "these helper calls do not pass NOVAK_HOME:\n" + "\n".join(missing))

@@ -439,3 +439,25 @@ class UrlEnvTests(unittest.TestCase):
         code, t = w.tools(token=w.keys["ushy"])
         self.assertEqual((code, t), (200, []))                       # the entry is skipped, nothing crashes
         self.assertTrue(any("address of hs-ushy (HS_USHY_URL) is not set" in r["outcome"] for r in w.audit.recent()))
+
+
+class HaMcpFilterTests(unittest.TestCase):
+    def shipped(self):
+        from pathlib import Path as P
+        return yaml.safe_load((P(__file__).resolve().parents[2] / "registry" / "gateway.yaml").read_text())["gateway"]
+
+    def test_the_shipped_filter_offers_lookups_and_devices_but_not_configuration(self):
+        f = self.shipped()["tool_filters"]
+        for tool in ("ha_search", "ha_get_state", "ha_call_service", "ha_bulk_control", "ha_get_history", "ha_set_todo_item"):
+            self.assertTrue(directory.tool_allowed(f, "ha-mcp", tool), tool)
+        for tool in ("ha_restart", "ha_manage_backup", "ha_manage_updates", "ha_config_set_automation", "ha_config_remove_script",
+                     "ha_eval_template", "ha_remove_device", "ha_reload_core", "ha_manage_hacs", "ha_get_logs"):
+            self.assertFalse(directory.tool_allowed(f, "ha-mcp", tool), tool)
+
+    def test_acting_on_a_device_needs_a_tap_and_lookups_do_not(self):
+        from novak_gateway import policy
+        ov = self.shipped()["tool_overrides"]["ha-mcp"]
+        self.assertEqual(policy.classify("ha_call_service", ov), "destructive")
+        self.assertEqual(policy.classify("ha_bulk_control", ov), "destructive")
+        self.assertEqual(policy.classify("ha_search", ov), "read")
+        self.assertEqual(policy.classify("ha_remove_todo_item", ov), "destructive")      # removals are held anyway

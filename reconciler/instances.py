@@ -113,56 +113,116 @@ def t_hindsight(a, entries, who, today, yes):
                f"If the console should map a person to this bank, their sign-in name must be '{bank}'."])
 
 
+def service_of(e):
+    """(service, instance, user) from an entry's own fields; empty strings for an
+    entry made before they existed."""
+    if e.get("service"):
+        return e["service"], str(e.get("instance", "")), e.get("user", "")
+    return "", "", ""
+
+
+def instances_of(entries, service):
+    """instance id -> address, for a service, as the registry already knows them. An
+    entry from before the fields existed counts if its name is service-<something>
+    (tududi-tui is instance tui), so a first `novak add` can reuse its address."""
+    out = {}
+    for e in entries:
+        svc, inst, _ = service_of(e)
+        if not svc and e["name"].startswith(service + "-") and e.get("kind") != "container":
+            svc, inst = service, e["name"][len(service) + 1:]
+        if svc == service and inst and e.get("kind") != "container":
+            out.setdefault(inst, e.get("url") or f"env:{e.get('url_env')}")
+    return out
+
+
+def next_instance(known):
+    n = 1
+    while str(n) in known:
+        n += 1
+    return str(n)
+
+
+def credential_var(service, instance, user, suffix):
+    return "_".join(re.sub(r"[^A-Za-z0-9]", "_", p).upper() for p in (service, instance, user)) + "_" + suffix
+
+
+def account_plan(a, entries, who, today, yes, service, label, suffix, url_question, build):
+    """One person's account on one instance of a service. Three separate facts name
+    a credential: the SERVICE (tududi), the INSTANCE (which server, a number or a short
+    name) and the USER (whose account). Entry tududi-1-ushy and variable
+    TUDUDI_1_USHY_API_TOKEN always read the same way, for every service."""
+    user = ask(a, "user", f"Whose account is this (a person's name, e.g. ushy)", yes=yes)
+    known = instances_of(entries, service)
+    default = next(iter(known)) if len(known) == 1 else next_instance(known)
+    shown = ", ".join(f"{i}={u}" for i, u in known.items())
+    inst = ask(a, "instance", f"Which {label} instance (a number or short name{'; known: ' + shown if shown else ''})", default, yes)
+    if not NAME_RE.match(inst) or not NAME_RE.match(user):
+        raise Abort("instance and user use a-z, 0-9 and hyphens")
+    name = f"{service}-{inst}-{user}"
+    url = known.get(inst) if inst in known and not str(known[inst]).startswith("env:") else None
+    if url is None:
+        url = ask(a, "url", url_question, yes=yes)
+    var_name = credential_var(service, inst, user, suffix)
+    return name, user, inst, url, var_name
+
+
 def t_outline(a, entries, who, today, yes):
-    inst = ask(a, "instance", "Instance name (e.g. work)", yes=yes)
-    url = ask(a, "url", "MCP URL (e.g. https://wiki.example.com/mcp)", yes=yes)
-    token = var("OUTLINE", inst, "API_KEY")
+    name, user, inst, url, token = account_plan(a, entries, who, today, yes, "outline", "Outline", "API_KEY",
+                                                "MCP URL (e.g. https://wiki.example.com/mcp)", None)
     return dict(
-        name=f"outline-{inst}", secrets=[token], config={},
-        entry={"name": f"outline-{inst}", "kind": "external", "url": url, "auth": token,
-               "enabled": True, "clients": ["open-webui"],
+        name=name, secrets=[token], config={},
+        entry={"name": name, "service": "outline", "instance": inst, "user": user, "kind": "external",
+               "url": url, "auth": token, "enabled": True, "clients": ["open-webui"],
                "source": {"url": "https://github.com/outline/outline",
                           "license": "BSL 1.1 (check before any commercial use)"},
-               "risk": {"level": "standard"}}, notes=[])
+               "risk": {"level": "standard"}},
+        notes=[f"Give it to {user}: novak person attach {user} {name}"])
 
 
 def t_tududi(a, entries, who, today, yes):
-    inst = ask(a, "instance", "Instance name (e.g. partner)", yes=yes)
-    url = ask(a, "url", "MCP URL (e.g. https://tududi.example.com/api/mcp)", yes=yes)
-    token = var("TUDUDI", inst, "API_TOKEN")
-    why = ["59 tools across tasks, projects, notes, goals, habits and people: a very "
+    name, user, inst, url, token = account_plan(a, entries, who, today, yes, "tududi", "Tududi", "API_TOKEN",
+                                                "MCP URL (e.g. https://tududi.example.com/api/mcp)", None)
+    why = ["65 tools across tasks, projects, notes, goals, habits and people: a very "
            "broad surface for one integration.",
            "Can create, modify and delete across all of them. VERIFY whether Tududi "
            "has a trash before trusting deletes to be recoverable."]
     return dict(
-        name=f"tududi-{inst}", secrets=[token], config={},
-        entry={"name": f"tududi-{inst}", "kind": "external", "url": url, "auth": token,
-               "enabled": True, "clients": ["open-webui"],
+        name=name, secrets=[token], config={},
+        entry={"name": name, "service": "tududi", "instance": inst, "user": user, "kind": "external",
+               "url": url, "auth": token, "enabled": True, "clients": ["open-webui"],
                "source": {"url": "https://github.com/chrisvel/tududi", "license": "VERIFY"},
                "risk": risk_block("elevated", why, who, today)},
-        notes=["One token is one Tududi account: each person needs their own instance entry."])
+        notes=[f"The token must be {user}'s own, from Profile, API Keys on that Tududi.",
+               f"Give it to {user}: novak person attach {user} {name}"])
 
 
 def t_vikunja(a, entries, who, today, yes):
-    inst = ask(a, "instance", "Instance name (e.g. partner)", yes=yes)
+    user = ask(a, "user", "Whose account is this (a person's name, e.g. ushy)", yes=yes)
+    known = instances_of(entries, "vikunja")
+    default = next(iter(known)) if len(known) == 1 else next_instance(known)
+    inst = ask(a, "instance", "Which Vikunja instance (a number or short name)", default, yes)
+    if not NAME_RE.match(inst) or not NAME_RE.match(user):
+        raise Abort("instance and user use a-z, 0-9 and hyphens")
     url = ask(a, "url", "Vikunja URL (e.g. https://tasks.example.com)", yes=yes)
+    name = f"vikunja-{inst}-{user}"
     model = entry_for(entries, "vikunja") or {}
     image = model.get("image", "node:22-alpine")
     command = model.get("command") or (
         'npx -y supergateway --stdio "npx -y @aimbitgmbh/vikunja-mcp" '
         "--outputTransport streamableHttp --port 8000")
     port = max(used_ports(entries) | {8001}) + 1
-    url_var, token_var = var("VIKUNJA", inst, "URL"), var("VIKUNJA", inst, "API_TOKEN")
+    url_var = credential_var("vikunja", inst, user, "URL")
+    token_var = credential_var("vikunja", inst, user, "API_TOKEN")
     why = ["Vikunja has no trash or undo: a delete is permanent."]
     return dict(
-        name=f"vikunja-{inst}", secrets=[token_var], config={url_var: url},
-        entry={"name": f"vikunja-{inst}", "image": image,
-               "command": " ".join(str(command).split()), "port": port,
+        name=name, secrets=[token_var], config={url_var: url},
+        entry={"name": name, "service": "vikunja", "instance": inst, "user": user,
+               "image": image, "command": " ".join(str(command).split()), "port": port,
                "env": [f"VIKUNJA_URL={url_var}", f"VIKUNJA_API_TOKEN={token_var}"],
                "enabled": True, "clients": ["open-webui"],
                "source": {"url": "https://github.com/aimbitgmbh/vikunja-mcp", "license": "VERIFY"},
                "risk": risk_block("elevated", why, who, today)},
-        notes=[f"Published on port {port}."])
+        notes=[f"Published on port {port}.", f"Give it to {user}: novak person attach {user} {name}"])
 
 
 def t_super_productivity(a, entries, who, today, yes):
@@ -268,8 +328,8 @@ def cmd_add(args) -> int:
     if kind not in TEMPLATES:
         print(f"unknown kind {kind!r}; known: {', '.join(TEMPLATES)}", file=sys.stderr)
         return 1
-    if args.name:                       # --name is the instance (or bank) name
-        answers.setdefault("instance", args.name)
+    if args.name:                       # --name: the user (account kinds), the bank, or the entry name
+        answers.setdefault("user", args.name)
         answers.setdefault("bank", args.name)
         answers.setdefault("name_full", args.name)
     who = args.accepted_by or os.environ.get("USER") or getpass.getuser()
@@ -316,8 +376,9 @@ def secret_vars(path=None) -> list[str]:
     side of container env items, kept to names that look like credentials."""
     names = []
     for e in load_entries(path):
-        cands = [e["auth"]] if e.get("auth") else []
-        cands += [i.partition("=")[2] or i for i in e.get("env") or []]
+        if e.get("auth"):
+            names.append(e["auth"])          # an auth variable is a credential whatever it is called
+        cands = [i.partition("=")[2] or i for i in e.get("env") or []]
         names += [c for c in cands if SECRETISH.search(c)]
         if e.get("url_env"):                 # an address that is a credential is one, whatever it is called
             names.append(e["url_env"])
@@ -329,12 +390,44 @@ def describe(var_name: str, path=None) -> str:
     users = []
     for e in load_entries(path):
         if e.get("auth") == var_name:
-            users.append(f"{e['name']} (MCP endpoint)")
+            svc, inst, user = service_of(e)
+            if e.get("service") and user:
+                host = re.sub(r"^https?://([^/]+).*$", r"\1", e.get("url") or "")
+                users.append(f"{user}'s {svc} account on instance {inst}" + (f" ({host})" if host else ""))
+            else:
+                users.append(f"{e['name']} (MCP endpoint)")
         elif e.get("url_env") == var_name:
             users.append(f"{e['name']} (MCP address)")
         elif any((i.partition("=")[2] or i) == var_name for i in e.get("env") or []):
             users.append(f"{e['name']} (container)")
-    return "used by " + ", ".join(users) if users else ""
+    if not users:
+        return ""
+    return users[0] if " account on instance " in users[0] else "used by " + ", ".join(users)
+
+
+def cmd_list(args) -> int:
+    """Instances and accounts per service, so a number means something."""
+    entries = load_entries()
+    by_service, other = {}, []
+    for e in entries:
+        svc, inst, user = service_of(e)
+        if not svc:
+            other.append(e)
+            continue
+        by_service.setdefault(svc, {}).setdefault(inst, []).append((user or "-", e["name"], e.get("enabled", False)))
+    for svc, insts in sorted(by_service.items()):
+        print(svc, file=sys.stderr)
+        for inst, accounts in sorted(insts.items()):
+            where = next((e.get("url") or f"env:{e.get('url_env')}" for e in entries
+                          if service_of(e)[:2] == (svc, inst)), "")
+            print(f"  instance {inst}  {where}", file=sys.stderr)
+            for user, name, enabled in accounts:
+                print(f"    {user:12} {name}{'' if enabled else '  (disabled)'}", file=sys.stderr)
+    if other:
+        print("not yet in service / instance / user form (novak rename can convert them):", file=sys.stderr)
+        for e in other:
+            print(f"  {e['name']}{'' if e.get('enabled') else '  (disabled)'}", file=sys.stderr)
+    return 0
 
 
 def main():
@@ -348,6 +441,7 @@ def main():
     add.add_argument("--yes", action="store_true", help="take defaults, accept risk prompts")
     add.add_argument("--dry-run", action="store_true")
     sub.add_parser("kinds")
+    sub.add_parser("list")
     sub.add_parser("secret-vars")
     d = sub.add_parser("describe")
     d.add_argument("var")
@@ -357,6 +451,8 @@ def main():
             for k, (label, _) in TEMPLATES.items():
                 print(f"{k:20} {label}")
             return 0
+        if args.cmd == "list":
+            return cmd_list(args)
         if args.cmd == "describe":
             print(describe(args.var))
             return 0

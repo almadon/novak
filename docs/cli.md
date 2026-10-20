@@ -75,7 +75,9 @@ works identically on both platforms.
 | `novak restart [SERVICE]` | restart everything, or one service |
 | `novak logs [SERVICE]` | follow logs |
 | `novak registry` | what the reconciler thinks it should start |
-| `novak add [KIND] [NAME]` | add another instance of an integration (see "More than one of anything" below) |
+| `novak add [KIND] [NAME]` | add another account or instance of an integration (see "More than one of anything" below) |
+| `novak instances` | which instance of each service is which, and whose accounts are on it |
+| `novak rename OLD NEW` | rename a registry entry everywhere it is named and move its credential |
 | `novak drift` | where this deployment differs from the repo (aliases: `verify`, `check`) |
 | `novak drift --live` | also greps router logs for persona injection silently skipped (decision #38) |
 | `novak omlx apply` | apply `registry/omlx.yaml` — models, profiles, TTLs |
@@ -113,13 +115,19 @@ off and `FORCE_COLOR=1` forces it on (useful over `ssh` without a terminal).
 the registry. Run it bare for a menu, or name what you want:
 
 ```bash
-novak add hindsight ushy        # a memory bank for another person
-novak add outline work          # a second Outline
-novak add tududi partner        # another Tududi account
-novak add vikunja partner       # another Vikunja (its own container)
+novak add hindsight ushy               # a memory bank for another person
+novak add tududi tmeuze                # tmeuze's account on a Tududi instance
+novak add tududi ushy                  # ushy's account on the same instance
+novak add outline tmeuze               # an account on an Outline wiki
+novak add vikunja partner              # another Vikunja (its own container)
 novak add super-productivity home
-novak add mcp                   # any other MCP server, by URL
+novak add mcp                          # any other MCP server, by URL
 ```
+
+For the account kinds (Tududi, Outline, Vikunja) the name you give is **whose
+account** it is. It also asks which instance, meaning which server: a number or a
+short name. With one instance known it reuses that one and its address; with none
+it starts at 1.
 
 It asks only what that kind needs, appends an entry to
 `$NOVAK_HOME/registry/mcp-servers.yaml` (comments above it are left alone, and
@@ -130,14 +138,24 @@ its reasons and asks you to accept them, which records who and when, as before.
 `--yes` takes defaults, `--set field=value` answers a prompt, `--dry-run`
 shows the entry without writing it.
 
-Naming: an instance is named for who or what it is for, not a number. The
-name is the join key across the registry entry (`tududi-ushy`), the credential
-(`TUDUDI_USHY_API_TOKEN`), and where one exists, the Hindsight bank (`ushy`) and
-the person's sign-in. A number such as `_2` stops meaning anything once one is
-removed, and nothing then says whose it was. The shape is always
-`<SERVICE>_<INSTANCE>_<API_KEY or API_TOKEN>`, following what that service calls
-its credential. For Tududi and Outline an instance usually means an account,
-because one server serves many accounts and each account has its own key.
+Naming: a credential is told apart by three separate facts, and every name says
+all three in the same order: the **service** (`tududi`), the **instance** (which
+server: `1`, or a short name such as `tui`) and the **user** (whose account:
+`ushy`). So the entry is `tududi-1-ushy`, its credential is
+`TUDUDI_1_USHY_API_TOKEN`, and `tududi-1-tmeuze` / `TUDUDI_1_TMEUZE_API_TOKEN` is the
+same server for someone else. Nothing tells you what "instance 1" is except the
+registry, so `novak instances` lists each instance with its address and whose
+accounts are on it, and `novak secret list` describes each variable ("ushy's tududi
+account on instance 1 (tui.example.com)"). The entry also records `service`,
+`instance` and `user` as fields, and the gateway refuses to list an account entry for
+anyone but its user. A Hindsight bank is the one exception: its credential is the
+shared tenant key, so it is just `hindsight-<person>`.
+
+Entries made before this scheme (`tududi-tui`, `outline-everything`) keep working.
+`novak rename OLD NEW --auth NEWVAR --service tududi --instance 1 --user tmeuze`
+converts one: it renames the registry entry, each person's list and any gateway
+override that names it, and moves the credential's value to the new variable
+without printing it. Then `novak up`.
 
 Check what you have with `novak secret list` (each one says what it belongs to,
 and a leftover placeholder reads as missing) and `novak registry --check` (a real

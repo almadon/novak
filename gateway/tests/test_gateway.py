@@ -461,3 +461,29 @@ class HaMcpFilterTests(unittest.TestCase):
         self.assertEqual(policy.classify("ha_bulk_control", ov), "destructive")
         self.assertEqual(policy.classify("ha_search", ov), "read")
         self.assertEqual(policy.classify("ha_remove_todo_item", ov), "destructive")      # removals are held anyway
+
+
+class AccountOwnershipTests(unittest.TestCase):
+    def test_an_entry_that_names_its_user_cannot_be_given_to_someone_else(self):
+        w = World(self)
+        servers = yaml.safe_load((w.dir / "mcp-servers.yaml").read_text())
+        for s in servers["servers"]:
+            if s["name"] == "hs-ushy":
+                s["user"] = "ushy"
+        (w.dir / "mcp-servers.yaml").write_text(yaml.safe_dump(servers))
+        self.assertEqual(directory.validate(directory.load(w.dir)), [])
+        people = yaml.safe_load((w.dir / "people.yaml").read_text())
+        people["people"]["tmeuze"]["entries"].append("hs-ushy")
+        people["people"]["ushy"]["entries"].remove("hs-ushy")
+        (w.dir / "people.yaml").write_text(yaml.safe_dump(people))
+        problems = directory.validate(directory.load(w.dir))
+        self.assertTrue(any("is ushy's account, not tmeuze's" in p for p in problems), problems)
+
+    def test_a_personal_account_cannot_be_household(self):
+        w = World(self)
+        servers = yaml.safe_load((w.dir / "mcp-servers.yaml").read_text())
+        for s in servers["servers"]:
+            if s["name"] == "hs-household":
+                s["user"] = "ushy"
+        (w.dir / "mcp-servers.yaml").write_text(yaml.safe_dump(servers))
+        self.assertTrue(any("cannot be shared with the household" in p for p in directory.validate(directory.load(w.dir))))

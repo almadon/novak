@@ -11,6 +11,9 @@
   people.py share ENTRY...        household entries (anyone, incl. satellites)
   people.py unshare ENTRY...
   people.py banks                 create any Hindsight bank the registry names but Hindsight lacks
+  people.py rename OLD NEW [--auth VAR] [--service S --instance I --user U]
+                                  rename a registry entry everywhere it is named: the
+                                  registry, each person's list, gateway overrides
   people.py client NAME           trusted client (Open WebUI): new key, shown once
   people.py household-key         new household key, shown once
 
@@ -358,6 +361,85 @@ def cmd_banks(a):
     return 0
 
 
+def entry_block(lines, name):
+    """(start, end) of the registry entry `- name: <name>`: from its first line to the
+    line before the next entry, not counting comments that introduce that next one."""
+    pat = re.compile(rf"^(\s*)- name: {re.escape(name)}\s*$")
+    start = next((i for i, l in enumerate(lines) if pat.match(l)), None)
+    if start is None:
+        return None
+    ind = len(pat.match(lines[start]).group(1))
+    end = len(lines)
+    for j in range(start + 1, len(lines)):
+        l = lines[j]
+        if re.match(rf"^\s{{{ind}}}- ", l) or (l.strip() and not l.lstrip().startswith("#") and len(l) - len(l.lstrip()) <= ind):
+            end = j
+            break
+    while end > start + 1 and (not lines[end - 1].strip() or lines[end - 1].lstrip().startswith("#")):
+        end -= 1
+    return start, end
+
+
+def cmd_rename(a):
+    need_files()
+    old, new = a.old, a.new
+    if not NAME_RE.match(new):
+        raise SystemExit(f"'{new}' is not a valid entry name (a-z, 0-9, hyphens)")
+    names = registry_entries()
+    if old not in names:
+        raise SystemExit(f"no such entry: {old}")
+    if new != old and new in names:
+        raise SystemExit(f"'{new}' already exists")
+    lines = REGISTRY.read_text().splitlines(True)
+    rng = entry_block(lines, old)
+    if rng is None:
+        raise SystemExit(f"could not find the block for {old} in {REGISTRY.name}")
+    block = lines[rng[0]:rng[1]]
+    lead = re.match(r"^(\s*)- name:", block[0]).group(1)          # the list's own indent
+    f = lead + "  "                                                  # the indent of the entry's fields
+    old_auth = next((re.match(rf"^{f}auth: (\S+)", l).group(1) for l in block if re.match(rf"^{f}auth: \S+", l)), None)
+    block[0] = f"{lead}- name: {new}\n"
+    block = [l for l in block if not re.match(rf"^{f}(service|instance|user): ", l)]
+    extra = []
+    if a.service: extra.append(f"{f}service: {a.service}\n")
+    if a.instance: extra.append(f"{f}instance: '{a.instance}'\n")
+    if a.user: extra.append(f"{f}user: {a.user}\n")
+    block[1:1] = extra
+    if a.auth:
+        if old_auth is None:
+            raise SystemExit(f"{old} has no auth variable to rename")
+        block = [re.sub(rf"^({f}auth: )\S+", rf"\g<1>{a.auth}", l) for l in block]
+    backups = [(REGISTRY, backup(REGISTRY)), (PEOPLE, backup(PEOPLE))]
+    lines[rng[0]:rng[1]] = block
+    REGISTRY.write_text("".join(lines))
+
+    d = load(PEOPLE)
+    hh = d.get("household") or {}
+    if old in (hh.get("entries") or []):
+        hh["entries"] = [new if e == old else e for e in hh["entries"]]
+        write_block(PEOPLE, "household", 0, hh)
+    for pname, person in people_entries(d).items():
+        if old in ((person or {}).get("entries") or []):
+            person["entries"] = [new if e == old else e for e in person["entries"]]
+            write_block(PEOPLE, pname, 2, person)
+    if GATEWAY.exists():
+        g = GATEWAY.read_text()
+        g2 = re.sub(rf"^(\s+){re.escape(old)}:", rf"\g<1>{new}:", g, flags=re.M)
+        if g2 != g:
+            backups.append((GATEWAY, backup(GATEWAY)))
+            GATEWAY.write_text(g2)
+    problem = instances.validate(REGISTRY)
+    if problem:
+        for target, bak in backups:
+            shutil.copy2(bak, target)
+        raise SystemExit(f"the registry did not validate after renaming, so everything was put back:\n{problem}")
+    say(f"Renamed {old} to {new} (backups kept as .bak-<time>).")
+    if a.auth and old_auth and a.auth != old_auth:
+        say(f"The credential variable is now {a.auth}; its value must move from {old_auth}.")
+        print(f"MOVE_SECRET: {old_auth} {a.auth}")
+    return 0
+
+
 def cmd_client(a):
     if not GATEWAY.exists():
         raise SystemExit(f"No {GATEWAY}: run 'novak up' once to seed it.")
@@ -400,11 +482,14 @@ def main():
     c = sub.add_parser("client"); c.add_argument("name")
     sub.add_parser("household-key")
     sub.add_parser("banks")
+    r = sub.add_parser("rename")
+    r.add_argument("old"); r.add_argument("new")
+    r.add_argument("--auth"); r.add_argument("--service"); r.add_argument("--instance"); r.add_argument("--user")
     a = ap.parse_args()
     return {"add": cmd_add, "list": cmd_list, "set": cmd_set, "key": cmd_key, "attach": lambda a: cmd_attach(a),
             "detach": lambda a: cmd_attach(a, True), "share": lambda a: cmd_share(a),
             "unshare": lambda a: cmd_share(a, True), "client": cmd_client,
-            "household-key": cmd_household_key, "banks": cmd_banks}[a.cmd](a)
+            "household-key": cmd_household_key, "banks": cmd_banks, "rename": cmd_rename}[a.cmd](a)
 
 
 if __name__ == "__main__":

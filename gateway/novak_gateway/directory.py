@@ -38,6 +38,7 @@ class Entry:
     token_env: str | None
     kind: str                      # external | container
     url_env: str | None = None     # the address is a secret, held in this variable
+    user: str | None = None        # whose account the credential is, when the entry says
 
     @property
     def alias(self) -> str:        # tool-name prefix: hindsight-tmeuze -> hindsight_tmeuze
@@ -110,9 +111,9 @@ def build_entries(registry: dict) -> dict[str, Entry]:
             url, url_env = e.get("url") or "", e.get("url_env")
             if not (url or url_env) or "EDIT-ME" in url:
                 continue
-            out[e["name"]] = Entry(e["name"], url, e.get("auth"), "external", url_env)
+            out[e["name"]] = Entry(e["name"], url, e.get("auth"), "external", url_env, e.get("user"))
         else:  # a container the reconciler runs, reachable by service name
-            out[e["name"]] = Entry(e["name"], f"http://{e['name']}-mcp:8000/mcp", None, "container")
+            out[e["name"]] = Entry(e["name"], f"http://{e['name']}-mcp:8000/mcp", None, "container", None, e.get("user"))
     return out
 
 
@@ -173,6 +174,17 @@ def validate(d: Directory) -> list[str]:
     for n in d.household_entries:
         if n not in d.entries:
             problems.append(f"household: entry '{n}' is not an enabled entry in mcp-servers.yaml")
+    # An entry that says whose account it is must be listed for that person only: this
+    # is what stops one person's token being attached to another by a slip of the pen.
+    for person in d.people.values():
+        for n in person.entries:
+            entry = d.entries.get(n)
+            if entry and entry.user and entry.user != person.name:
+                problems.append(f"{person.name}: entry '{n}' is {entry.user}'s account, not {person.name}'s")
+    for n in d.household_entries:
+        entry = d.entries.get(n)
+        if entry and entry.user:
+            problems.append(f"household: entry '{n}' is {entry.user}'s own account and cannot be shared with the household")
     owners: dict[str, list[str]] = {}
     for person in d.people.values():
         for n in person.entries:

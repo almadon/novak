@@ -66,36 +66,63 @@ class AddTests(unittest.TestCase):
         self.assertIn("already exists", r.stderr)
         self.assertEqual(h.reg.read_text(), (REPO / "registry" / "mcp-servers.yaml").read_text())
 
-    def test_outline_and_tududi_get_their_own_secret_names(self):
+    def test_an_account_is_named_service_instance_user(self):
         h = Home(self)
-        r = h.run("add", "--kind", "outline", "--name", "work", "--set", "url=https://w.example/mcp", "--yes")
-        self.assertEqual(r.stdout.strip(), "SECRETS: OUTLINE_WORK_API_KEY")
-        self.assertEqual(h.entries()["outline-work"]["auth"], "OUTLINE_WORK_API_KEY")
-        r = h.run("add", "--kind", "tududi", "--name", "ushy-home", "--set", "url=https://t.example/api/mcp", "--yes")
-        self.assertEqual(r.stdout.strip(), "SECRETS: TUDUDI_USHY_HOME_API_TOKEN")
+        r = h.run("add", "--kind", "outline", "--name", "tmeuze", "--set", "instance=1", "--set", "url=https://w.example/mcp", "--yes")
+        self.assertEqual(r.stdout.strip(), "SECRETS: OUTLINE_1_TMEUZE_API_KEY")
+        e = h.entries()["outline-1-tmeuze"]
+        self.assertEqual((e["auth"], e["service"], e["instance"], e["user"]), ("OUTLINE_1_TMEUZE_API_KEY", "outline", "1", "tmeuze"))
+        r = h.run("add", "--kind", "tududi", "--name", "ushy", "--set", "instance=tui", "--set", "url=https://t.example/api/mcp", "--yes")
+        self.assertEqual(r.stdout.strip(), "SECRETS: TUDUDI_TUI_USHY_API_TOKEN")
+        self.assertEqual(h.entries()["tududi-tui-ushy"]["user"], "ushy")
+
+    def test_a_second_user_on_the_same_instance_reuses_its_address(self):
+        h = Home(self)
+        h.run("add", "--kind", "tududi", "--name", "tmeuze", "--set", "instance=1", "--set", "url=https://t.example/api/mcp", "--yes")
+        r = h.run("add", "--kind", "tududi", "--name", "ushy", "--set", "instance=1", "--yes")       # no url given
+        self.assertEqual(r.returncode, 0, r.stderr)
+        e = h.entries()
+        self.assertEqual(e["tududi-1-ushy"]["url"], "https://t.example/api/mcp")
+        self.assertEqual(r.stdout.strip(), "SECRETS: TUDUDI_1_USHY_API_TOKEN")
+
+    def test_the_instance_defaults_to_the_only_one_known_or_the_next_number(self):
+        h = Home(self)
+        h.run("add", "--kind", "tududi", "--name", "tmeuze", "--set", "url=https://t1.example/api/mcp", "--yes")
+        self.assertIn("tududi-1-tmeuze", h.entries())                                            # first instance is 1
+        r = h.run("add", "--kind", "tududi", "--name", "ushy", "--yes")                           # one known: reused
+        self.assertIn("tududi-1-ushy", h.entries())
+        h.run("add", "--kind", "tududi", "--name", "sam", "--set", "instance=2", "--set", "url=https://t2.example/api/mcp", "--yes")
+        self.assertIn("tududi-2-sam", h.entries())
+
+    def test_the_same_account_twice_is_refused(self):
+        h = Home(self)
+        h.run("add", "--kind", "tududi", "--name", "ushy", "--set", "instance=1", "--set", "url=https://t.example/api/mcp", "--yes")
+        r = h.run("add", "--kind", "tududi", "--name", "ushy", "--set", "instance=1", "--yes")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("already exists", r.stderr)
 
     def test_vikunja_instance_maps_env_and_takes_a_free_port(self):
         h = Home(self)
         r = h.run("add", "--kind", "vikunja", "--name", "partner",
                   "--set", "url=https://tasks.example", "--yes")
         self.assertEqual(r.returncode, 0, r.stderr)
-        e = h.entries()["vikunja-partner"]
-        used = {x["port"] for n, x in h.entries().items() if n != "vikunja-partner" and "port" in x}
+        e = h.entries()["vikunja-1-partner"]
+        used = {x["port"] for n, x in h.entries().items() if n != "vikunja-1-partner" and "port" in x}
         self.assertNotIn(e["port"], used)
-        self.assertEqual(e["env"], ["VIKUNJA_URL=VIKUNJA_PARTNER_URL",
-                                    "VIKUNJA_API_TOKEN=VIKUNJA_PARTNER_API_TOKEN"])
-        self.assertIn("VIKUNJA_PARTNER_URL=https://tasks.example", (h.dir / ".env").read_text())
-        self.assertEqual(r.stdout.strip(), "SECRETS: VIKUNJA_PARTNER_API_TOKEN")
+        self.assertEqual(e["env"], ["VIKUNJA_URL=VIKUNJA_1_PARTNER_URL",
+                                    "VIKUNJA_API_TOKEN=VIKUNJA_1_PARTNER_API_TOKEN"])
+        self.assertIn("VIKUNJA_1_PARTNER_URL=https://tasks.example", (h.dir / ".env").read_text())
+        self.assertEqual(r.stdout.strip(), "SECRETS: VIKUNJA_1_PARTNER_API_TOKEN")
 
     def test_vikunja_container_receives_the_mapped_values(self):
-        h = Home(self, "VIKUNJA_PARTNER_URL=https://tasks.example\nVIKUNJA_PARTNER_API_TOKEN=tok\n")
+        h = Home(self, "VIKUNJA_1_PARTNER_URL=https://tasks.example\nVIKUNJA_1_PARTNER_API_TOKEN=tok\n")
         h.run("add", "--kind", "vikunja", "--name", "partner", "--set", "url=https://tasks.example", "--yes")
         env = {**os.environ, "NOVAK_HOME": str(h.dir)}
         out = subprocess.run([sys.executable, str(REPO / "reconciler" / "reconcile.py"), "--dry-run"],
                              capture_output=True, text=True, env=env).stdout
-        svc = yaml.safe_load(out[out.index("name:"):])["services"]["vikunja-partner-mcp"]
-        self.assertEqual(svc["environment"]["VIKUNJA_URL"], "${VIKUNJA_PARTNER_URL}")
-        self.assertEqual(svc["environment"]["VIKUNJA_API_TOKEN"], "${VIKUNJA_PARTNER_API_TOKEN}")
+        svc = yaml.safe_load(out[out.index("name:"):])["services"]["vikunja-1-partner-mcp"]
+        self.assertEqual(svc["environment"]["VIKUNJA_URL"], "${VIKUNJA_1_PARTNER_URL}")
+        self.assertEqual(svc["environment"]["VIKUNJA_API_TOKEN"], "${VIKUNJA_1_PARTNER_API_TOKEN}")
 
     def test_invalid_entry_is_rolled_back(self):
         h = Home(self)
@@ -133,11 +160,11 @@ class AddTests(unittest.TestCase):
     def test_secret_vars_include_instance_credentials_only(self):
         h = Home(self)
         h.run("add", "--kind", "vikunja", "--name", "partner", "--set", "url=https://t.example", "--yes")
-        h.run("add", "--kind", "outline", "--name", "work", "--set", "url=https://w.example/mcp", "--yes")
+        h.run("add", "--kind", "outline", "--name", "work", "--set", "instance=1", "--set", "url=https://w.example/mcp", "--yes")
         names = h.run("secret-vars").stdout.split()
-        for n in ("VIKUNJA_PARTNER_API_TOKEN", "OUTLINE_WORK_API_KEY", "HINDSIGHT_API_KEY"):
+        for n in ("VIKUNJA_1_PARTNER_API_TOKEN", "OUTLINE_1_WORK_API_KEY", "HINDSIGHT_API_KEY"):
             self.assertIn(n, names)
-        self.assertNotIn("VIKUNJA_PARTNER_URL", names)
+        self.assertNotIn("VIKUNJA_1_PARTNER_URL", names)
 
 
 if __name__ == "__main__":
@@ -148,8 +175,8 @@ class DescribeTests(unittest.TestCase):
     def test_describes_registry_credentials(self):
         h = Home(self)
         h.run("add", "--kind", "tududi", "--name", "ushy", "--set", "url=https://t.example/api/mcp", "--yes")
-        out = h.run("describe", "TUDUDI_USHY_API_TOKEN").stdout.strip()
-        self.assertEqual(out, "used by tududi-ushy (MCP endpoint)")
+        out = h.run("describe", "TUDUDI_1_USHY_API_TOKEN").stdout.strip()
+        self.assertEqual(out, "ushy's tududi account on instance 1 (t.example)")
         self.assertEqual(h.run("describe", "NOT_A_THING").stdout.strip(), "")
 
 
@@ -170,3 +197,15 @@ class UrlEnvTests(unittest.TestCase):
         r = h.run("add", "--kind", "mcp", "--name", "svc", "--set", "url_secret=y", "--set", "url_var=SVC_URL",
                   "--set", "needs_token=y", "--set", "token_var=SVC_API_TOKEN", "--yes")
         self.assertEqual(r.stdout.strip(), "SECRETS: SVC_URL SVC_API_TOKEN")
+
+
+class InstancesListTests(unittest.TestCase):
+    def test_list_says_which_instance_is_which_and_whose_account(self):
+        h = Home(self)
+        h.run("add", "--kind", "tududi", "--name", "tmeuze", "--set", "instance=1", "--set", "url=https://tui.example/api/mcp", "--yes")
+        h.run("add", "--kind", "tududi", "--name", "ushy", "--set", "instance=1", "--yes")
+        out = h.run("list").stderr
+        self.assertIn("tududi", out)
+        self.assertIn("instance 1  https://tui.example/api/mcp", out)
+        self.assertRegex(out, r"tmeuze\s+tududi-1-tmeuze")
+        self.assertRegex(out, r"ushy\s+tududi-1-ushy")

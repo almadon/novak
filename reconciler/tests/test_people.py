@@ -29,7 +29,7 @@ class Home:
         test.addCleanup(lambda: __import__("shutil").rmtree(self.dir, ignore_errors=True))
         reg = self.dir / "registry"
         reg.mkdir()
-        (reg / "mcp-servers.yaml").write_text(yaml.safe_dump(REGISTRY))
+        (reg / "mcp-servers.yaml").write_text(yaml.safe_dump(REGISTRY, sort_keys=False))   # entries start with `- name:`, as in the real file
         (reg / "people.yaml").write_text((REPO / "registry" / "people.yaml").read_text())
         (reg / "gateway.yaml").write_text((REPO / "registry" / "gateway.yaml").read_text())
         self.people, self.gateway = reg / "people.yaml", reg / "gateway.yaml"
@@ -236,3 +236,51 @@ class GatewayEnvUrlTests(unittest.TestCase):
                            env={**os.environ, "NOVAK_HOME": str(h.dir), "HA_MCP_URL": "http://x:1/private_zzz"})
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("HA_MCP_URL=http://x:1/private_zzz", (h.dir / "gateway.env").read_text())
+
+
+class RenameTests(unittest.TestCase):
+    def legacy(self, h):
+        # tududi-tui (auth TUDUDI_TUI_API_TOKEN) is already in the fixture registry, in the old naming.
+        h.run("add", "tmeuze", "--yes", "--entries", "tududi-tui")
+        (h.dir / "registry" / "gateway.yaml").write_text(
+            (h.dir / "registry" / "gateway.yaml").read_text().replace("    ha-mcp: {ha_call_service: destructive, ha_bulk_control: destructive}",
+                     "    ha-mcp: {ha_call_service: destructive, ha_bulk_control: destructive}\n    tududi-tui: {delete_task: destructive}"))
+
+    def test_rename_updates_the_registry_the_person_and_the_gateway_overrides(self):
+        h = Home(self)
+        self.legacy(h)
+        r = h.run("rename", "tududi-tui", "tududi-1-tmeuze", "--auth", "TUDUDI_1_TMEUZE_API_TOKEN",
+                  "--service", "tududi", "--instance", "1", "--user", "tmeuze")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        e = {x["name"]: x for x in yaml.safe_load((h.dir / "registry" / "mcp-servers.yaml").read_text())["servers"]}
+        self.assertNotIn("tududi-tui", e)
+        self.assertEqual((e["tududi-1-tmeuze"]["auth"], e["tududi-1-tmeuze"]["service"], e["tududi-1-tmeuze"]["instance"],
+                          e["tududi-1-tmeuze"]["user"]), ("TUDUDI_1_TMEUZE_API_TOKEN", "tududi", "1", "tmeuze"))
+        self.assertEqual(h.load()["people"]["tmeuze"]["entries"], ["tududi-1-tmeuze"])
+        self.assertIn("tududi-1-tmeuze:", (h.dir / "registry" / "gateway.yaml").read_text())
+        self.assertNotIn("tududi-tui", (h.dir / "registry" / "gateway.yaml").read_text())
+        self.assertEqual(r.stdout.strip(), "MOVE_SECRET: TUDUDI_TUI_API_TOKEN TUDUDI_1_TMEUZE_API_TOKEN")
+
+    def test_rename_keeps_the_comments_around_other_entries(self):
+        h = Home(self)
+        self.legacy(h)
+        before = (h.dir / "registry" / "mcp-servers.yaml").read_text()
+        h.run("rename", "tududi-tui", "tududi-1-tmeuze")
+        after = (h.dir / "registry" / "mcp-servers.yaml").read_text()
+        self.assertEqual(after.replace("tududi-1-tmeuze", "tududi-tui"), before)                 # nothing else moved
+
+    def test_rename_refuses_a_name_in_use_or_a_missing_entry_and_changes_nothing(self):
+        h = Home(self)
+        self.legacy(h)
+        before = (h.dir / "registry" / "mcp-servers.yaml").read_text()
+        self.assertNotEqual(h.run("rename", "tududi-tui", "brave-search").returncode, 0)
+        self.assertNotEqual(h.run("rename", "nope", "x").returncode, 0)
+        self.assertEqual((h.dir / "registry" / "mcp-servers.yaml").read_text(), before)
+
+    def test_the_gateway_still_reads_the_renamed_entry_and_checks_its_owner(self):
+        from novak_gateway import directory
+        h = Home(self)
+        self.legacy(h)
+        h.run("rename", "tududi-tui", "tududi-1-ushy", "--service", "tududi", "--instance", "1", "--user", "ushy")
+        problems = directory.validate(directory.load(h.dir / "registry"))
+        self.assertTrue(any("is ushy's account, not tmeuze's" in p for p in problems), problems)

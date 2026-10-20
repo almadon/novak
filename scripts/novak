@@ -210,7 +210,7 @@ cmd_secret() {
         # A placeholder from .env.example is not a secret: it must not read as set.
         if [ -z "$val" ] || [[ "$val" =~ $PLACEHOLDERS ]]; then state="$(red missing)"; else state="$(grn present)"; fi
         desc="$(secret_desc "$v" 2>/dev/null || true)"
-        [ -n "$desc" ] || desc="$("$NOVAK_HOME/.venv/bin/python" "$REPO_DIR/reconciler/instances.py" describe "$v" 2>/dev/null || true)"
+        [ -n "$desc" ] || desc="$(NOVAK_HOME="$NOVAK_HOME" "$NOVAK_HOME/.venv/bin/python" "$REPO_DIR/reconciler/instances.py" describe "$v" 2>/dev/null || true)"
         printf '  %-30s %-17s %s\n' "$v" "$state" "$(dim "$desc")"
       done
       echo
@@ -880,7 +880,7 @@ cmd_instances() {
 cmd_registry() {
   need_env
   local out
-  out="$("$NOVAK_HOME/.venv/bin/python" "$REPO_DIR/reconciler/reconcile.py" --dry-run)"
+  out="$(NOVAK_HOME="$NOVAK_HOME" "$NOVAK_HOME/.venv/bin/python" "$REPO_DIR/reconciler/reconcile.py" --dry-run)"
   printf '%s\n' "$out"
 
   [ "${1:-}" = "--check" ] || return 0

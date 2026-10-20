@@ -90,6 +90,28 @@ filtered tool is not listed and cannot be called by name. Removal tools that
 stay on the list still need confirmation. The shipped defaults give Hindsight
 16 tools and Outline 11; Tududi is unfiltered until its tool list is seen.
 
+## Open WebUI: people, groups and models
+
+Three things that look like one setting, and each can hide the others:
+
+- **A person is a person once they sign in.** Their Open WebUI account appears the
+  first time they use Continue with Inti, as a plain User. The gateway recognises
+  them by the email Open WebUI has for them, which must match `people.yaml`.
+- **Groups follow Inti, not Open WebUI.** `OWUI_OIDC_GROUP_MANAGEMENT` is on: at
+  every sign-in Open WebUI removes the user from any of its groups whose name is
+  not in their Inti `groups` claim, as long as the claim has at least one group.
+  A group you build by hand in Open WebUI and fill by hand (for example "Users
+  Novak") loses its members the next time they sign in, unless an Inti group has
+  exactly that name and they belong to it. Name the Open WebUI group after an Inti
+  group, or turn group management off and manage groups in Open WebUI only.
+- **API keys are off until switched on.** A group's API Keys permission does
+  nothing while `OWUI_ENABLE_API_KEYS` is false; set it true in `.env` and `novak up`.
+
+If someone cannot see a shared model or the Workspace tab, the quickest check is
+what the server itself thinks they may read (their groups, the model grants, and
+their permissions); a stale browser session that predates the sharing is the other
+usual cause, and a reload or sign-out and in fixes it.
+
 ## Entries and people
 
 An entry (in `mcp-servers.yaml`) holds one credential, so it belongs to one

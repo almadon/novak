@@ -141,43 +141,9 @@ servers:
   #   risk:
   #     level: standard
 
-  # Tududi serves MCP itself at /api/mcp — streamable HTTP, no wrapper and no
-  # second container. Tududi's current docs (docs/14-mcp-integration.md, v1.9)
-  # say it is on by default, but a live v1.5.0 server answered 403 "MCP feature is
-  # not enabled: set FF_ENABLE_MCP=true" to a valid token (its REST API accepted
-  # the same token), so an older server needs FF_ENABLE_MCP=true in its .env, or an
-  # upgrade. Unauthenticated, /api/mcp answers 401, which only proves the route.
-  #
-  # AUTH: the user's own API key (Profile -> API Keys) as a bearer token. The
-  # same per-user key authenticates the REST API and MCP; it is scoped to that
-  # one user, so one key means one account's data. It is configured on the
-  # CLIENT (Open WebUI's MCP server entry), not here — external entries carry
-  # no credentials.
-  #
-  # NOTE: one token means one Tududi account's tasks, for everyone using that
-  # client. Same shape as the memory problem, without a shim to solve it: if
-  # two people need their own task lists, each needs their own client-side
-  # registration with their own token.
-  - name: tududi
-    kind: external
-    url: https://tududi.example.tld/api/mcp # VERIFY your host
-    auth: TUDUDI_API_TOKEN
-    enabled: false # flip once Tududi is running and the token is issued
-    # Not on the voice pipeline: 65 tools is far too much context for a
-    # 1-2s spoken response. Same reasoning as vikunja.
-    clients: [open-webui]
-    source:
-      url: https://github.com/chrisvel/tududi
-      license: VERIFY
-    risk:
-      level: elevated
-      why:
-        - "65 tools across tasks, projects, notes, goals, habits and people —
-           a very broad surface for one integration."
-        - "Can create, modify and delete across all of them. VERIFY whether
-           Tududi has a trash before trusting deletes to be recoverable."
-      accepted_by: tmeuze
-      accepted_on: 2026-08-17
+  # Tududi: add an account per person with `novak add tududi` (entry
+  # tududi-<instance>-<user>, token TUDUDI_<INSTANCE>_<USER>_API_TOKEN). Tududi serves
+  # MCP itself at /api/mcp. Older servers (v1.5) need FF_ENABLE_MCP=true.
 
   # Hindsight speaks MCP natively — no wrapper, no shim, no first-party code.
   #

@@ -50,6 +50,11 @@
 #   novak gateway client NAME trusted client key (Open WebUI) | household-key |
 #                             banks (create missing Hindsight banks) |
 #                             status | check | audit [person]
+#   novak instances           which instance of each service is which, and whose
+#                             account is on each (so an instance number means something)
+#   novak rename OLD NEW [--auth VAR] [--service S --instance I --user U]
+#                             rename a registry entry everywhere it is named, and move
+#                             its credential to the new variable name
 #   novak omlx apply          apply registry/omlx.yaml (models, profiles, TTLs)
 #   novak router apply        apply registry/engines.yaml -> router/config.yaml
 #                              (decision #28; run 'novak restart router' after)
@@ -837,6 +842,41 @@ cmd_gateway() {
   esac
 }
 
+# Rename a registry entry everywhere it is named, moving its credential to the new
+# variable name if that changed. The helper prints "MOVE_SECRET: OLD NEW" and this
+# does the move with the same secret functions `novak secret` uses, so the value is
+# never printed, and only removes the old name once the new one reads back.
+cmd_rename() {
+  need_env
+  local py="$NOVAK_HOME/.venv/bin/python"; [ -x "$py" ] || py="$(command -v python3)"
+  local out rc=0
+  out="$(NOVAK_HOME="$NOVAK_HOME" "$py" "$REPO_DIR/reconciler/people.py" rename "$@")" || rc=$?
+  [ "$rc" -eq 0 ] || exit "$rc"
+  local mv; mv="$(sed -n 's/^MOVE_SECRET: *//p' <<<"$out")"
+  if [ -n "$mv" ]; then
+    set -- $mv
+    local oldv="$1" newv="$2" val
+    val="$(secret_get "$oldv")"
+    if [ -z "$val" ] || [[ "$val" =~ $PLACEHOLDERS ]]; then
+      ylw "  $oldv had no value to move: set the new one with  novak secret set $newv"
+    elif secret_set "$newv" "$val" && [ "$(secret_get "$newv")" = "$val" ]; then
+      secret_delete "$oldv"
+      grn "  Moved the value of $oldv to $newv."
+    else
+      red "  Could not store $newv; $oldv was left as it is."; exit 1
+    fi
+    unset val
+  fi
+  echo
+  dim "Run 'novak up' so the gateway gets the new variable name."
+}
+
+cmd_instances() {
+  need_env
+  local py="$NOVAK_HOME/.venv/bin/python"; [ -x "$py" ] || py="$(command -v python3)"
+  NOVAK_HOME="$NOVAK_HOME" "$py" "$REPO_DIR/reconciler/instances.py" list
+}
+
 cmd_registry() {
   need_env
   local out
@@ -1482,6 +1522,8 @@ case "${1:-menu}" in
   logs)     shift; compose logs -f --tail=100 "$@" ;;
   registry) shift; cmd_registry "$@" ;;
   add)      shift; cmd_add "$@" ;;
+  rename)   shift; cmd_rename "$@" ;;
+  instances) cmd_instances ;;
   person)   shift; cmd_person "$@" ;;
   gateway)  shift; cmd_gateway "$@" ;;
   -h|--help|help) usage ;;

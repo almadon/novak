@@ -27,8 +27,9 @@ def needed_names(registry_dir: Path) -> list[str]:
     wanted = set((people.get("household") or {}).get("entries") or [])
     for person in (people.get("people") or {}).values():
         wanted |= set((person or {}).get("entries") or [])
-    names = {e["auth"] for e in load("mcp-servers.yaml").get("servers") or []
-             if e.get("name") in wanted and e.get("auth")}
+    servers = [e for e in load("mcp-servers.yaml").get("servers") or [] if e.get("name") in wanted]
+    # An address that is itself a credential (url_env) is passed like a token.
+    names = {e["auth"] for e in servers if e.get("auth")} | {e["url_env"] for e in servers if e.get("url_env")}
     return sorted(names | set(OWN))
 
 

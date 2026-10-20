@@ -41,12 +41,17 @@ class Gateway:
         return self._dir
 
     def _upstream(self, entry) -> Upstream:
-        key = f"{entry.name}|{entry.url}"
+        url = entry.url
+        if entry.url_env:
+            url = self.env.get(entry.url_env, "")
+            if not url or url in ("set-in-keychain", "EDIT-ME", "changeme"):
+                raise MCPError(f"the address of {entry.name} ({entry.url_env}) is not set")
+        key = f"{entry.name}|{url}"
         if key not in self._upstreams:
             token = self.env.get(entry.token_env) if entry.token_env else None
             if entry.token_env and (not token or token in ("set-in-keychain", "EDIT-ME", "changeme")):
                 raise MCPError(f"the credential for {entry.name} ({entry.token_env}) is not set")
-            self._upstreams[key] = self.upstream_factory(entry.url, token)
+            self._upstreams[key] = self.upstream_factory(url, token)
         return self._upstreams[key]
 
     # tools --------------------------------------------------------------------

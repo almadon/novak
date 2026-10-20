@@ -151,3 +151,22 @@ class DescribeTests(unittest.TestCase):
         out = h.run("describe", "TUDUDI_USHY_API_TOKEN").stdout.strip()
         self.assertEqual(out, "used by tududi-ushy (MCP endpoint)")
         self.assertEqual(h.run("describe", "NOT_A_THING").stdout.strip(), "")
+
+
+class UrlEnvTests(unittest.TestCase):
+    def test_secret_url_entry_is_added_and_its_variable_is_a_secret(self):
+        h = Home(self)
+        r = h.run("add", "--kind", "mcp", "--name", "ha-mcp-x", "--set", "url_secret=y", "--set", "url_var=HA_MCP_X_URL",
+                  "--set", "needs_token=n", "--set", "risk=dangerous", "--yes")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        e = h.entries()["ha-mcp-x"]
+        self.assertEqual((e["url_env"], "url" in e), ("HA_MCP_X_URL", False))
+        self.assertEqual(r.stdout.strip(), "SECRETS: HA_MCP_X_URL")
+        self.assertIn("HA_MCP_X_URL", h.run("secret-vars").stdout.split())
+        self.assertEqual(h.run("describe", "HA_MCP_X_URL").stdout.strip(), "used by ha-mcp-x (MCP address)")
+
+    def test_secret_url_and_token_are_both_collected(self):
+        h = Home(self)
+        r = h.run("add", "--kind", "mcp", "--name", "svc", "--set", "url_secret=y", "--set", "url_var=SVC_URL",
+                  "--set", "needs_token=y", "--set", "token_var=SVC_API_TOKEN", "--yes")
+        self.assertEqual(r.stdout.strip(), "SECRETS: SVC_URL SVC_API_TOKEN")

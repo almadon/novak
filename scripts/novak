@@ -875,6 +875,10 @@ cmd_registry() {
     name="$(sed -E 's/^external: ([a-z0-9-]+).*/\1/' <<<"$line")"
     url="$(sed -E 's/^external: [a-z0-9-]+ -> ([^ ]+).*/\1/' <<<"$line")"
     authvar="$(sed -nE 's/.*\[token: ([A-Z_]+)\].*/\1/p' <<<"$line")"
+    # An entry whose address is a secret prints as env:VAR; resolve it here, and
+    # never print the resolved value.
+    case "$url" in env:*) url="$(keychain "${url#env:}")" ;; esac
+    if [ -z "$url" ]; then printf '  %-22s %s\n' "$name" "$(ylw 'address variable not set')"; continue; fi
     token=""
     [ -n "$authvar" ] && token="$(keychain "$authvar")"
 

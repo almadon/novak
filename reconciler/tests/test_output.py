@@ -97,3 +97,37 @@ class ShellHelperTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UrlEnvReconcileTests(unittest.TestCase):
+    def entry_registry(self, env_text):
+        import yaml
+        home = Path(tempfile.mkdtemp())
+        (home / "registry").mkdir()
+        reg = yaml.safe_load((REPO / "registry" / "mcp-servers.yaml").read_text())
+        reg["servers"].append({"name": "secret-addr", "kind": "external", "url_env": "SECRET_ADDR_URL", "enabled": True})
+        (home / "registry" / "mcp-servers.yaml").write_text(yaml.safe_dump(reg))
+        (home / ".env").write_text(env_text)
+        return home
+
+    def run_reconcile_at(self, home):
+        r = subprocess.run([sys.executable, str(REPO / "reconciler" / "reconcile.py"), "--dry-run"], capture_output=True,
+                           text=True, env={**{k: v for k, v in os.environ.items() if k not in ("NO_COLOR", "FORCE_COLOR")}, "NOVAK_HOME": str(home)})
+        return r.stdout + r.stderr
+
+    def test_unset_variable_means_skipped_with_the_reason_and_set_means_listed_without_the_value(self):
+        out = self.run_reconcile_at(self.entry_registry("HOST_NAME=spire\n"))
+        self.assertIn("skipped:  secret-addr — url variable SECRET_ADDR_URL is not set", out)
+        out = self.run_reconcile_at(self.entry_registry("HOST_NAME=spire\nSECRET_ADDR_URL=http://10.0.0.1:9/private_abc123\n"))
+        self.assertIn("external: secret-addr -> env:SECRET_ADDR_URL", out)
+        self.assertNotIn("private_abc123", out)
+
+    def test_exactly_one_of_url_and_url_env(self):
+        import yaml
+        home = Path(tempfile.mkdtemp())
+        (home / "registry").mkdir()
+        reg = yaml.safe_load((REPO / "registry" / "mcp-servers.yaml").read_text())
+        reg["servers"].append({"name": "both", "kind": "external", "url": "http://x:1/", "url_env": "X_URL", "enabled": True})
+        (home / "registry" / "mcp-servers.yaml").write_text(yaml.safe_dump(reg))
+        (home / ".env").write_text("HOST_NAME=spire\n")
+        self.assertIn("exactly one of url or url_env", self.run_reconcile_at(home))

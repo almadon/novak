@@ -186,15 +186,27 @@ def t_super_productivity(a, entries, who, today, yes):
 
 def t_mcp(a, entries, who, today, yes):
     name = ask(a, "name_full", "Entry name (a-z, 0-9, hyphen)", yes=yes)
-    url = ask(a, "url", "MCP URL", yes=yes)
-    level = ask(a, "risk", "Risk level", "standard", yes, ("standard", "elevated"))
-    secrets, entry = [], {"name": name, "kind": "external", "url": url, "enabled": True,
-                          "clients": ["open-webui"]}
+    url_secret = yn(a, "url_secret", "Is the URL itself a secret (a private path in it)?", False, yes)
+    if url_secret:
+        url_var = ask(a, "url_var", "Variable that will hold the URL (UPPER_SNAKE, e.g. MYSERVICE_URL)", yes=yes)
+        if not re.match(r"^[A-Z][A-Z0-9_]*$", url_var):
+            raise Abort(f"URL variable {url_var!r} must be UPPER_SNAKE")
+        url = None
+    else:
+        url = ask(a, "url", "MCP URL", yes=yes)
+    level = ask(a, "risk", "Risk level", "standard", yes, ("standard", "elevated", "dangerous"))
+    secrets, entry = [], {"name": name, "kind": "external", "enabled": True, "clients": ["open-webui"]}
+    if url_secret:
+        entry["url_env"] = url_var
+        secrets.append(url_var)
+    else:
+        entry["url"] = url
     if yn(a, "needs_token", "Needs a bearer token?", True, yes):
         token = ask(a, "token_var", "Variable holding the token (UPPER_SNAKE, e.g. MYSERVICE_API_TOKEN)", yes=yes)
         if not re.match(r"^[A-Z][A-Z0-9_]*$", token):
             raise Abort(f"token variable {token!r} must be UPPER_SNAKE")
-        entry["auth"], secrets = token, [token]
+        entry["auth"] = token
+        secrets.append(token)
     why = ["Raised by hand when added with `novak add`; write down why."]
     entry["risk"] = risk_block(level, why, who, today)
     return dict(name=name, secrets=secrets, config={}, entry=entry, notes=[])
@@ -307,6 +319,8 @@ def secret_vars(path=None) -> list[str]:
         cands = [e["auth"]] if e.get("auth") else []
         cands += [i.partition("=")[2] or i for i in e.get("env") or []]
         names += [c for c in cands if SECRETISH.search(c)]
+        if e.get("url_env"):                 # an address that is a credential is one, whatever it is called
+            names.append(e["url_env"])
     return sorted(set(names))
 
 
@@ -316,6 +330,8 @@ def describe(var_name: str, path=None) -> str:
     for e in load_entries(path):
         if e.get("auth") == var_name:
             users.append(f"{e['name']} (MCP endpoint)")
+        elif e.get("url_env") == var_name:
+            users.append(f"{e['name']} (MCP address)")
         elif any((i.partition("=")[2] or i) == var_name for i in e.get("env") or []):
             users.append(f"{e['name']} (container)")
     return "used by " + ", ".join(users) if users else ""

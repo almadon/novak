@@ -77,6 +77,15 @@ household-key`), for satellites.
    `<gateway>/mcp/k/<their key>`. The household pipeline for satellites uses
    `/mcp/household`. Identity comes from which pipeline a device selects.
 
+## Addresses that are secrets
+
+Some endpoints carry their credential in the URL (HA-MCP's private path, for
+instance). Such an entry names the variable instead of writing the address:
+`url_env: HA_MCP_URL`. The variable is treated as a secret (`novak secret set
+HA_MCP_URL`, shown masked, never printed by `novak registry`), is passed to the
+gateway like any token, and the entry is skipped with a reason while it is unset.
+`novak add mcp` asks whether the URL is secret.
+
 ## Which tools each entry offers
 
 A model given every tool a service has does worse: it spends its context on

@@ -514,10 +514,11 @@ services:
   # tag moves, and the persona-injection mechanism this relies on
   # (async_pre_call_hook, not LiteLLM's newer CustomPromptManagement API,
   # which was tried first and silently never fired — see
-  # router/persona_hook.py) was confirmed against this specific build.
+  # router/persona_hook.py) was confirmed against v1.105.0; v1.106.0 is VERIFY until the
+  # persona check (chat injects, task does not) is rerun on the deployed router.
   router:
     profiles: ["router"]
-    image: ghcr.io/berriai/litellm@sha256:20b5044b619055374061a6d5b7b08754cad75aeabbf82ddf4f69cc0cf80ddaf4
+    image: ghcr.io/berriai/litellm@sha256:2e4c0371f3a8c28e4da131d77abaa8341cd3b0c2fcc4d34d7c5900431af7b9d0
     restart: unless-stopped
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     ports:

@@ -302,19 +302,10 @@ live together.
 | URL of a `container` MCP server | `.env` | `VIKUNJA_URL`, `HA_MCP_URL` |
 
 **There is no `TUDUDI_URL`, and that is not an omission.** Tududi is an
-`external` entry — something already running elsewhere that Novak only points
-clients at — so its address is the `url:` field in the registry:
-
-```yaml
-  - name: tududi
-    kind: external
-    url: https://tududi.example.tld/api/mcp
-    auth: TUDUDI_API_TOKEN      # the NAME of a Keychain item, not a value
-    enabled: false
-```
-
-Edit the URL there, in `$NOVAK_HOME/registry/mcp-servers.yaml`, and set the
-token with `novak secret set TUDUDI_API_TOKEN`. Then flip `enabled: true`.
+`external` entry (something already running elsewhere that Novak only points
+clients at), so its address is the `url:` field in the registry. `novak add
+tududi` writes the entry and asks for the token, which it stores as
+`TUDUDI_<INSTANCE>_<USER>_API_TOKEN`.
 
 A `container` entry is the other case: Novak runs it, so it needs both halves
 as variables — `VIKUNJA_URL` and `VIKUNJA_API_TOKEN`. The reconciler skips a
@@ -375,7 +366,8 @@ and provider URL are all present.
 Three kinds, because who else knows the value decides how you may set it.
 
 **Externally owned** — `OMLX_API_KEY`, `OIDC_CLIENT_SECRET`,
-`OUTLINE_EVERYTHING_API_KEY`, `VIKUNJA_API_TOKEN`, `TUDUDI_API_TOKEN`.
+`OUTLINE_<INSTANCE>_<USER>_API_KEY`, `VIKUNJA_API_TOKEN`, and the per-account
+Tududi tokens.
 
 The value must *match* what another system already holds. `--generate` is
 **refused** here, deliberately: a fresh random value is not a shortcut, it is an

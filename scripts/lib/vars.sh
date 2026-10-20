@@ -17,7 +17,6 @@ SECRET_VARS=(
   ROUTER_API_KEY
   HINDSIGHT_API_KEY
   OUTLINE_EVERYTHING_API_KEY
-  TUDUDI_API_TOKEN
   VIKUNJA_API_TOKEN
   BRAVE_API_KEY
   OPEN_TERMINAL_API_KEY
@@ -25,7 +24,6 @@ SECRET_VARS=(
   OIDC_CLIENT_SECRET
   OWUI_OIDC_CLIENT_SECRET
   WEBUI_SECRET_KEY
-  HA_MCP_TOKEN
   HA_DRIFT_TOKEN
   TINYAUTH_OIDC_CLIENT_SECRET
   INGEST_TOKEN
@@ -75,7 +73,7 @@ CORE_SECRETS=(HINDSIGHT_API_KEY)
 #                   it is a silent outage: the service simply starts refusing
 #                   us. `novak secret set --generate` refuses these outright.
 #                   HA_DRIFT_TOKEN belongs here too, and deliberately does not
-#                   reuse HA_MCP_TOKEN (decision #44/#52): it's a long-lived
+#                   reuse an MCP token (decision #44/#52): it's a long-lived
 #                   access token from a dedicated, non-admin HA user, created
 #                   for `novak drift --live`'s HA-side persona check
 #                   (reconciler/ha_persona_drift.py) alone — see
@@ -101,10 +99,8 @@ EXTERNAL_SECRETS=(
   OMLX_API_KEY
   OIDC_CLIENT_SECRET
   OWUI_OIDC_CLIENT_SECRET
-  HA_MCP_TOKEN
   HA_DRIFT_TOKEN
   OUTLINE_EVERYTHING_API_KEY
-  TUDUDI_API_TOKEN
   VIKUNJA_API_TOKEN
   BRAVE_API_KEY
   TINYAUTH_OIDC_CLIENT_SECRET
@@ -151,7 +147,6 @@ secret_desc() {
     OWUI_OIDC_CLIENT_SECRET)    echo "Open WebUI: its client secret in Pocket ID. Copy from Pocket ID" ;;
     WEBUI_SECRET_KEY)           echo "Open WebUI: signs its session tokens. Internal, keeps logins across restarts" ;;
     TINYAUTH_OIDC_CLIENT_SECRET) echo "Portal (TinyAuth): its client secret in Pocket ID. Copy from Pocket ID" ;;
-    HA_MCP_TOKEN)               echo "Home Assistant: long-lived token for the ha-mcp server" ;;
     HA_DRIFT_TOKEN)             echo "Home Assistant: read-only token for 'novak drift --live'" ;;
     INGEST_TOKEN)               echo "Ingest: bearer token recorders and adapters send" ;;
     INGEST_GATEWAY_KEY)         echo "Ingest: trusted gateway client key (novak gateway client ingest)" ;;

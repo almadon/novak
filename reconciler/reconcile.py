@@ -177,8 +177,17 @@ def validate(entry: dict, seen_names: set[str], seen_ports: set[int]) -> dict:
     if kind == "external":
         # Nothing is started; we only catalogue it. Still validate risk, so an
         # external endpoint with broad powers gets accepted on the record too.
-        url = req("url")
-        if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+        # An endpoint whose address is itself a credential (a secret path in the URL,
+        # as HA-MCP uses) is named by `url_env` instead of written down: the registry
+        # is committed and shown, the variable lives with the other secrets.
+        url, url_env = entry.get("url"), entry.get("url_env")
+        if (url is None) == (url_env is None):
+            raise ValidationError(f"[{name}] external entries need exactly one of url or url_env")
+        if url_env is not None:
+            if not isinstance(url_env, str) or not ENV_RE.match(url_env):
+                raise ValidationError(f"[{name}] url_env must be an UPPER_SNAKE variable name, got {url_env!r}")
+            url = ""
+        elif not isinstance(url, str) or not url.startswith(("http://", "https://")):
             raise ValidationError(f"[{name}] external entries need an http(s) url, got {url!r}")
         for forbidden in ("image", "command", "port"):
             if forbidden in entry:
@@ -193,7 +202,7 @@ def validate(entry: dict, seen_names: set[str], seen_ports: set[int]) -> dict:
 
         seen_names.add(name)
         return {
-            "name": name, "kind": kind, "url": url, "enabled": enabled_raw,
+            "name": name, "kind": kind, "url": url, "url_env": url_env, "enabled": enabled_raw,
             "auth": auth,
             "risk": validate_risk(name, entry, enabled_raw),
             "source": entry.get("source"),
@@ -262,6 +271,21 @@ def unedited_url(server: dict) -> bool:
     return "EDIT-ME" in server.get("url", "")
 
 
+def url_unset(server: dict, configured: set[str]) -> bool:
+    """An external entry whose address lives in a variable nobody has filled in."""
+    return bool(server.get("url_env")) and server["url_env"] not in configured
+
+
+def skip_reason(server: dict) -> str:
+    if server.get("url_env"):
+        return f"url variable {server['url_env']} is not set"
+    return f"url still has EDIT-ME: {server['url']}"
+
+
+def shown_url(server: dict) -> str:
+    return server["url"] or f"env:{server['url_env']}"
+
+
 def render(servers: list[dict], configured: set[str]) -> dict:
     services = {}
     for s in servers:
@@ -300,10 +324,10 @@ def report_plain(running, disabled, skipped, external, external_skipped, enabled
         print(f"skipped:  {s['name']} — not configured: {', '.join(missing_vars(s, configured))}",
               file=sys.stderr)
     for s in external_skipped:
-        print(f"skipped:  {s['name']} — url still has EDIT-ME: {s['url']}", file=sys.stderr)
+        print(f"skipped:  {s['name']} — {skip_reason(s)}", file=sys.stderr)
     for s in external:
         auth = f"  [token: {s['auth']}]" if s.get("auth") else ""
-        print(f"external: {s['name']} -> {s['url']}{auth}")
+        print(f"external: {s['name']} -> {shown_url(s)}{auth}")
     # Surface accepted risk on every run, so a `dangerous` server that was
     # accepted months ago doesn't quietly fade into the background.
     for s in enabled:
@@ -325,12 +349,12 @@ def report_pretty(running, disabled, skipped, external, external_skipped, enable
         print(f"  ⏸️  {c('dim', 'disabled')}  {c('dim', ', '.join(s['name'] for s in disabled))}")
     for s in external:
         auth = f"  {c('dim', 'token ' + s['auth'])}" if s.get("auth") else ""
-        print(f"  🔗 {c('cyan', 'external')}  {s['name']} {c('dim', '→')} {c('dim', s['url'])}{auth}")
+        print(f"  🔗 {c('cyan', 'external')}  {s['name']} {c('dim', '→')} {c('dim', shown_url(s))}{auth}")
     for s in skipped:
         print(f"  ⏭️  {c('yellow', 'skipped')}   {s['name']} {c('dim', '— not configured:')} "
               f"{', '.join(missing_vars(s, configured))}")
     for s in external_skipped:
-        print(f"  ⏭️  {c('yellow', 'skipped')}   {s['name']} {c('dim', '— url still has EDIT-ME:')} {s['url']}")
+        print(f"  ⏭️  {c('yellow', 'skipped')}   {s['name']} {c('dim', '— ' + skip_reason(s))}")
 
     risky = [s for s in enabled if s["risk"]["level"] != "standard"]
     if risky:
@@ -382,8 +406,8 @@ def main() -> int:
     skipped = [s for s in containers if missing_vars(s, configured)]
     running = [s for s in containers if not missing_vars(s, configured)]
     external_all = [s for s in enabled if s["kind"] == "external"]
-    external_skipped = [s for s in external_all if unedited_url(s)]
-    external = [s for s in external_all if not unedited_url(s)]
+    external_skipped = [s for s in external_all if unedited_url(s) or url_unset(s, configured)]
+    external = [s for s in external_all if not (unedited_url(s) or url_unset(s, configured))]
 
     pretty = ui.pretty()
     if pretty:

@@ -223,3 +223,16 @@ class ExistingBankTests(unittest.TestCase):
         self.assertEqual((p["entries"], p["key_sha256"]), (before["entries"], before["key_sha256"]))
         h.run("set", "tmeuze", "--no-notify")
         self.assertNotIn("notify", h.load()["people"]["tmeuze"])
+
+
+class GatewayEnvUrlTests(unittest.TestCase):
+    def test_a_secret_address_variable_is_passed_to_the_gateway(self):
+        h = Home(self)
+        reg = yaml.safe_load((h.dir / "registry" / "mcp-servers.yaml").read_text())
+        reg["servers"].append({"name": "ha-mcp", "kind": "external", "url_env": "HA_MCP_URL", "enabled": True})
+        (h.dir / "registry" / "mcp-servers.yaml").write_text(yaml.safe_dump(reg))
+        h.run("add", "tmeuze", "--yes", "--entries", "ha-mcp")
+        r = subprocess.run([sys.executable, str(REPO / "reconciler" / "gateway_env.py")], capture_output=True, text=True,
+                           env={**os.environ, "NOVAK_HOME": str(h.dir), "HA_MCP_URL": "http://x:1/private_zzz"})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("HA_MCP_URL=http://x:1/private_zzz", (h.dir / "gateway.env").read_text())

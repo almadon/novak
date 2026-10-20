@@ -37,6 +37,7 @@ class Entry:
     url: str
     token_env: str | None
     kind: str                      # external | container
+    url_env: str | None = None     # the address is a secret, held in this variable
 
     @property
     def alias(self) -> str:        # tool-name prefix: hindsight-tmeuze -> hindsight_tmeuze
@@ -106,10 +107,10 @@ def build_entries(registry: dict) -> dict[str, Entry]:
         if not e.get("enabled", False) or not e.get("name"):
             continue
         if e.get("kind") == "external":
-            url = e.get("url") or ""
-            if not url or "EDIT-ME" in url:
+            url, url_env = e.get("url") or "", e.get("url_env")
+            if not (url or url_env) or "EDIT-ME" in url:
                 continue
-            out[e["name"]] = Entry(e["name"], url, e.get("auth"), "external")
+            out[e["name"]] = Entry(e["name"], url, e.get("auth"), "external", url_env)
         else:  # a container the reconciler runs, reachable by service name
             out[e["name"]] = Entry(e["name"], f"http://{e['name']}-mcp:8000/mcp", None, "container")
     return out

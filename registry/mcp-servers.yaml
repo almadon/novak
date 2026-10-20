@@ -318,15 +318,20 @@ servers:
       # No accepted_by/accepted_on: the reconciler refuses to start this
       # until a person fills those in, same as ha-mcp below.
 
-  # Example of a `dangerous` entry, left disabled. ha-mcp exposes 88+ tools
-  # including file access and YAML config editing, and authenticates with a
-  # secret in the URL by default. Enable only with ha_auth mode, and never
-  # attach it to the voice pipeline — a malicious calendar entry or email that
-  # the model reads could otherwise reach these tools.
+  # HA-MCP (homeassistant-ai/ha-mcp) exposes about 87 tools to Home Assistant,
+  # including config and file access, so it is `dangerous` and left disabled.
+  # Its recommended setup is now the HA-MCP custom component (HACS), which runs
+  # inside Home Assistant and serves MCP at a private URL
+  # (http://<ha-ip>:9584/private_<random>); a Docker image still exists but is the
+  # fallback. That URL is the credential, so it is not written here: `url_env`
+  # names the variable that holds it (a secret, in .env or the Keychain).
+  #
+  # In the gateway, list it for ONE person only, never the household, and give it
+  # a tool_filters entry in gateway.yaml that allows just the read and control
+  # tools you want (see docs/gateway.md). Never attach it to the voice pipeline.
   - name: ha-mcp
-    image: ghcr.io/homeassistant-ai/ha-mcp:latest # VERIFY image path
-    port: 8004
-    env: [HA_MCP_URL, HA_MCP_TOKEN]
+    kind: external
+    url_env: HA_MCP_URL
     enabled: false
     clients: [open-webui]
     source:
@@ -337,6 +342,6 @@ servers:
       why:
         - "Can edit Home Assistant YAML config and read files on the HA host."
         - "Can create and modify automations, which then run on their own."
-        - "Default auth puts a secret in the URL, which leaks into logs and history."
+        - "Authenticates with a secret in the URL, which leaks into logs and history."
       # No accepted_by/accepted_on: the reconciler will refuse to start this
       # until a person fills those in. That is the intended friction.

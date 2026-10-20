@@ -386,7 +386,16 @@ class FilterTests(unittest.TestCase):
         for tool in ("create_document", "list_collections", "delete_document"):
             self.assertTrue(directory.tool_allowed(shipped, "outline-everything", tool), tool)
         self.assertFalse(directory.tool_allowed(shipped, "outline-everything", "delete_collection"))
-        self.assertTrue(directory.tool_allowed(shipped, "tududi-tui", "anything"))            # no filter for Tududi yet
+        for tool in ("create_task", "list_tasks", "complete_task", "delete_task", "add_to_inbox", "search"):
+            self.assertTrue(directory.tool_allowed(shipped, "tududi-tui", tool), tool)
+        for tool in ("create_habit", "delete_person", "create_view", "create_goal"):
+            self.assertFalse(directory.tool_allowed(shipped, "tududi-tui", tool), tool)
+        n = sum(directory.tool_allowed(shipped, "tududi-tui", t) for t in (
+            "list_tasks get_task create_task update_task complete_task delete_task add_subtask add_task_comment "
+            "list_task_comments get_task_metrics list_projects get_project create_project update_project delete_project "
+            "list_areas list_tags create_tag list_notes get_note create_note update_note delete_note add_to_inbox "
+            "list_inbox process_inbox_item search create_habit create_goal create_view delete_person").split())
+        self.assertEqual(n, 27)
 
 
 class NotifyErrorTests(unittest.TestCase):
@@ -402,3 +411,31 @@ class NotifyErrorTests(unittest.TestCase):
         with self.assertRaises(RuntimeError) as cm:
             notify._post(f"http://127.0.0.1:{srv.server_port}", "t", "/x", {})
         self.assertIn("Category Novak not found", str(cm.exception))
+
+
+class UrlEnvTests(unittest.TestCase):
+    def world_with_secret_url(self, w):
+        servers = yaml.safe_load((w.dir / "mcp-servers.yaml").read_text())
+        for s in servers["servers"]:
+            if s["name"] == "hs-ushy":
+                s.pop("url")
+                s["url_env"] = "HS_USHY_URL"
+        (w.dir / "mcp-servers.yaml").write_text(yaml.safe_dump(servers))
+        import os
+        os.utime(w.dir / "mcp-servers.yaml", (time.time() + 5, time.time() + 5))
+
+    def test_the_address_comes_from_the_environment_not_the_registry(self):
+        w = World(self)
+        real_url = f"http://127.0.0.1:{w.srvs['hs-ushy'].server_port}/mcp/"
+        self.world_with_secret_url(w)
+        w.env["HS_USHY_URL"] = real_url
+        _, t = w.tools(token=w.keys["ushy"])
+        self.assertTrue(t and all(n.startswith("hs_ushy__") for n in t))
+        self.assertNotIn(real_url, (w.dir / "mcp-servers.yaml").read_text())
+
+    def test_an_unset_address_is_reported_not_guessed(self):
+        w = World(self)
+        self.world_with_secret_url(w)
+        code, t = w.tools(token=w.keys["ushy"])
+        self.assertEqual((code, t), (200, []))                       # the entry is skipped, nothing crashes
+        self.assertTrue(any("address of hs-ushy (HS_USHY_URL) is not set" in r["outcome"] for r in w.audit.recent()))

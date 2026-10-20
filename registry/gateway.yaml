@@ -23,7 +23,7 @@ gateway:
 
   # Which tools each kind of entry offers. A model given 36 tools for one memory
   # bank explores them (a read-only question once reached for a delete); given
-  # the dozen people use, it behaves. First filter whose `entries` glob matches
+  # the dozen people use, it behaves (Tududi has 65 tools; this offers 27). First filter whose `entries` glob matches
   # decides; `allow` limits to those tools, `deny` removes more. Removal tools
   # kept here still need confirmation. Delete this block to offer everything.
   tool_filters:
@@ -31,6 +31,12 @@ gateway:
       allow: [recall, retain, sync_retain, reflect, list_memories, get_memory, update_memory,
               invalidate_memory, list_documents, get_document, delete_document, list_tags,
               get_bank, search_knowledge_base, get_knowledge_page, get_knowledge_base_tree]
+    - entries: "tududi-*"
+      allow: [list_tasks, get_task, create_task, update_task, complete_task, delete_task, add_subtask,
+              add_task_comment, list_task_comments, get_task_metrics, list_projects, get_project,
+              create_project, update_project, delete_project, list_areas, list_tags, create_tag,
+              list_notes, get_note, create_note, update_note, delete_note, add_to_inbox, list_inbox,
+              process_inbox_item, search]
     - entries: "outline-*"
       allow: [list_collections, list_documents, list_collection_documents, fetch, create_document,
               update_document, move_document, delete_document, restore_document, create_comment,

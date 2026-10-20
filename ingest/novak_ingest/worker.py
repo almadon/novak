@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import chunk, llm, notify, stt, summarize
-from .api import decide_proposal
+from .api import decide_proposal, gateway_for, owner_vars
 from .sinks import build_sinks
 
 
@@ -138,7 +138,9 @@ class Worker:
     def _deliver(self, rid, rec, result, note, meta, prog) -> list[str]:
         """Note and memory sinks. A sink that fails is reported, never fatal:
         the note is already on disk and the next recording should not wait."""
-        sinks, problems = build_sinks(self.s.cfg["sinks"])
+        owner = rec.get("owner", "")
+        sinks, problems = build_sinks(self.s.cfg["sinks"], gateway=gateway_for(self.s), owner=owner,
+                                      owner_vars=owner_vars(self.s, owner))
         sent = prog.setdefault("sent", [])
         for sink in sinks:
             if sink.kind == "task" or sink.name in sent:
@@ -185,7 +187,8 @@ class Worker:
                 self._notify(self.s.ha_url, self.s.ha_token, self.s.ha_target, title,
                              f"{first}{more}", url)
             elif notify.is_ticker(self.s.ha_target):
-                notify.ticker_notify(self.s.ha_url, self.s.ha_token, self.s.ticker_category,
+                person = (self.s.cfg["owners"].get("people") or {}).get(rec.get("owner", "")) or {}
+                notify.ticker_notify(self.s.ha_url, self.s.ha_token, person.get("ticker_category") or self.s.ticker_category,
                                      title, f"{first}{more}", url)
             else:
                 notify.ha_notify(self.s.ha_url, self.s.ha_token, self.s.ha_target, title,

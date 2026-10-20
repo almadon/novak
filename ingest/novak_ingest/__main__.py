@@ -32,7 +32,7 @@ def watch_inbox(s, store, stop):
             meta = json.loads(side.read_text()) if side.exists() else {}
             try:
                 when = parse_when(str(meta["recorded_at"])) if "recorded_at" in meta else int(f.stat().st_mtime)
-                ingest_file(s, store, f, meta.get("source", "inbox"), when, f.name)
+                ingest_file(s, store, f, meta.get("source", "inbox"), when, f.name, meta.get("owner"))
                 f.unlink()
                 side.unlink(missing_ok=True)
             except Exception as exc:

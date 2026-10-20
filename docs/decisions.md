@@ -2965,3 +2965,36 @@ instead of starting an open one.
 
 Per-person router keys (LiteLLM virtual keys need its database), once the router
 itself should know which person a model call is for.
+
+## 60. Ingest acts through the gateway as the recording's owner
+
+Ingest delivered notes, memories and tasks straight to Outline, Hindsight and
+Tududi with credentials of its own: one account for everyone, and a second copy
+of every secret. That contradicts the identity work ([identity.md](identity.md)):
+a recording belongs to a person, and what it writes should be theirs and be
+logged as theirs.
+
+### What was decided
+
+Ingest holds one trusted gateway client key (`INGEST_GATEWAY_KEY`, from `novak
+gateway client ingest`) and names the owner in `X-Novak-User` on each call. The
+gateway applies that person's tool filters and credentials and audits it. Sinks
+name a `service` and a `tool`; the gateway's namespaced tool list for the owner
+decides which account that is. A recording gets an owner when it arrives
+(`X-Owner`, the source label map, or a default) and keeps it, so a task approved
+later is created as the same person. Per-person `vars` (Outline collection) and
+Ticker category live under `owners.people` in `registry/ingest.yaml`.
+
+### What it costs
+
+- Ingest now depends on the gateway being up; a failed note is reported on the
+  recording and a failed task stays pending, as before.
+- A trusted client can claim to be any person, so the key is as sensitive as the
+  Open WebUI one. The gateway is still the only thing that holds service tokens.
+- A sink that could not be built (no owner, no key, no such account) leaves its
+  tasks pending rather than marking them done.
+
+### What would make it worth revisiting
+
+Per-recording identity from the recorder itself (a signed owner claim) instead
+of a label map, once more than one person's device uploads to the same inbox.

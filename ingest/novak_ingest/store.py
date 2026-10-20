@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS recordings (
   recorded_at INTEGER NOT NULL,
   received_at INTEGER NOT NULL,
   filename TEXT NOT NULL,
+  owner TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'queued',
   attempts INTEGER NOT NULL DEFAULT 0,
   error TEXT,
@@ -43,6 +44,10 @@ class Store:
         self.lock = threading.RLock()
         with self.lock:
             self.db.executescript(SCHEMA)
+            cols = {r["name"] for r in self.db.execute("PRAGMA table_info(recordings)")}
+            if "owner" not in cols:          # a database from before recordings had owners
+                self.db.execute("ALTER TABLE recordings ADD COLUMN owner TEXT NOT NULL DEFAULT ''")
+                self.db.commit()
 
     def _one(self, sql, args=()):
         with self.lock:
@@ -60,16 +65,16 @@ class Store:
             return cur
 
     # recordings -----------------------------------------------------------
-    def add_recording(self, sha256, source, recorded_at, filename):
+    def add_recording(self, sha256, source, recorded_at, filename, owner=""):
         """Returns (recording, created). A repeat upload is not a new job."""
         with self.lock:
             existing = self._one("SELECT * FROM recordings WHERE sha256=?", (sha256,))
             if existing:
                 return existing, False
             cur = self._run(
-                "INSERT INTO recordings(sha256,source,recorded_at,received_at,filename)"
-                " VALUES(?,?,?,?,?)",
-                (sha256, source, int(recorded_at), int(time.time()), filename),
+                "INSERT INTO recordings(sha256,source,recorded_at,received_at,filename,owner)"
+                " VALUES(?,?,?,?,?,?)",
+                (sha256, source, int(recorded_at), int(time.time()), filename, owner),
             )
             return self.recording(cur.lastrowid), True
 

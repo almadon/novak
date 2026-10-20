@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from .sinks import build_sinks
+from .sinks import Gateway, build_sinks
 
 SAFE_EXT = re.compile(r"^\.[a-z0-9]{1,5}$")
 
@@ -27,7 +27,16 @@ def parse_when(value: str | None) -> int:
         return int(datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc).timestamp())
 
 
-def ingest_file(settings, store, src: Path, source: str, recorded_at: int, filename: str):
+def resolve_owner(settings, source: str, claimed: str | None = None) -> str:
+    """Whose recording this is: a named owner from an authenticated uploader, else the
+    person the source label maps to, else the default, else nobody (sinks that need an
+    owner then report it instead of guessing)."""
+    owners = settings.cfg["owners"]
+    who = (claimed or "").strip().lower() or owners["sources"].get(source) or owners["default"] or ""
+    return str(who)
+
+
+def ingest_file(settings, store, src: Path, source: str, recorded_at: int, filename: str, owner: str | None = None):
     """Hash, keep one copy, and queue it. A repeat of the same audio is not queued twice."""
     digest = hashlib.sha256()
     with src.open("rb") as f:
@@ -36,12 +45,29 @@ def ingest_file(settings, store, src: Path, source: str, recorded_at: int, filen
     sha = digest.hexdigest()
     ext = Path(filename).suffix.lower()
     ext = ext if SAFE_EXT.match(ext) else ".bin"
-    rec, created = store.add_recording(sha, source, recorded_at, filename[:200])
+    rec, created = store.add_recording(sha, source, recorded_at, filename[:200], resolve_owner(settings, source, owner))
     if created:
         audio = settings.data / "audio"
         audio.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, audio / f"{sha}{ext}")
     return rec, created
+
+
+_GATEWAYS: dict = {}
+
+
+def gateway_for(settings):
+    """One Gateway per settings object (it caches tool lists); None when no key is set."""
+    if not settings.gateway_key:
+        return None
+    key = (settings.gateway_url, settings.gateway_key)
+    if key not in _GATEWAYS:
+        _GATEWAYS[key] = Gateway(settings.gateway_url, settings.gateway_key)
+    return _GATEWAYS[key]
+
+
+def owner_vars(settings, owner: str) -> dict:
+    return ((settings.cfg["owners"].get("people") or {}).get(owner) or {}).get("vars") or {}
 
 
 def decide_proposal(settings, store, proposal, action: str):
@@ -51,9 +77,14 @@ def decide_proposal(settings, store, proposal, action: str):
     if action == "reject":
         store.decide(proposal["id"], "rejected")
         return 200, "rejected"
-    sinks, problems = build_sinks(settings.cfg["sinks"])
+    owner = (store.recording(proposal["recording_id"]) or {}).get("owner", "")
+    sinks, problems = build_sinks(settings.cfg["sinks"], gateway=gateway_for(settings), owner=owner,
+                                  owner_vars=owner_vars(settings, owner))
+    task_sinks = [s for s in sinks if s.kind == "task"]
+    if problems and not task_sinks:       # a sink was wanted but could not be built: say so, don't mark it done
+        return 502, f"task sink unavailable, still pending: {'; '.join(problems)}"
     results = []
-    for sink in (s for s in sinks if s.kind == "task"):
+    for sink in task_sinks:
         try:
             results.append(f"{sink.name}: {sink.send({'title': proposal['title'], 'detail': proposal['detail'], 'due': proposal['due'] or '', 'recording_id': proposal['recording_id']})}")
         except Exception as exc:
@@ -176,7 +207,7 @@ def make_server(settings, store, host="0.0.0.0", port=8000):
                 tmp.flush()
                 rec, created = ingest_file(
                     settings, store, Path(tmp.name), self.headers.get("X-Source", "unknown")[:60],
-                    recorded, self.headers.get("X-Filename", "recording.bin"))
+                    recorded, self.headers.get("X-Filename", "recording.bin"), self.headers.get("X-Owner"))
             self._send(201 if created else 200, {"id": rec["id"], "duplicate": not created})
 
     return ThreadingHTTPServer((host, port), Handler)

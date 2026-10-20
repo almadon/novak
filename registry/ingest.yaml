@@ -2,9 +2,8 @@
 # INGEST_ENABLED=true in .env. Validate with:
 #   python3 -m novak_ingest check registry/ingest.yaml   (from ingest/)
 #
-# SECRETS DO NOT BELONG HERE. A sink names the environment variable that holds
-# its token (`token_env`); the value lives in .env / the Keychain like every
-# other secret in this repo.
+# SECRETS DO NOT BELONG HERE. Sinks use no credentials of their own: they go
+# through the gateway, whose key is INGEST_GATEWAY_KEY in .env / the Keychain.
 #
 # Passive work always yields to active work: the worker starts a unit of work
 # (one chunk of audio, one model call) only after no model has been used for
@@ -34,33 +33,48 @@ ingest:
     role: chat
     window_words: 2500  # transcripts longer than this are summarised in parts
 
-  # Sinks call an MCP tool. kind: note (a finished note), memory (text to
-  # remember), task (called only after a person approves a proposed task).
+  # Whose recording it is. A person's notes, memories and tasks go to that
+  # person's own accounts, through the gateway (decision #60): ingest holds one
+  # trusted gateway key (INGEST_GATEWAY_KEY) and names the owner on each call, so
+  # the gateway applies their tools and credentials and logs it as theirs.
+  # The owner is, in order: an authenticated uploader's X-Owner header (or an
+  # inbox sidecar's "owner"), `sources[<X-Source label>]`, then `default`.
+  # Names are the people in registry/people.yaml. With none, sinks that need an
+  # owner report it and tasks wait for approval.
+  owners:
+    default: ""                    # e.g. tmeuze
+    sources: {}                    # e.g. {omi-ushy: ushy}
+    people: {}
+    # people:
+    #   tmeuze:
+    #     ticker_category: Novak tmeuze       # where their task notifications go
+    #     vars: {outline_collection: "<collection id from list_collections>"}
+
+  # A sink names a service and a tool, never an endpoint or a credential: which
+  # account it reaches is whatever the owner has (their `outline-1-<name>`,
+  # `hindsight-<name>`, `tududi-1-<name>` entry). Add `entry:` to pin one when a
+  # person has several. kind: note (a finished note), memory (text to
+  # remember), task (called when a task is added or approved).
   # Placeholders: note {title} {body} {summary} {recorded} {recording_id};
-  # memory {title} {text} {summary} {recording_id}; task {title} {detail} {due}.
-  # All three are disabled until the tool names are checked against the live
-  # server, which is one command:
-  #   docker exec novak-ingest-1 python -m novak_ingest mcp-tools <url> <TOKEN_ENV>
-  # Tasks are never written without approval. Notes land on disk
-  # (/data/notes) whether or not any sink is enabled.
+  # memory {title} {text} {summary} {recording_id} {recorded_iso}; task {title}
+  # {detail} {due}; plus any `vars` of the owner. All are disabled until the
+  # owner's tools are checked (`novak gateway ...` / the gateway's tools/list).
+  # An older sink with an `mcp: {url_env, token_env}` block still works directly.
   sinks:
     - name: outline-note
       kind: note
       enabled: false
-      mcp: {url_env: INGEST_OUTLINE_MCP_URL, token_env: OUTLINE_EVERYTHING_API_KEY}
-      tool: create_document          # checked against et.a64.one/mcp (2026-10-12)
-      # collectionId is the collection the note lands in. Without it Outline
-      # decides; set it to one of your collection ids (list_collections).
+      service: outline
+      tool: create_document
+      # Set the owner's collection with a var, e.g. collectionId: "{outline_collection}"
       args: {title: "{title}", text: "{body}", publish: false}
 
     - name: hindsight-memory
       kind: memory
       enabled: false
-      mcp: {url_env: INGEST_HINDSIGHT_MCP_URL, token_env: HINDSIGHT_API_KEY}
-      tool: retain                   # checked against Hindsight's tools/list (2026-10-12)
+      service: hindsight             # the owner's personal bank, never household
+      tool: retain
       # document_id makes a re-run replace the memory instead of duplicating it.
-      # Point INGEST_HINDSIGHT_MCP_URL at ONE bank: a personal bank
-      # (/mcp/<name>/), never household, which voice satellites can read.
       args:
         content: "Recording {recorded}: {title}. {text}"
         context: "Voice recording transcribed by Novak ingest"
@@ -71,6 +85,6 @@ ingest:
     - name: tududi-task
       kind: task
       enabled: false
-      mcp: {url_env: INGEST_TUDUDI_MCP_URL, token_env: TUDUDI_API_TOKEN}
-      tool: create_task              # VERIFY against tools/list
+      service: tududi
+      tool: create_task
       args: {name: "{title}", note: "{detail}", due_date: "{due}"}

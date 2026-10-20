@@ -25,7 +25,7 @@ class Env:
     def __init__(self, test, sinks=None, busy=False):
         self.dir = Path(tempfile.mkdtemp())
         test.addCleanup(lambda: __import__("shutil").rmtree(self.dir, ignore_errors=True))
-        cfg = _merge(DEFAULTS, {"sinks": sinks or []})
+        cfg = _merge(__import__("copy").deepcopy(DEFAULTS), {"sinks": sinks or []})   # tests edit cfg in place
         self.settings = Settings(
             data=self.dir, token="secret", public_url="http://spire:13409", stt_url="http://stt",
             llm_base_url="http://router", llm_api_key="none", ollama_url="http://ollama",
@@ -167,6 +167,7 @@ class PipelineTests(unittest.TestCase):
         e = Env(self, sinks=[{"name": "t", "kind": "task", "enabled": True, "tool": "create_task",
                               "mcp": {"url": f"http://127.0.0.1:{srv.server_port}/mcp"},
                               "args": {"name": "{title}", "due": "{due}"}}])
+        e.settings.cfg["tasks"] = {"mode": "confirm"}
         e.upload()
         e.worker.run_once()
         self.assertEqual(FakeMCP.seen, [])                      # proposing wrote nothing
@@ -333,3 +334,108 @@ class AutoTaskTests(unittest.TestCase):
         e.worker.run_once()
         self.assertEqual(len(e.store.proposals("pending")), 2)
         self.assertIn("task(s) to approve", e.calls["notify"][0][3])
+
+
+class FakeGateway(BaseHTTPRequestHandler):
+    """Namespaced tools per person, like the real gateway; records who called what."""
+    accounts = {"tmeuze": ["tududi_1_tmeuze__create_task", "hindsight_1_tmeuze__retain"],
+                "ushy": ["tududi_1_ushy__create_task"]}
+    seen = []
+
+    def log_message(self, *a):
+        pass
+
+    def do_POST(self):
+        msg = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        who = self.headers.get("X-Novak-User")
+        type(self).seen.append((msg.get("method"), self.headers.get("Authorization"), who, msg.get("params")))
+        if "id" not in msg:
+            self.send_response(202); self.send_header("Content-Length", "0"); self.end_headers(); return
+        m = msg["method"]
+        if m == "initialize":
+            res = {"protocolVersion": "2025-03-26", "capabilities": {}}
+        elif m == "tools/list":
+            res = {"tools": [{"name": n} for n in type(self).accounts.get(who, [])]}
+        else:
+            res = {"content": [{"type": "text", "text": "ok"}]}
+        body = json.dumps({"jsonrpc": "2.0", "id": msg["id"], "result": res}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+class GatewaySinkTests(unittest.TestCase):
+    def env(self, sinks, **owners):
+        FakeGateway.seen = []
+        srv = HTTPServer(("127.0.0.1", 0), FakeGateway)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        e = Env(self, sinks=sinks)
+        e.settings.gateway_url = f"http://127.0.0.1:{srv.server_port}/mcp"
+        e.settings.gateway_key = "ingest-key"
+        e.settings.cfg["owners"] = {"default": "", "sources": {}, "people": {}, **owners}
+        return e
+
+    def calls(self):
+        return [(s[2], s[3]["name"], s[3]["arguments"]) for s in FakeGateway.seen if s[0] == "tools/call"]
+
+    TASK = {"name": "t", "kind": "task", "enabled": True, "service": "tududi", "tool": "create_task",
+            "args": {"name": "{title}"}}
+    MEM = {"name": "m", "kind": "memory", "enabled": True, "service": "hindsight", "tool": "retain",
+           "args": {"content": "{title}", "tags": ["{who}"]}}
+
+    def test_acts_as_the_owner_with_the_trusted_key(self):
+        e = self.env([self.TASK], default="tmeuze")
+        e.upload()
+        e.worker.run_once()
+        self.assertEqual([c[:2] for c in self.calls()], [("tmeuze", "tududi_1_tmeuze__create_task")] * 2)
+        self.assertTrue(all(s[1] == "Bearer ingest-key" for s in FakeGateway.seen))
+        self.assertEqual(e.store.recordings()[0]["owner"], "tmeuze")
+
+    def test_source_label_and_owner_header_pick_the_person(self):
+        e = self.env([self.TASK], sources={"ushy-pendant": "ushy"}, default="tmeuze")
+        e.upload(**{"X-Source": "ushy-pendant"})
+        e.upload(b"other", **{"X-Owner": "tmeuze"})
+        owners = sorted(r["owner"] for r in e.store.recordings())
+        self.assertEqual(owners, ["tmeuze", "ushy"])
+        while e.worker.run_once():
+            pass
+        self.assertEqual({c[0] for c in self.calls()}, {"tmeuze", "ushy"})
+
+    def test_owner_without_the_service_is_reported_not_guessed(self):
+        e = self.env([self.TASK, self.MEM], default="ushy")
+        e.upload()
+        e.worker.run_once()
+        # ushy has Tududi but no Hindsight: tasks go through, the memory sink reports instead of guessing
+        self.assertEqual({c[1] for c in self.calls()}, {"tududi_1_ushy__create_task"})
+
+    def test_per_person_vars_fill_arguments(self):
+        mem = dict(self.MEM, args={"content": "{title}", "tags": ["{bank_tag}"]})
+        e = self.env([mem], default="tmeuze",
+                     people={"tmeuze": {"vars": {"bank_tag": "mine"}}})
+        e.upload()
+        e.worker.run_once()
+        self.assertEqual(self.calls()[0][2]["tags"], ["mine"])
+
+    def test_no_owner_or_no_key_does_not_call_anything(self):
+        e = self.env([self.TASK])                                # no default owner
+        e.upload()
+        e.worker.run_once()
+        self.assertEqual(self.calls(), [])
+        self.assertEqual(len(e.store.proposals("pending")), 2)
+        e2 = self.env([self.TASK], default="tmeuze")
+        e2.settings.gateway_key = ""
+        e2.upload()
+        e2.worker.run_once()
+        self.assertEqual(self.calls(), [])
+
+    def test_approval_acts_as_the_recordings_owner(self):
+        e = self.env([self.TASK], default="ushy")
+        e.settings.cfg["tasks"] = {"mode": "confirm"}      # not in place: DEFAULTS is shared
+        e.upload()
+        e.worker.run_once()
+        first = e.store.proposals("pending")[0]
+        e.req("POST", f"/v1/proposals/{first['id']}/approve")
+        self.assertEqual([c[:2] for c in self.calls()], [("ushy", "tududi_1_ushy__create_task")])

@@ -373,14 +373,13 @@ services:
       INGEST_HA_NOTIFY_TARGET: "${INGEST_HA_NOTIFY_TARGET:-}"
       INGEST_TICKER_CATEGORY: "${INGEST_TICKER_CATEGORY:-general}"
       INGEST_MAX_UPLOAD_MB: "${INGEST_MAX_UPLOAD_MB:-512}"
-      # Names listed in registry/ingest.yaml's sinks. Blank is fine: a sink
-      # whose variable is unset is reported and skipped, not fatal.
-      INGEST_OUTLINE_MCP_URL: "${INGEST_OUTLINE_MCP_URL:-}"
-      INGEST_HINDSIGHT_MCP_URL: "${INGEST_HINDSIGHT_MCP_URL:-}"
-      INGEST_TUDUDI_MCP_URL: "${INGEST_TUDUDI_MCP_URL:-}"
-      OUTLINE_EVERYTHING_API_KEY: "${OUTLINE_EVERYTHING_API_KEY:-}"
-      HINDSIGHT_API_KEY: "${HINDSIGHT_API_KEY:-}"
-      TUDUDI_API_TOKEN: "${TUDUDI_API_TOKEN:-}"
+      # Notes, memories and tasks go through the gateway as the recording's
+      # owner (decision #60), so ingest holds no Outline, Hindsight or Tududi
+      # credentials. The key is a trusted client made with `novak gateway client ingest`.
+      INGEST_GATEWAY_URL: "${INGEST_GATEWAY_URL:-http://gateway:8000/mcp}"
+      INGEST_GATEWAY_KEY: "${INGEST_GATEWAY_KEY:-}"
+      # Sinks that still name an `mcp` block call that endpoint directly; any
+      # variable they use (url_env, token_env) must be added here by hand.
     volumes:
       - ${INGEST_DATA_DIR:-ingest-data}:/data
       # Code from the checkout (${REPO_DIR}, same rule as persona and the

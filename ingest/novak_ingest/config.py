@@ -1,6 +1,7 @@
 """Settings. Infrastructure comes from the environment (compose sets it);
 behaviour comes from registry/ingest.yaml, which names secrets, never holds them."""
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -14,6 +15,11 @@ DEFAULTS = {
     # auto: a task sink creates each task at once (adding is not destructive).
     # confirm: every task waits for a person to approve it.
     "tasks": {"mode": "auto"},
+    # Whose a recording is. `sources` maps an upload's X-Source label to a person;
+    # `default` takes the rest. `people.<name>.vars` fills {placeholders} in that
+    # person's sink arguments (their Outline collection), and `.ticker_category` is
+    # where their task notifications go.
+    "owners": {"default": "", "sources": {}, "people": {}},
     "inbox_poll_s": 10,
     "max_attempts": 3,
     "sinks": [],
@@ -60,6 +66,10 @@ def validate(cfg: dict) -> dict:
         raise ConfigError("idle.quiet_s must be >= 0 and stt.chunk_s >= 10")
     if cfg["tasks"]["mode"] not in ("auto", "confirm"):
         raise ConfigError("tasks.mode must be 'auto' or 'confirm'")
+    owners = cfg["owners"]
+    for who in [owners.get("default", ""), *owners.get("sources", {}).values(), *owners.get("people", {}).keys()]:
+        if who and not re.match(r"^[a-z0-9][a-z0-9-]*$", str(who)):
+            raise ConfigError(f"owner {who!r}: use a-z, 0-9 and hyphens (a person's name)")
     seen = set()
     for s in cfg["sinks"]:
         name = s.get("name")
@@ -68,9 +78,14 @@ def validate(cfg: dict) -> dict:
         seen.add(name)
         if s.get("kind") not in SINK_KINDS:
             raise ConfigError(f"sink {name}: kind must be one of {SINK_KINDS}")
-        if not s.get("tool") or not isinstance(s.get("mcp"), dict):
-            raise ConfigError(f"sink {name}: needs 'tool' and an 'mcp' block")
-        if not (s["mcp"].get("url") or s["mcp"].get("url_env")):
+        if not s.get("tool"):
+            raise ConfigError(f"sink {name}: needs a 'tool'")
+        if s.get("service"):
+            if s.get("mcp"):
+                raise ConfigError(f"sink {name}: give 'service' (through the gateway) or 'mcp' (direct), not both")
+        elif not isinstance(s.get("mcp"), dict):
+            raise ConfigError(f"sink {name}: needs a 'service' (through the gateway) or an 'mcp' block (direct)")
+        elif not (s["mcp"].get("url") or s["mcp"].get("url_env")):
             raise ConfigError(f"sink {name}: mcp needs 'url' or 'url_env'")
     return cfg
 
@@ -98,6 +113,8 @@ class Settings:
     ticker_category: str
     max_upload_mb: int
     cfg: dict = field(default_factory=dict)
+    gateway_url: str = "http://gateway:8000/mcp"
+    gateway_key: str = ""
 
     @classmethod
     def from_env(cls, env=os.environ):
@@ -118,6 +135,8 @@ class Settings:
             ha_token=unplaceholder(e("INGEST_HA_TOKEN", "")),
             ha_target=e("INGEST_HA_NOTIFY_TARGET", ""),
             ticker_category=e("INGEST_TICKER_CATEGORY", "") or "general",
+            gateway_url=e("INGEST_GATEWAY_URL", "http://gateway:8000/mcp"),
+            gateway_key=unplaceholder(e("INGEST_GATEWAY_KEY", "")),
             max_upload_mb=int(e("INGEST_MAX_UPLOAD_MB", "512")),
             cfg=load_yaml(e("INGEST_CONFIG", "/registry/ingest.yaml")),
         )

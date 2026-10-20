@@ -30,6 +30,7 @@ SECRET_VARS=(
   TINYAUTH_OIDC_CLIENT_SECRET
   INGEST_TOKEN
   INGEST_HA_TOKEN
+  INGEST_GATEWAY_KEY
   GATEWAY_HA_TOKEN
 )
 
@@ -108,6 +109,7 @@ EXTERNAL_SECRETS=(
   BRAVE_API_KEY
   TINYAUTH_OIDC_CLIENT_SECRET
   INGEST_HA_TOKEN
+  INGEST_GATEWAY_KEY
   GATEWAY_HA_TOKEN
 )
 # OPEN_TERMINAL_API_KEY is the same shape as HINDSIGHT_API_KEY: we generate
@@ -152,6 +154,7 @@ secret_desc() {
     HA_MCP_TOKEN)               echo "Home Assistant: long-lived token for the ha-mcp server" ;;
     HA_DRIFT_TOKEN)             echo "Home Assistant: read-only token for 'novak drift --live'" ;;
     INGEST_TOKEN)               echo "Ingest: bearer token recorders and adapters send" ;;
+    INGEST_GATEWAY_KEY)         echo "Ingest: trusted gateway client key (novak gateway client ingest)" ;;
     INGEST_HA_TOKEN)            echo "Ingest: Home Assistant token for approval notifications" ;;
     GATEWAY_HA_TOKEN)           echo "Gateway: Home Assistant token for removal-confirmation notifications" ;;
     *)                          return 1 ;;

@@ -118,11 +118,23 @@ Also: `GET /v1/recordings`, `GET /v1/recordings/<id>`,
 3. `novak up`. The first run builds the `ingest` image (Python plus ffmpeg).
 4. Check what it sees: `docker exec novak-ingest-1 python -m novak_ingest idle`.
 5. Optional sinks, in `registry/ingest.yaml` (the deployed copy under
-   `NOVAK_HOME/registry`). All three ship disabled because their tool names
-   are guesses until checked against the live server:
-   `docker exec novak-ingest-1 python -m novak_ingest mcp-tools <url> <TOKEN_ENV>`
-   lists them. Set the URL variables in `.env`, correct `tool` and `args`,
-   then `enabled: true`.
+   `NOVAK_HOME/registry`). They go through the gateway as the recording's
+   owner ([decision #60](decisions.md)), so ingest holds no Outline, Hindsight
+   or Tududi credentials:
+   - `novak gateway client ingest` makes a trusted client key (shown once);
+     store it with `novak secret set INGEST_GATEWAY_KEY`, then `novak up`.
+   - Under `owners:` name the default person, map recorder labels to people
+     (`sources: {omi-ushy: ushy}`), and give each person their `vars` (an
+     Outline collection id) and `ticker_category`.
+   - Each sink names a `service` and a `tool`. The gateway resolves them to
+     the owner's own account (`outline-1-<name>`, `hindsight-<name>`,
+     `tududi-1-<name>`), so a person without a Tududi account simply gets no
+     tasks and the note says why. Set `enabled: true` once the tool names
+     match what the owner's tools list shows.
+   - A recording's owner is, in order: an `X-Owner` header or inbox sidecar
+     `owner` (an authenticated uploader), the `sources` map, then `default`.
+     With no owner, sinks report it and tasks wait for approval.
+   - Older `mcp: {url_env, token_env}` sinks still work and bypass the gateway.
 
 ## First run: what to measure
 

@@ -457,6 +457,8 @@ def cmd_client(a):
     say(f"Trusted client '{a.name}'. Its key (shown once):\n  {key}")
     say("The client sends it as 'Authorization: Bearer <key>' and names the user in the X-Novak-User header.")
     say("Nothing but that client should be able to reach the gateway.")
+    if a.name == "ingest":
+        say("Store it for the ingest service:  novak secret set INGEST_GATEWAY_KEY   then  novak up")
     return 0
 
 

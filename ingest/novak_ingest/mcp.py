@@ -14,8 +14,9 @@ class MCPError(RuntimeError):
 
 
 class MCPClient:
-    def __init__(self, url: str, token: str | None = None, timeout: float = 30):
+    def __init__(self, url: str, token: str | None = None, timeout: float = 30, headers: dict | None = None):
         self.url, self.token, self.timeout = url, token, timeout
+        self.extra_headers = headers or {}
         self.session: str | None = None
         self._id = 0
         self._ready = False
@@ -25,6 +26,7 @@ class MCPClient:
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
         }
+        headers.update(self.extra_headers)
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
         if self.session:

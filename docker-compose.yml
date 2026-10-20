@@ -23,13 +23,13 @@ name: novak
 
 services:
   # ── Chat frontend ─────────────────────────────────────────────────────
-  # Pinned to the digest the v0.12.0 release tag resolved to on 2026-10-13
-  # (decision #45), replacing the 2026-09-22 :main pin (v0.11.4). A release tag,
-  # not :main, so the version is nameable. Refresh: resolve the tag again,
+  # Pinned to the digest the v0.12.3 release tag resolved to on 2026-10-19
+  # (decision #45); was v0.12.0 (2026-10-13), and the 2026-09-22 :main pin
+  # (v0.11.4) before that. A release tag, not :main, so the version is nameable. Refresh: resolve the tag again,
   # confirm the persona capabilities fix (decision #38) still holds against the
   # new build through the real chat UI, then update this line in its own commit.
   open-webui:
-    image: ghcr.io/open-webui/open-webui@sha256:1565038903151ced924b5a3226f73f40f16963df4b910441f6391f10144afdaa
+    image: ghcr.io/open-webui/open-webui@sha256:a537bbe1e6b428820f52ed4a029d7fff97062e24d5cf32c365fba36fd0542def
     restart: unless-stopped
     ports:
       - "${OPENWEBUI_PORT:-13400}:8080"
@@ -114,6 +114,10 @@ services:
       # Off by default: with signup on, anyone your IdP authenticates gets an
       # account here. Turn it on once the IdP admits only people you mean in.
       ENABLE_OAUTH_SIGNUP: "${OWUI_OIDC_SIGNUP:-false}"
+      # Per-user API keys (Account settings). Off in Open WebUI itself, and a group's
+      # "API Keys" permission does nothing while this is off. Env wins over the admin
+      # UI here (ENABLE_PERSISTENT_CONFIG is false), so a UI toggle would not stick.
+      ENABLE_API_KEYS: "${OWUI_ENABLE_API_KEYS:-false}"
       # admins.novak already exists in Pocket ID — the console's client
       # requests the `groups` scope and gates on it (deploy-checklist.md).
       # Reusing it here, rather than a second group, means one Pocket ID

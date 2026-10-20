@@ -514,8 +514,8 @@ services:
   # tag moves, and the persona-injection mechanism this relies on
   # (async_pre_call_hook, not LiteLLM's newer CustomPromptManagement API,
   # which was tried first and silently never fired — see
-  # router/persona_hook.py) was confirmed against v1.105.0; v1.106.0 is VERIFY until the
-  # persona check (chat injects, task does not) is rerun on the deployed router.
+  # router/persona_hook.py) was confirmed against v1.105.0 and rechecked on v1.106.0
+  # (2026-10-19: `chat` carries 572 prompt tokens, one with its own system message 23).
   router:
     profiles: ["router"]
     image: ghcr.io/berriai/litellm@sha256:2e4c0371f3a8c28e4da131d77abaa8341cd3b0c2fcc4d34d7c5900431af7b9d0

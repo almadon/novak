@@ -2998,3 +2998,32 @@ Ticker category live under `owners.people` in `registry/ingest.yaml`.
 
 Per-recording identity from the recorder itself (a signed owner claim) instead
 of a label map, once more than one person's device uploads to the same inbox.
+
+## 62. Hindsight is not on the network
+
+Hindsight's API and MCP endpoints do enforce the tenant key (checked: 401 without
+it), but there is one key for every bank, so whoever holds it reads every
+personal bank, and the published ports put the key's only guard on every interface
+of the host. Decision #54 left it open because voice satellites reached it directly;
+since the gateway ([gateway.md](gateway.md)) fronts memory for everyone, nothing
+needs that path.
+
+### What was decided
+
+Registry entries for Hindsight use `http://hindsight:8888/...` (the compose network).
+The API port is published on loopback only, for `novak` checks and `novak person`
+bank creation on the host. The UI is loopback too unless `HINDSIGHT_UI_BIND` names
+the Tailscale IP.
+
+### What it costs
+
+- Nothing outside the stack can call Hindsight directly. Debugging from another
+  machine means going through the gateway, or an ssh tunnel.
+- `docs/proxy.md`'s `memory.nov.a64.one` proxy block no longer reaches the API from
+  elsewhere; the proxy runs on the host, so it still reaches the UI on loopback.
+- The shared tenant key remains one key for all banks; this narrows who can try it,
+  not what it unlocks.
+
+### What would make it worth revisiting
+
+Per-bank keys, if Hindsight grows them.

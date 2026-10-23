@@ -206,7 +206,8 @@ cmd_secret() {
       bold "Secrets   ($(secrets_backend_label))"
       echo
       local v val desc
-      for v in "${SECRET_VARS[@]}"; do
+      # Alphabetical, whatever order they were declared or added in (novak add appends).
+      for v in $(printf '%s\n' "${SECRET_VARS[@]}" | sort -u); do
         val="$(secret_get "$v")"
         # A placeholder from .env.example is not a secret: it must not read as set.
         if [ -z "$val" ] || [[ "$val" =~ $PLACEHOLDERS ]]; then state="$(red missing)"; else state="$(grn present)"; fi
@@ -226,7 +227,7 @@ cmd_secret() {
     set)
       [ $# -ge 2 ] || { red "usage: novak secret set KEY [--generate]"; exit 1; }
       local key="$2"; shift 2
-      is_secret "$key" || { ylw "'$key' isn't a known secret. Known:"; printf '  %s\n' "${SECRET_VARS[@]}"; exit 1; }
+      is_secret "$key" || { ylw "'$key' isn't a known secret. Known:"; printf '  %s\n' $(printf '%s\n' "${SECRET_VARS[@]}" | sort -u); exit 1; }
 
       local generate=0
       while [ $# -gt 0 ]; do

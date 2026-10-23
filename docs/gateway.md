@@ -155,3 +155,28 @@ accounts happens inside Tududi, so each person just has their own entry.
 - **Not built:** per-person self-service for pasting a key (an admin enters it),
   streaming responses (replies are plain JSON), and resources and prompts
   (only tools are proxied).
+
+## Approve and Deny buttons
+
+A person whose `notify` is `{kind: ha, service: <name>}` gets a Home Assistant
+notification with real **Approve** and **Deny** buttons (plus a Review link). `service`
+may be a notify service (`mobile_app_pyrite`), a list of them, or a name from
+`notify_groups` in `gateway.yaml` (`mgmt: [mobile_app_pyrite, mobile_app_aquarius]` sends
+to both phones; whichever presses first decides, and a decision is final).
+
+A button press is an event inside Home Assistant (`mobile_app_notification_action`). The
+gateway cannot subscribe to events without an admin token, and it should not hold one, so
+the press is passed on through a helper the gateway can read with its ordinary token:
+
+1. Settings, Devices & services, Helpers, Create helper, **Text**. Name it
+   `novak_approval`, maximum length 255 (entity `input_text.novak_approval`).
+2. One automation: trigger **Event** `mobile_app_notification_action`; action
+   **input_text.set_value** on that helper with the value `{{ trigger.event.data.action }}`.
+   Add a condition so only Novak's presses count: the action starts with `NOVAK_`.
+3. In `gateway.yaml`: `approval_helper: input_text.novak_approval`.
+
+While a confirmation is waiting the gateway reads the helper every second and a half, and
+acts only on an action carrying that approval's own token. Nothing polls when nothing waits.
+A press takes a second or two to land. If the helper or automation is missing, the buttons
+do nothing and the Review link still works.
+

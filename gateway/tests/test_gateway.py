@@ -53,7 +53,7 @@ def fake_backend(tools, name):
 class World:
     """Two people, a household, three backends, a gateway, and an HTTP server."""
 
-    def __init__(self, test, oidc=None, notifier=None, confirm_timeout=5):
+    def __init__(self, test, oidc=None, notifier=None, confirm_timeout=5, settings=None, helper_reader=None):
         self.dir = Path(tempfile.mkdtemp())
         test.addCleanup(lambda: __import__("shutil").rmtree(self.dir, ignore_errors=True))
         self.srvs = {}
@@ -79,14 +79,16 @@ class World:
             "household": {"entries": ["hs-household"], "key_sha256": sha256(self.keys["household"])}}))
         (self.dir / "gateway.yaml").write_text(yaml.safe_dump({"gateway": {
             "confirm_timeout_s": confirm_timeout, "notify_default": {"kind": "ticker", "category": "Novak"},
-            "clients": [{"name": "open-webui", "key_sha256": sha256(self.keys["owui"]), "user_header": "X-Novak-User"}]}}))
+            "clients": [{"name": "open-webui", "key_sha256": sha256(self.keys["owui"]), "user_header": "X-Novak-User"}],
+            **(settings or {})}}))
         self.env = {"TOK_HS_TMEUZE": "backend-secret-tmeuze", "TOK_HS_USHY": "backend-secret-ushy",
                     "TOK_HS_HOUSEHOLD": "backend-secret-house", "GATEWAY_HA_URL": "http://ha", "GATEWAY_HA_TOKEN": "t"}
         self.notes = []
         self.audit = Audit(str(self.dir / "audit.db"))
         self.approvals = Approvals(str(self.dir / "approvals.db"))
         self.gw = Gateway(self.dir, self.audit, self.approvals, "http://gw.test", self.env,
-                          notifier=notifier or (lambda *a: self.notes.append(a) or "test"))
+                          notifier=notifier or (lambda *a: self.notes.append(a) or "test"),
+                          **({"helper_reader": helper_reader, "helper_poll_s": 0.05} if helper_reader else {}))
         self.server = make_server(self.gw, oidc, "127.0.0.1", 0)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         test.addCleanup(self.server.shutdown)
@@ -461,6 +463,121 @@ class HaMcpFilterTests(unittest.TestCase):
         self.assertEqual(policy.classify("ha_bulk_control", ov), "destructive")
         self.assertEqual(policy.classify("ha_search", ov), "read")
         self.assertEqual(policy.classify("ha_remove_todo_item", ov), "destructive")      # removals are held anyway
+
+
+class ButtonTests(unittest.TestCase):
+    """Approve and Deny buttons on the phone: Home Assistant writes the pressed action into a helper."""
+    HELPER = {"approval_helper": "input_text.novak_approval"}
+
+    def world(self, press, **kw):
+        w = World(self, confirm_timeout=3, settings=dict(self.HELPER, **kw.pop("settings", {})),
+                  helper_reader=lambda url, tok, ent: press(w))
+        return w
+
+    def token(self, w):
+        return w.notes[0][6].rsplit("/", 1)[1] if w.notes else None
+
+    def test_a_pressed_approve_runs_the_held_call(self):
+        w = self.world(lambda w: f"NOVAK_APPROVE_{self.token(w)}" if w.notes else "")
+        _, r = w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])
+        self.assertEqual(r["result"]["content"][0]["text"], "hs-tmeuze did delete_document")
+
+    def test_a_pressed_deny_does_nothing(self):
+        w = self.world(lambda w: f"NOVAK_DENY_{self.token(w)}" if w.notes else "")
+        _, r = w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])
+        self.assertTrue(r["result"]["isError"])
+        self.assertIn("declined", r["result"]["content"][0]["text"])
+        self.assertEqual([m for m, *_ in w.seen["hs-tmeuze"] if m == "tools/call"], [])
+
+    def test_an_old_or_foreign_action_is_ignored(self):
+        w = self.world(lambda w: "NOVAK_APPROVE_somebody-elses-token", )
+        w.gw.dir.settings["confirm_timeout_s"] = 0.4
+        _, r = w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])
+        self.assertIn("No confirmation", r["result"]["content"][0]["text"])
+        self.assertEqual([m for m, *_ in w.seen["hs-tmeuze"] if m == "tools/call"], [])
+
+    def test_a_helper_that_cannot_be_read_does_not_break_the_wait(self):
+        def broken(w):
+            raise OSError("ha down")
+        w = self.world(broken)
+        w.gw.dir.settings["confirm_timeout_s"] = 0.4
+        _, r = w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])
+        self.assertIn("No confirmation", r["result"]["content"][0]["text"])
+
+    def test_the_notification_carries_the_buttons_and_reaches_every_phone_in_the_group(self):
+        from novak_gateway import notify
+        sent = []
+        post = lambda url, tok, path, body: sent.append((path, body))
+        cfg = notify.expand({"kind": "ha", "service": "mgmt"}, {"mgmt": ["mobile_app_pyrite", "mobile_app_aquarius"]})
+        out = notify.send(cfg, {}, "http://ha", "t", "Confirm: x", "m", "http://gw/approve/TOK123", post)
+        self.assertEqual([p for p, _ in sent], ["/api/services/notify/mobile_app_pyrite", "/api/services/notify/mobile_app_aquarius"])
+        actions = sent[0][1]["data"]["actions"]
+        self.assertEqual([a["action"] for a in actions[:2]], ["NOVAK_APPROVE_TOK123", "NOVAK_DENY_TOK123"])
+        self.assertIn("pyrite", out)
+        self.assertIn("aquarius", out)
+
+    def test_one_phone_failing_does_not_hide_the_other(self):
+        from novak_gateway import notify
+        def post(url, tok, path, body):
+            if "pyrite" in path:
+                raise RuntimeError("offline")
+        out = notify.send({"kind": "ha", "service": ["mobile_app_pyrite", "mobile_app_aquarius"]}, {}, "http://ha", "t",
+                          "T", "M", "http://gw/approve/TOK", post)
+        self.assertIn("aquarius", out)
+        with self.assertRaises(RuntimeError):
+            notify.send({"kind": "ha", "service": ["mobile_app_pyrite"]}, {}, "http://ha", "t", "T", "M", "http://gw/approve/TOK", post)
+
+
+class ArgRuleTests(unittest.TestCase):
+    """A held tool lets harmless calls through, judged by the call's own arguments."""
+    RULE = {"to": "modify", "allow": {"light": ["turn_on", "turn_off"], "scene": ["turn_on"]}}
+
+    def shipped_rule(self, tool="ha_call_service"):
+        from pathlib import Path as P
+        g = yaml.safe_load((P(__file__).resolve().parents[2] / "registry" / "gateway.yaml").read_text())["gateway"]
+        return g["arg_rules"]["ha-mcp"][tool]
+
+    def test_a_listed_domain_and_service_passes_and_everything_else_does_not(self):
+        from novak_gateway.policy import relaxed
+        r = self.shipped_rule()
+        self.assertTrue(relaxed(r, {"domain": "light", "service": "turn_on", "data": {"rgb_color": [255, 0, 128]}}))
+        self.assertTrue(relaxed(r, {"domain": "light", "service": "turn_on", "entity_id": "light.a, light.b"}))
+        self.assertTrue(relaxed(r, {"domain": "scene", "service": "turn_on", "entity_id": "scene.movie"}))
+        self.assertFalse(relaxed(r, {"domain": "lock", "service": "unlock", "entity_id": "lock.front"}))
+        self.assertFalse(relaxed(r, {"domain": "light", "service": "delete"}))
+        self.assertFalse(relaxed(r, {"domain": "light", "service": "turn_on", "entity_id": "lock.front"}))   # target in another domain
+        self.assertFalse(relaxed(r, {"domain": "light", "service": "turn_on", "ws_command": "config/entity_registry/remove"}))
+        self.assertFalse(relaxed(r, {"service": "turn_on"}))                                  # no domain
+        self.assertFalse(relaxed(r, {}))
+        self.assertFalse(relaxed(None, {"domain": "light", "service": "turn_on"}))
+        self.assertFalse(relaxed({"allow": {}}, {"domain": "light", "service": "turn_on"}))
+
+    def test_bulk_control_needs_every_operation_to_be_harmless(self):
+        from novak_gateway.policy import relaxed
+        r = self.shipped_rule("ha_bulk_control")
+        ok = [{"entity_id": "light.a", "action": "on", "parameters": {"brightness_pct": 30}}, {"entity_id": "light.b", "action": "off"}]
+        self.assertTrue(relaxed(r, {"operations": ok}))
+        self.assertFalse(relaxed(r, {"operations": ok + [{"entity_id": "lock.front", "action": "off"}]}))
+        self.assertFalse(relaxed(r, {"operations": [{"entity_id": "light.a", "action": "delete"}]}))
+
+    def test_through_the_gateway_a_harmless_call_runs_and_a_risky_one_is_held(self):
+        w = World(self, confirm_timeout=0.3, settings={"arg_rules": {"hs-tmeuze": {"delete_document": self.RULE}}})
+        _, r = w.call("hs_tmeuze__delete_document", {"domain": "light", "service": "turn_on"}, token=w.keys["tmeuze"])
+        self.assertEqual(r["result"]["content"][0]["text"], "hs-tmeuze did delete_document")
+        self.assertEqual(w.notes, [])                                                       # no approval was asked for
+        _, r = w.call("hs_tmeuze__delete_document", {"domain": "lock", "service": "unlock"}, token=w.keys["tmeuze"])
+        self.assertTrue(r["result"]["isError"])
+        self.assertIn("No confirmation", r["result"]["content"][0]["text"])
+        self.assertEqual(len(w.notes), 1)
+
+    def test_a_harmless_call_is_fine_for_the_household_too(self):
+        w = World(self, settings={"arg_rules": {"hs-household": {"delete_document": self.RULE}}})
+        _, r = w.call("hs_household__delete_document", {"domain": "light", "service": "turn_on"},
+                       token=w.keys["household"], path="/mcp/household")
+        self.assertEqual(r["result"]["content"][0]["text"], "hs-household did delete_document")   # a lamp is a lamp
+        _, r = w.call("hs_household__delete_document", {"domain": "lock", "service": "unlock"},
+                      token=w.keys["household"], path="/mcp/household")
+        self.assertTrue(r["result"]["isError"])                                              # still needs a person to confirm
 
 
 class AccountOwnershipTests(unittest.TestCase):

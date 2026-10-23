@@ -1,12 +1,14 @@
 """The gateway's logic, independent of HTTP: what a caller sees and may do."""
 import json
 import os
+import re
+import threading
 import time
 from pathlib import Path
 
 from . import directory, notify as notify_mod
 from .mcp import MCPError, Upstream
-from .policy import classify
+from .policy import classify, relaxed
 
 SEP = "__"
 TOOLS_TTL_S = 60
@@ -19,11 +21,13 @@ def text_result(message: str, error=False) -> dict:
 
 class Gateway:
     def __init__(self, registry_dir, audit, approvals, public_url, env=os.environ,
-                 notifier=notify_mod.send, upstream_factory=Upstream, clock=time.time):
+                 notifier=notify_mod.send, upstream_factory=Upstream, clock=time.time,
+                 helper_reader=notify_mod.read_state, helper_poll_s=1.5):
         self.registry_dir = Path(registry_dir)
         self.audit, self.approvals = audit, approvals
         self.public_url, self.env, self.notifier = public_url.rstrip("/"), env, notifier
         self.upstream_factory, self.clock = upstream_factory, clock
+        self.helper_reader, self.helper_poll_s = helper_reader, helper_poll_s
         self._dir = directory.load(self.registry_dir)
         self._upstreams: dict[str, Upstream] = {}
         self._tools: dict[str, tuple[float, list]] = {}
@@ -63,8 +67,12 @@ class Gateway:
         self._tools[entry.name] = (self.clock(), tools)
         return tools
 
-    def _kind(self, entry, tool) -> str:
-        return classify(tool, (self.dir.settings.get("tool_overrides") or {}).get(entry.name))
+    def _kind(self, entry, tool, args=None) -> str:
+        kind = classify(tool, (self.dir.settings.get("tool_overrides") or {}).get(entry.name))
+        rule = ((self.dir.settings.get("arg_rules") or {}).get(entry.name) or {}).get(tool)
+        if kind == "destructive" and rule and relaxed(rule, args):
+            return rule.get("to", "modify")
+        return kind
 
     def list_tools(self, identity) -> list[dict]:
         out = []
@@ -100,7 +108,7 @@ class Gateway:
         if not directory.tool_allowed(self.dir.settings.get("tool_filters"), entry.name, tool):
             self.audit.record(identity, entry.name, tool, None, "denied", "not offered", args=args)
             return text_result(f"Unknown tool '{namespaced}'.", True)
-        kind = self._kind(entry, tool)
+        kind = self._kind(entry, tool, args)
         if kind in self.dir.settings.get("confirm", ["destructive"]):
             if identity.kind == "household":
                 self.audit.record(identity, entry.name, tool, kind, "denied", "household cannot confirm", args=args)
@@ -129,13 +137,39 @@ class Gateway:
         url = f"{self.public_url}/approve/{pending['token']}"
         person = identity.person
         try:
-            sent = self.notifier((person.notify if person else {}), self.dir.settings.get("notify_default") or {},
+            groups = self.dir.settings.get("notify_groups") or {}
+            sent = self.notifier(notify_mod.expand((person.notify if person else {}), groups),
+                                 notify_mod.expand(self.dir.settings.get("notify_default") or {}, groups),
                                  self.env.get("GATEWAY_HA_URL", ""), self.env.get("GATEWAY_HA_TOKEN", ""),
                                  f"Confirm: {tool.replace('_', ' ')}", f"{entry.name}: {tool}. Tap to review.", url)
         except Exception as exc:
             sent = f"notification failed: {exc}"
         self.audit.record(identity, entry.name, tool, "destructive", "held", sent)
-        return self.approvals.wait(pending["id"], float(self.dir.settings.get("confirm_timeout_s", 180)))
+        timeout = float(self.dir.settings.get("confirm_timeout_s", 180))
+        helper = self.dir.settings.get("approval_helper")
+        if helper and self.env.get("GATEWAY_HA_URL") and self.env.get("GATEWAY_HA_TOKEN"):
+            threading.Thread(target=self._watch_helper, args=(pending, helper, timeout), daemon=True).start()
+        return self.approvals.wait(pending["id"], timeout)
+
+    def _watch_helper(self, pending, entity, timeout):
+        """A button on the notification lands in a Home Assistant helper (an automation
+        writes the action id there); read it until this approval is decided or expires.
+        Only an action carrying THIS approval's token counts, and a decision is final."""
+        deadline = self.clock() + timeout
+        want = re.compile(r"NOVAK_(APPROVE|DENY)_(.+)")
+        while self.clock() < deadline:
+            time.sleep(self.helper_poll_s)
+            current = self.approvals.get(pending["id"])
+            if not current or current["status"] != "pending":
+                return
+            try:
+                state = self.helper_reader(self.env["GATEWAY_HA_URL"], self.env["GATEWAY_HA_TOKEN"], entity)
+            except Exception:
+                continue
+            m = want.fullmatch(state or "")
+            if m and m.group(2) == pending["token"]:
+                self.approvals.decide(pending["id"], m.group(1) == "APPROVE")
+                return
 
     # JSON-RPC -----------------------------------------------------------------
     def instructions(self, identity) -> str:

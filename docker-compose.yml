@@ -118,6 +118,10 @@ services:
       # "API Keys" permission does nothing while this is off. Env wins over the admin
       # UI here (ENABLE_PERSISTENT_CONFIG is false), so a UI toggle would not stick.
       ENABLE_API_KEYS: "${OWUI_ENABLE_API_KEYS:-false}"
+      # Both false = sign-in only through Pocket ID: the form is hidden and the password
+      # endpoints refuse (a local account has no 2FA here, decision #68). API keys still work.
+      ENABLE_LOGIN_FORM: "${OWUI_ENABLE_LOGIN_FORM:-true}"
+      ENABLE_PASSWORD_AUTH: "${OWUI_ENABLE_PASSWORD_AUTH:-true}"
       # admins.novak already exists in Pocket ID — the console's client
       # requests the `groups` scope and gates on it (deploy-checklist.md).
       # Reusing it here, rather than a second group, means one Pocket ID

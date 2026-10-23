@@ -24,6 +24,14 @@ gateway:
   # See docs/gateway.md "Approve and Deny buttons". Blank turns the buttons off; the
   # notification still carries a link.
   approval_helper: ""
+  # What the approvals page in Home Assistant shows: while a confirmation waits the gateway
+  # writes a short description of it (who, which call) into this input_text, and clears it
+  # after. `approval_page` is the dashboard path a tap on the notification opens, inside the
+  # app. Both blank = no page, just the buttons.
+  pending_helper: ""
+  approval_page: ""
+  #   pending_helper: input_text.novak_pending
+  #   approval_page: /novak-approvals/approvals
   #   approval_helper: input_text.novak_approval
 
   # Clients trusted to name the user in a header (Open WebUI). Only as safe as

@@ -125,6 +125,8 @@ DEFAULT_SETTINGS = {
     "arg_rules": {},
     "notify_groups": {},
     "approval_helper": "",
+    "pending_helper": "",
+    "approval_page": "",
     "tool_filters": [],
     "clients": [],
     "oidc": {},

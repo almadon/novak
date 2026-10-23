@@ -180,3 +180,24 @@ acts only on an action carrying that approval's own token. Nothing polls when no
 A press takes a second or two to land. If the helper or automation is missing, the buttons
 do nothing and the Review link still works.
 
+### The approvals page
+
+Buttons tell you less than the call itself, so a tap on the notification opens a page in
+Home Assistant that shows what is being asked, with Approve and Deny. The gateway's token is
+not an admin one and cannot publish a sensor state, but it can call services, so it fills a
+second helper and the page reads that:
+
+1. Helper: **Text**, name `novak_pending`, maximum length 255 (`input_text.novak_pending`).
+2. Two scripts that write the decision to the approval helper, using the token in the pending one:
+   `novak_approve` sets `input_text.novak_approval` to
+   `NOVAK_APPROVE_{{ (states('input_text.novak_pending') | from_json).t }}`, and
+   `novak_deny` the same with `NOVAK_DENY_`. Both do nothing when the pending helper is empty.
+3. A dashboard (URL path `novak-approvals`, view `approvals`) with a Markdown card that shows
+   `{{ (states('input_text.novak_pending') | from_json).who }}` and `.do`, and two button cards
+   that run the scripts.
+4. In `gateway.yaml`: `pending_helper: input_text.novak_pending` and
+   `approval_page: /novak-approvals/approvals`.
+
+With several requests waiting the page shows the newest; the notification buttons on each
+phone still carry their own request's token, so none is lost.
+

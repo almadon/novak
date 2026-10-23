@@ -53,7 +53,7 @@ def fake_backend(tools, name):
 class World:
     """Two people, a household, three backends, a gateway, and an HTTP server."""
 
-    def __init__(self, test, oidc=None, notifier=None, confirm_timeout=5, settings=None, helper_reader=None):
+    def __init__(self, test, oidc=None, notifier=None, confirm_timeout=5, settings=None, helper_reader=None, publisher=None):
         self.dir = Path(tempfile.mkdtemp())
         test.addCleanup(lambda: __import__("shutil").rmtree(self.dir, ignore_errors=True))
         self.srvs = {}
@@ -88,7 +88,8 @@ class World:
         self.approvals = Approvals(str(self.dir / "approvals.db"))
         self.gw = Gateway(self.dir, self.audit, self.approvals, "http://gw.test", self.env,
                           notifier=notifier or (lambda *a: self.notes.append(a) or "test"),
-                          **({"helper_reader": helper_reader, "helper_poll_s": 0.05} if helper_reader else {}))
+                          **({"helper_reader": helper_reader, "helper_poll_s": 0.05} if helper_reader else {}),
+                          **({"publisher": publisher} if publisher else {}))
         self.server = make_server(self.gw, oidc, "127.0.0.1", 0)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         test.addCleanup(self.server.shutdown)
@@ -486,10 +487,10 @@ class ButtonTests(unittest.TestCase):
         ha = {"notify_default": {"kind": "ha", "service": "mobile_app_x"}}
         w = World(self, confirm_timeout=0.3, settings=dict(self.HELPER, **ha), helper_reader=lambda *a: "")
         w.call("hs_ushy__delete_document", token=w.keys["ushy"])               # ushy has no channel of their own
-        self.assertEqual(w.notes[0][1], {"kind": "ha", "service": ["mobile_app_x"], "link": False})   # (person, default, ...)
+        self.assertEqual(w.notes[0][1], {"kind": "ha", "service": ["mobile_app_x"], "link": False, "page": ""})   # (person, default, ...)
         w = World(self, confirm_timeout=0.3, settings=ha)                      # no helper: the link is all there is
         w.call("hs_ushy__delete_document", token=w.keys["ushy"])
-        self.assertEqual(w.notes[0][1], {"kind": "ha", "service": ["mobile_app_x"], "link": True})
+        self.assertEqual(w.notes[0][1], {"kind": "ha", "service": ["mobile_app_x"], "link": True, "page": ""})
         w = World(self, confirm_timeout=0.3, settings=self.HELPER, helper_reader=lambda *a: "")
         w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])           # Ticker is passed through untouched
         self.assertEqual(w.notes[0][0], {"kind": "ticker", "category": "Novak tmeuze"})
@@ -545,6 +546,66 @@ class ButtonTests(unittest.TestCase):
         self.assertIn("aquarius", out)
         with self.assertRaises(RuntimeError):
             notify.send({"kind": "ha", "service": ["mobile_app_pyrite"]}, {}, "http://ha", "t", "T", "M", "http://gw/approve/TOK", post)
+
+
+class ApprovalsPageTests(unittest.TestCase):
+    """The page Home Assistant shows: what is being asked, read from a helper the gateway fills."""
+    SETTINGS = {"approval_helper": "input_text.novak_approval", "pending_helper": "input_text.novak_pending",
+                "approval_page": "/novak-approvals/approvals"}
+
+    def world(self, published, press=lambda w: "", settings=None, publisher=None, confirm_timeout=3):
+        def pub(url, tok, path, body):
+            published.append((path, body))
+        w = World(self, confirm_timeout=confirm_timeout, settings=dict(self.SETTINGS, **(settings or {})),
+                  helper_reader=lambda url, tok, ent: press(w), publisher=publisher or pub)
+        return w
+
+    def test_what_is_being_asked_is_shown_while_it_waits_and_cleared_after(self):
+        published = []
+        w = self.world(published, press=lambda w: f"NOVAK_APPROVE_{w.notes[0][6].rsplit('/', 1)[1]}" if w.notes else "")
+        w.call("hs_tmeuze__delete_document", {"id": "d1"}, token=w.keys["tmeuze"])
+        first, last = published[0], published[-1]
+        self.assertEqual(first[0], "/api/services/input_text/set_value")
+        self.assertEqual(first[1]["entity_id"], "input_text.novak_pending")
+        shown = json.loads(first[1]["value"])
+        self.assertEqual(shown["who"], "tmeuze")
+        self.assertIn("delete_document", shown["do"])
+        self.assertIn("id=d1", shown["do"])
+        self.assertTrue(w.notes[0][6].endswith(shown["t"]))                  # the page's token is the approval's
+        self.assertEqual(last[1]["value"], "")                                 # cleared once decided
+
+    def test_a_long_description_is_trimmed_to_fit_not_the_token(self):
+        from novak_gateway import notify
+        v = notify.pending_value("T" * 32, "tmeuze", "x" * 1000)
+        self.assertLessEqual(len(v), 255)
+        self.assertEqual(json.loads(v)["t"], "T" * 32)
+
+    def test_the_description_of_a_service_call_names_the_call(self):
+        from novak_gateway import notify
+        self.assertEqual(notify.describe("ha-mcp", "ha_call_service", {"domain": "lock", "service": "unlock", "entity_id": "lock.front"}),
+                         "ha-mcp: ha_call_service lock.unlock lock.front")
+
+    def test_nothing_is_published_without_a_pending_helper(self):
+        published = []
+        w = self.world(published, settings={"pending_helper": ""}, confirm_timeout=0.3)
+        w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])
+        self.assertEqual(published, [])
+
+    def test_a_failing_publish_does_not_break_the_confirmation(self):
+        def boom(*a):
+            raise OSError("ha down")
+        w = self.world([], publisher=boom, press=lambda w: f"NOVAK_APPROVE_{w.notes[0][6].rsplit('/', 1)[1]}" if w.notes else "")
+        _, r = w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])
+        self.assertEqual(r["result"]["content"][0]["text"], "hs-tmeuze did delete_document")
+
+    def test_a_tap_opens_the_page_inside_the_app(self):
+        from novak_gateway import notify
+        sent = []
+        cfg = {"kind": "ha", "service": ["mobile_app_odi"], "link": False, "page": "/novak-approvals/approvals"}
+        notify.send(cfg, {}, "http://ha", "t", "T", "m", "http://gw/approve/TOK", lambda u, t, path, body: sent.append(body))
+        self.assertEqual(sent[0]["data"]["clickAction"], "/novak-approvals/approvals")
+        self.assertNotIn("url", sent[0]["data"])
+        self.assertEqual(len(sent[0]["data"]["actions"]), 2)
 
 
 class ArgRuleTests(unittest.TestCase):

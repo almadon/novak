@@ -22,12 +22,12 @@ def text_result(message: str, error=False) -> dict:
 class Gateway:
     def __init__(self, registry_dir, audit, approvals, public_url, env=os.environ,
                  notifier=notify_mod.send, upstream_factory=Upstream, clock=time.time,
-                 helper_reader=notify_mod.read_state, helper_poll_s=1.5):
+                 helper_reader=notify_mod.read_state, helper_poll_s=1.5, publisher=notify_mod._post):
         self.registry_dir = Path(registry_dir)
         self.audit, self.approvals = audit, approvals
         self.public_url, self.env, self.notifier = public_url.rstrip("/"), env, notifier
         self.upstream_factory, self.clock = upstream_factory, clock
-        self.helper_reader, self.helper_poll_s = helper_reader, helper_poll_s
+        self.helper_reader, self.helper_poll_s, self.publisher = helper_reader, helper_poll_s, publisher
         self._dir = directory.load(self.registry_dir)
         self._upstreams: dict[str, Upstream] = {}
         self._tools: dict[str, tuple[float, list]] = {}
@@ -139,9 +139,11 @@ class Gateway:
         try:
             groups = self.dir.settings.get("notify_groups") or {}
             buttons = bool(self.dir.settings.get("approval_helper"))
+            page = self.dir.settings.get("approval_page") or ""
+
             def channel(cfg):
                 cfg = notify_mod.expand(cfg, groups)
-                return {**cfg, "link": not buttons} if cfg.get("kind") == "ha" else cfg
+                return {**cfg, "link": not buttons, "page": page} if cfg.get("kind") == "ha" else cfg
             sent = self.notifier(channel(person.notify if person else {}),
                                  channel(self.dir.settings.get("notify_default") or {}),
                                  self.env.get("GATEWAY_HA_URL", ""), self.env.get("GATEWAY_HA_TOKEN", ""),
@@ -151,9 +153,37 @@ class Gateway:
         self.audit.record(identity, entry.name, tool, "destructive", "held", sent)
         timeout = float(self.dir.settings.get("confirm_timeout_s", 180))
         helper = self.dir.settings.get("approval_helper")
-        if helper and self.env.get("GATEWAY_HA_URL") and self.env.get("GATEWAY_HA_TOKEN"):
+        have_ha = bool(self.env.get("GATEWAY_HA_URL") and self.env.get("GATEWAY_HA_TOKEN"))
+        if helper and have_ha:
             threading.Thread(target=self._watch_helper, args=(pending, helper, timeout), daemon=True).start()
-        return self.approvals.wait(pending["id"], timeout)
+        shown = self.dir.settings.get("pending_helper") if have_ha else ""
+        if shown:
+            self._show_pending(shown, pending, notify_mod.describe(entry.name, tool, args))
+        try:
+            return self.approvals.wait(pending["id"], timeout)
+        finally:
+            if shown:
+                self._clear_pending(shown, pending)
+
+    def _set_helper(self, entity, value):
+        self.publisher(self.env["GATEWAY_HA_URL"], self.env["GATEWAY_HA_TOKEN"], "/api/services/input_text/set_value",
+                       {"entity_id": entity, "value": value})
+
+    def _show_pending(self, entity, pending, text):
+        """What the approvals page in Home Assistant shows. Best effort: the notification
+        buttons work without it."""
+        try:
+            self._set_helper(entity, notify_mod.pending_value(pending["token"], pending["person"], text))
+        except Exception:
+            pass
+
+    def _clear_pending(self, entity, pending):
+        try:
+            current = self.helper_reader(self.env["GATEWAY_HA_URL"], self.env["GATEWAY_HA_TOKEN"], entity)
+            if not current or pending["token"] in current:      # leave a newer request's text alone
+                self._set_helper(entity, "")
+        except Exception:
+            pass
 
     def _watch_helper(self, pending, entity, timeout):
         """A button on the notification lands in a Home Assistant helper (an automation

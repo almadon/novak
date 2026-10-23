@@ -30,6 +30,7 @@ class Identity:
     via: str                 # oidc | client:<name> | key
     person: object = None
     scope: tuple = ()        # entry globs this connection narrows itself to; empty = everything it may use
+    tools: tuple = ()        # tool-name globs (<alias>__<tool>) it narrows itself to; empty = every tool
 
 
 class OIDC:
@@ -72,6 +73,7 @@ def authenticate(d: Directory, headers, oidc: OIDC | None, path_key: str | None 
     header only ever narrows: a connection cannot reach more than its person may."""
     ident = _authenticate(d, headers, oidc, path_key, household_path)
     ident.scope = tuple(p.strip() for p in (headers.get("X-Novak-Scope") or "").split(",") if p.strip())
+    ident.tools = tuple(p.strip() for p in (headers.get("X-Novak-Tools") or "").split(",") if p.strip())
     return ident
 
 

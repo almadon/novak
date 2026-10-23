@@ -3231,6 +3231,35 @@ mobile notifications ([gateway.md](gateway.md)).
 
 Apprise (or a successor) carrying actionable callbacks, which would let approvals move too.
 
+## 71. House tools are lean, because the context window is small
+
+A real lighting request failed three ways: the model called a built-in tool and asked an irrelevant question,
+then invented floor ids and went quiet after the error, and on the larger model the request was refused
+outright (17,626 tokens against a window of 8,192). Measured, Home Assistant's tools for the house are about
+21,000 tokens and all of the gateway's are about 34,000. Better prompts could not fix that, because the
+prompt itself was being cut off.
+
+### What was decided
+
+The gateway offers two small built-in tools, `house_state` and `lights_set` (about 450 tokens), that do the
+looking-up themselves: floors and areas by loose name, lights that are on by default, colors cycled across
+the lights, and errors that list the valid names. A per-connection `X-Novak-Tools` allowlist narrows the main
+Open WebUI connection to about ten tools (about 2,400 tokens). The Home preset sees only the two house tools.
+Built-in Open WebUI tools are off on every preset (decision #66). The house prompt says: act first, check after.
+
+### What it costs
+
+- The gateway now holds a little knowledge of Home Assistant (templates, light services) and is a place to fix
+  when HA changes. It only touches lights, so the blast radius stays small.
+- Matching names loosely ("floor 2" to areas labelled L2) is a convention of this house's naming, and wrong
+  guesses are caught by the helpful error rather than prevented.
+- The allowlist is a list to maintain: a tool a person needs that is not on it is invisible until added.
+- The window itself is still 8,192. Raising it (16,384 for `chat`) is a VRAM question not yet measured.
+
+### What would make it worth revisiting
+
+A larger context window, or Open WebUI deferring tool definitions until needed, which would let the lists grow.
+
 ## 72. Supernotify routes Novak's approvals; Apprise stays the fleet's
 
 Decision #70 put plain notices on Apprise and left approvals on hand-picked Home Assistant notify services

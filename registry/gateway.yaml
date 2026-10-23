@@ -15,6 +15,10 @@ gateway:
 
   # Used when a person has no notify block of their own.
   notify_default: {}
+  # The lean house tools (house__house_state, house__lights_set) run on this person-owned registry
+  # entry and are offered only to someone who has it. Blank turns them off. See docs/gateway.md.
+  house: {entry: ha-mcp}
+
   # Approvals through Supernotify (a Home Assistant integration): `notify: {kind: supernotify, target:
   # person.<ha person>}` for a person (`novak person set NAME --supernotify person.x`), or a list of
   # people for notify_default. Supernotify finds that person's phones from Home Assistant itself, so

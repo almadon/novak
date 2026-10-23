@@ -209,6 +209,23 @@ add an entry the person is not allowed, and a call outside it is refused as an u
 Open WebUI uses it to give a "Home" preset a connection that offers just the house tools, since
 a preset can switch on a whole connection but not individual tools.
 
+## Lean tool lists: `X-Novak-Tools` and the house tools
+
+A model can only use the tools that fit in its context. The models here have an 8,192-token window;
+Home Assistant's own tools are about 21,000 tokens of definitions for the house alone and the gateway
+offers 79 tools in all (about 34,000). A model given them loses the start of its prompt, so it ignores
+its instructions and invents arguments.
+
+- **`X-Novak-Tools: <glob>[, ...]`** limits one connection to the tools whose namespaced name
+  (`<entry>__<tool>`) matches. Like the scope header it only narrows. The Open WebUI registry uses it
+  to give the main connection about ten tools (about 2,400 tokens) and the Home connection two.
+- **The house tools** (`house__house_state`, `house__lights_set`, about 450 tokens together) are built
+  into the gateway and run on the person's own Home Assistant entry (`house: {entry: ha-mcp}` in
+  `gateway.yaml`; blank turns them off). They take floor and area names ("floor 2" matches areas labelled
+  `L2`), resolve the lights themselves, and an unknown name returns an error that lists the real ones.
+  They touch only lights, so nothing needs a confirmation, and they are offered only to someone who has
+  that entry. The household and anyone without a Home Assistant entry do not get them.
+
 ## Approvals through Supernotify
 
 `notify: {kind: supernotify, target: person.tyler_meuse}` (set with `novak person set NAME --supernotify

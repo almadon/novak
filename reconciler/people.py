@@ -154,6 +154,9 @@ def ensure_banks(only=None) -> int:
             return json.load(resp)
     done = 0
     for bank, base in banks.items():
+        if base in ("http://hindsight:8888", "https://hindsight:8888"):
+            # The compose-network name; from this host the published port is loopback only.
+            base = f"http://127.0.0.1:{os.environ.get('HINDSIGHT_PORT') or '13403'}"
         try:
             have = {b["bank_id"] for b in call(base, "GET", "/v1/default/banks").get("banks", [])}
             if bank in have:

@@ -235,8 +235,14 @@ services:
     image: ghcr.io/vectorize-io/hindsight@sha256:b5da1a9aece1f53a15f12821fb1470f358ed6c74dfaa0c4b1a39c3f3ae93e002
     restart: unless-stopped
     ports:
-      - "${HINDSIGHT_PORT:-13403}:8888"   # API + MCP
-      - "${HINDSIGHT_UI_PORT:-13404}:9999" # web UI
+      # Loopback only (decision #62). Everything in the stack reaches Hindsight as
+      # http://hindsight:8888 on the compose network, and people reach it through
+      # the gateway. The published API port exists for the CLI and checks run on
+      # this host. The one tenant key is all that guards every bank, so the
+      # network does not get to try it. HINDSIGHT_UI_BIND can be this host's
+      # Tailscale IP to use the UI from another device.
+      - "127.0.0.1:${HINDSIGHT_PORT:-13403}:8888"   # API + MCP
+      - "${HINDSIGHT_UI_BIND:-127.0.0.1}:${HINDSIGHT_UI_PORT:-13404}:9999" # web UI
     environment:
       # Points at DEFAULT_ENGINE_BASE_URL (.env) by default, same as everything else
       # (decision #28). The base-URL variable name is confirmed: Hindsight

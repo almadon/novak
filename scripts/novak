@@ -813,7 +813,7 @@ cmd_add() {
 cmd_person() {
   need_env
   local py="$NOVAK_HOME/.venv/bin/python"; [ -x "$py" ] || py="$(command -v python3)"
-  HINDSIGHT_API_KEY="$(secret_get HINDSIGHT_API_KEY)" NOVAK_HOME="$NOVAK_HOME" "$py" "$REPO_DIR/reconciler/people.py" "$@"
+  HINDSIGHT_API_KEY="$(secret_get HINDSIGHT_API_KEY)" HINDSIGHT_PORT="$(envval HINDSIGHT_PORT)" NOVAK_HOME="$NOVAK_HOME" "$py" "$REPO_DIR/reconciler/people.py" "$@"
   case "${1:-}" in
     add|attach|detach|share|unshare|key|set)
       echo

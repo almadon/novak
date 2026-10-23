@@ -3191,3 +3191,36 @@ host. That is a deliberate trade: the host is the break-glass, and it is already
 
 Open WebUI offering 2FA for local accounts, or a second identity provider as a fallback.
 
+## 70. Plain notices go through Apprise; approvals stay on Home Assistant
+
+Novak and the fleet (the VPS proxy, Grafana, backups) both need to tell a person something. Running a
+separate sender in each means two sets of channel credentials and two places to change them.
+
+### What was decided
+
+Apprise (its API, run by the fleet project at `notify.a64.one`, admin panel on the LAN and tailnet only)
+is the shared layer for plain notices. A call names a saved configuration key and one tag; Apprise maps
+the tag to channels set in its panel, so Novak never holds a Pushover token. Novak uses its own key with
+only `novak-*` tags (`novak-tmeuze`, `novak-ushy` for a person's notices, `novak-admin` for a problem the
+admin should know about), so the Novak key cannot trigger the fleet's alerts and the reverse. Ingest sends
+through it now (`INGEST_APPRISE_URL`, `INGEST_APPRISE_KEY`): "tasks added" goes to the owner's `notice_tag`,
+and a recording that fails for good goes to `admin_tag`. A refused or unreachable Apprise falls back to Home
+Assistant, so a notice is not lost.
+
+Approvals are not notices. Approve and Deny must come back to the gateway tied to a one-time token, and
+Apprise cannot carry that callback (its Home Assistant target only creates a persistent notification, and
+its JSON target posts Apprise's own schema, not Home Assistant's `data.actions`). They stay on Home Assistant
+mobile notifications ([gateway.md](gateway.md)).
+
+### What it costs
+
+- A dependency on the fleet's Apprise for plain notices; the fallback covers it being down, not Novak being
+  silent about its own failures if both are down.
+- Apprise's response codes are unverified until the first live test: the sender treats any 2xx as success and
+  anything else as failure, and does not parse the body.
+- One more secret (`INGEST_APPRISE_KEY`), owned by Apprise, not generated here.
+
+### What would make it worth revisiting
+
+Apprise (or a successor) carrying actionable callbacks, which would let approvals move too.
+

@@ -388,6 +388,9 @@ services:
       # credentials. The key is a trusted client made with `novak gateway client ingest`.
       INGEST_GATEWAY_URL: "${INGEST_GATEWAY_URL:-http://gateway:8000/mcp}"
       INGEST_GATEWAY_KEY: "${INGEST_GATEWAY_KEY:-}"
+      # Plain notices (a task was added, a recording failed) go through Apprise by tag, decision #70.
+      INGEST_APPRISE_URL: "${INGEST_APPRISE_URL:-}"
+      INGEST_APPRISE_KEY: "${INGEST_APPRISE_KEY:-}"
       # Sinks that still name an `mcp` block call that endpoint directly; any
       # variable they use (url_env, token_env) must be added here by hand.
     volumes:

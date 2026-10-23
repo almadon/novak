@@ -18,6 +18,7 @@ SECRET_VARS=(
   GATEWAY_HA_TOKEN
   HA_DRIFT_TOKEN
   HINDSIGHT_API_KEY
+  INGEST_APPRISE_KEY
   INGEST_GATEWAY_KEY
   INGEST_HA_TOKEN
   INGEST_TOKEN
@@ -101,6 +102,7 @@ EXTERNAL_SECRETS=(
   BRAVE_API_KEY
   GATEWAY_HA_TOKEN
   HA_DRIFT_TOKEN
+  INGEST_APPRISE_KEY
   INGEST_GATEWAY_KEY
   INGEST_HA_TOKEN
   OIDC_CLIENT_SECRET
@@ -155,6 +157,7 @@ secret_desc() {
     INGEST_TOKEN)               echo "Ingest: bearer token recorders and adapters send" ;;
     OWUI_ADMIN_API_KEY)         echo "Open WebUI: an admin's API key, for 'novak owui' (Settings, Account, API keys)" ;;
     OWUI_GATEWAY_KEY)           echo "Open WebUI: the gateway client key it presents (novak gateway client open-webui)" ;;
+    INGEST_APPRISE_KEY)         echo "Ingest: Apprise configuration key for plain notices (made in Apprise's panel)" ;;
     INGEST_GATEWAY_KEY)         echo "Ingest: trusted gateway client key (novak gateway client ingest)" ;;
     INGEST_HA_TOKEN)            echo "Ingest: Home Assistant token for approval notifications" ;;
     GATEWAY_HA_TOKEN)           echo "Gateway: Home Assistant token for removal-confirmation notifications" ;;

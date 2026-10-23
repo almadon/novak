@@ -20,6 +20,10 @@ DEFAULTS = {
     # person's sink arguments (their Outline collection), and `.ticker_category` is
     # where their task notifications go.
     "owners": {"default": "", "sources": {}, "people": {}},
+    # Plain notices go through Apprise (INGEST_APPRISE_URL and _KEY) by tag: `people.<name>.notice_tag`
+    # for someone's own, `admin_tag` for a problem the admin should know about. Approvals
+    # stay on Home Assistant, which can carry buttons.
+    "notices": {"admin_tag": "novak-admin"},
     "inbox_poll_s": 10,
     "max_attempts": 3,
     "sinks": [],
@@ -70,6 +74,10 @@ def validate(cfg: dict) -> dict:
     for who in [owners.get("default", ""), *owners.get("sources", {}).values(), *owners.get("people", {}).keys()]:
         if who and not re.match(r"^[a-z0-9][a-z0-9-]*$", str(who)):
             raise ConfigError(f"owner {who!r}: use a-z, 0-9 and hyphens (a person's name)")
+    tags = [cfg["notices"].get("admin_tag", "")] + [(p or {}).get("notice_tag", "") for p in (owners.get("people") or {}).values()]
+    for t in tags:
+        if t and not re.match(r"^[A-Za-z0-9_-]+$", str(t)):
+            raise ConfigError(f"notice tag {t!r}: one tag per notice, letters, digits, _ and - only")
     seen = set()
     for s in cfg["sinks"]:
         name = s.get("name")
@@ -115,6 +123,8 @@ class Settings:
     cfg: dict = field(default_factory=dict)
     gateway_url: str = "http://gateway:8000/mcp"
     gateway_key: str = ""
+    apprise_url: str = ""
+    apprise_key: str = ""
 
     @classmethod
     def from_env(cls, env=os.environ):
@@ -137,6 +147,8 @@ class Settings:
             ticker_category=e("INGEST_TICKER_CATEGORY", "") or "general",
             gateway_url=e("INGEST_GATEWAY_URL", "http://gateway:8000/mcp"),
             gateway_key=unplaceholder(e("INGEST_GATEWAY_KEY", "")),
+            apprise_url=e("INGEST_APPRISE_URL", ""),
+            apprise_key=unplaceholder(e("INGEST_APPRISE_KEY", "")),
             max_upload_mb=int(e("INGEST_MAX_UPLOAD_MB", "512")),
             cfg=load_yaml(e("INGEST_CONFIG", "/registry/ingest.yaml")),
         )

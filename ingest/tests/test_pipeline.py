@@ -439,3 +439,116 @@ class GatewaySinkTests(unittest.TestCase):
         first = e.store.proposals("pending")[0]
         e.req("POST", f"/v1/proposals/{first['id']}/approve")
         self.assertEqual([c[:2] for c in self.calls()], [("ushy", "tududi_1_ushy__create_task")])
+
+
+class FakeApprise(BaseHTTPRequestHandler):
+    """Records what Novak posts; `code` lets a test make Apprise refuse."""
+    seen = []
+    code = 200
+
+    def log_message(self, *a):
+        pass
+
+    def do_POST(self):
+        from urllib.parse import parse_qs
+        body = parse_qs(self.rfile.read(int(self.headers["Content-Length"])).decode())
+        type(self).seen.append((self.path, self.headers.get("Content-Type"), {k: v[0] for k, v in body.items()}))
+        self.send_response(type(self).code)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+
+class AppriseNoticeTests(unittest.TestCase):
+    TASK = {"name": "t", "kind": "task", "enabled": True, "service": "tududi", "tool": "create_task", "args": {"name": "{title}"}}
+
+    def env(self, **kw):
+        FakeApprise.seen, FakeApprise.code = [], kw.pop("code", 200)
+        srv = HTTPServer(("127.0.0.1", 0), FakeApprise)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        gw = HTTPServer(("127.0.0.1", 0), FakeGateway)
+        FakeGateway.seen = []
+        threading.Thread(target=gw.serve_forever, daemon=True).start()
+        self.addCleanup(gw.shutdown)
+        e = Env(self, sinks=[self.TASK])
+        e.settings.gateway_url, e.settings.gateway_key = f"http://127.0.0.1:{gw.server_port}/mcp", "k"
+        e.settings.apprise_url, e.settings.apprise_key = f"http://127.0.0.1:{srv.server_port}", "novak-key/with space"
+        e.settings.cfg["owners"] = {"default": "tmeuze", "sources": {}, "people": {"tmeuze": {"notice_tag": "novak-tmeuze"}}}
+        e.settings.cfg["notices"] = {"admin_tag": "novak-admin"}
+        for k, v in kw.items():
+            setattr(e.settings, k, v)
+        return e
+
+    def test_tasks_added_automatically_are_a_plain_notice_to_the_persons_own_tag(self):
+        e = self.env()
+        e.upload()
+        e.worker.run_once()
+        self.assertEqual(len(FakeApprise.seen), 1)
+        path, ctype, form = FakeApprise.seen[0]
+        self.assertEqual(path, "/notify/novak-key%2Fwith%20space")                  # key is URL-quoted, never in the body
+        self.assertEqual(ctype, "application/x-www-form-urlencoded")
+        self.assertEqual((form["tag"], form["type"]), ("novak-tmeuze", "success"))
+        self.assertIn("task(s) added", form["title"])
+        self.assertEqual(e.calls["notify"], [])                                      # and nothing went to Home Assistant
+
+    def test_a_task_waiting_for_approval_still_goes_to_home_assistant(self):
+        e = self.env()
+        e.settings.cfg["tasks"] = {"mode": "confirm"}
+        e.upload()
+        e.worker.run_once()
+        self.assertEqual(FakeApprise.seen, [])
+        self.assertEqual(len(e.calls["notify"]), 1)                                   # buttons need Home Assistant
+
+    def test_a_refusing_or_unreachable_apprise_falls_back_to_home_assistant(self):
+        e = self.env(code=403)
+        e.upload()
+        e.worker.run_once()
+        self.assertEqual(len(FakeApprise.seen), 1)
+        self.assertEqual(len(e.calls["notify"]), 1)                                   # the notice is not lost
+        e2 = self.env()
+        e2.settings.apprise_url = "http://127.0.0.1:1"
+        e2.upload()
+        e2.worker.run_once()
+        self.assertEqual(len(e2.calls["notify"]), 1)
+
+    def test_a_person_with_no_tag_or_no_apprise_uses_home_assistant_as_before(self):
+        e = self.env()
+        e.settings.cfg["owners"]["people"] = {}
+        e.upload()
+        e.worker.run_once()
+        self.assertEqual((FakeApprise.seen, len(e.calls["notify"])), ([], 1))
+        e = self.env(apprise_key="")
+        e.upload()
+        e.worker.run_once()
+        self.assertEqual((FakeApprise.seen, len(e.calls["notify"])), ([], 1))
+
+    def test_a_recording_that_gives_up_tells_the_admin_tag(self):
+        e = self.env()
+        e.fail_chunk = 1
+        e.settings.cfg["max_attempts"] = 1
+        e.upload()
+        e.worker.run_once()
+        self.assertEqual(e.store.recordings()[0]["status"], "failed")
+        tags = [f["tag"] for _, _, f in FakeApprise.seen]
+        self.assertEqual(tags, ["novak-admin"])
+        self.assertEqual(FakeApprise.seen[0][2]["type"], "failure")
+
+    def test_the_sender_rejects_a_bad_type_and_reports_without_the_key(self):
+        from novak_ingest import notify
+        with self.assertRaises(ValueError):
+            notify.apprise_notify("http://x", "k", "t", "T", "b", "shout")
+        FakeApprise.seen, FakeApprise.code = [], 500
+        srv = HTTPServer(("127.0.0.1", 0), FakeApprise)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        with self.assertRaises(RuntimeError) as cm:
+            notify.apprise_notify(f"http://127.0.0.1:{srv.server_port}", "secret-key-123", "t", "T", "b")
+        self.assertNotIn("secret-key-123", str(cm.exception))
+        self.assertIn("500", str(cm.exception))
+
+    def test_a_tag_with_a_space_or_comma_is_refused_at_load(self):
+        from novak_ingest.config import ConfigError, validate, DEFAULTS, _merge
+        import copy
+        bad = _merge(copy.deepcopy(DEFAULTS), {"owners": {"people": {"tmeuze": {"notice_tag": "a b"}}}})
+        with self.assertRaises(ConfigError):
+            validate(bad)

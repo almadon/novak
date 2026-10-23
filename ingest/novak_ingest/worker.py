@@ -46,7 +46,22 @@ class Worker:
                 status="failed" if failed else "queued")
             self.retry_after[rec["id"]] = time.time() + 60 * attempts
             self.log(f"recording {rec['id']} attempt {attempts} failed: {exc}")
+            if failed:
+                self._notice(self.s.cfg["notices"].get("admin_tag"), "failure",
+                             f"Recording {rec['id']} failed after {attempts} tries", str(exc)[:300])
         return True
+
+    def _notice(self, tag, kind, title, body) -> bool:
+        """A plain notice through Apprise. False (and a log line, never an exception) when Apprise
+        is not configured, the tag is not set, or the send failed, so the caller can fall back."""
+        if not (self.s.apprise_url and self.s.apprise_key and tag):
+            return False
+        try:
+            notify.apprise_notify(self.s.apprise_url, self.s.apprise_key, tag, title, body, kind)
+            return True
+        except Exception as exc:
+            self.log(f"apprise notice failed ({tag}): {exc}")
+            return False
 
     def _wait(self):
         if not self.gate.wait(self.stop):
@@ -182,6 +197,12 @@ class Worker:
         else:
             title = f"{len(tasks)} task(s) added: {result['title']}"[:100]
         url = f"{self.s.public_url}/review/{tasks[0]['token']}"
+        if not pending:
+            # Nothing to decide: a plain notice, through Apprise to this person's own tag when
+            # there is one. Anything pending needs buttons, which only Home Assistant carries.
+            person = (self.s.cfg["owners"].get("people") or {}).get(rec.get("owner", "")) or {}
+            if self._notice(person.get("notice_tag"), "success", title, f"{first}{more}"):
+                return
         try:
             if self._notify:                       # injected by tests
                 self._notify(self.s.ha_url, self.s.ha_token, self.s.ha_target, title,

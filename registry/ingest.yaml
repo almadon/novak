@@ -41,13 +41,19 @@ ingest:
   # inbox sidecar's "owner"), `sources[<X-Source label>]`, then `default`.
   # Names are the people in registry/people.yaml. With none, sinks that need an
   # owner report it and tasks wait for approval.
+  # Plain notices (tasks were added, a recording failed) go through Apprise, which maps a tag to
+  # channels you set in its panel; approvals stay on Home Assistant (decision #70). Needs
+  # INGEST_APPRISE_URL and INGEST_APPRISE_KEY. One tag per notice.
+  notices:
+    admin_tag: novak-admin
   owners:
     default: ""                    # e.g. tmeuze
     sources: {}                    # e.g. {omi-ushy: ushy}
     people: {}
     # people:
     #   tmeuze:
-    #     ticker_category: Novak tmeuze       # where their task notifications go
+    #     ticker_category: Novak tmeuze       # where their task approvals go (Home Assistant)
+    #     notice_tag: novak-tmeuze            # their plain notices, through Apprise
     #     vars: {outline_collection: "<collection id from list_collections>"}
 
   # A sink names a service and a tool, never an endpoint or a credential: which

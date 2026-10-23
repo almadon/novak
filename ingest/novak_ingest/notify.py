@@ -2,6 +2,8 @@
 Assistant notify service. The console and PWA push use the same proposals API
 later, so nothing here is the only way to approve."""
 import json
+import urllib.error
+import urllib.parse
 import urllib.request
 
 
@@ -11,6 +13,26 @@ def _post(ha_url, token, path, body, timeout):
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         r.read()
+
+
+def apprise_notify(url: str, key: str, tag: str, title: str, body: str, kind: str = "info",
+                   timeout=15, opener=urllib.request.urlopen):
+    """A plain notice through Apprise (decision #70): POST <url>/notify/<key> with a tag, which
+    Apprise maps to whatever channels that tag has. Fire-and-forget: no buttons, no callback
+    (approvals stay on Home Assistant). `kind` is info, success, warning or failure. Raises on
+    anything but a 2xx; the key is never in the message."""
+    if kind not in ("info", "success", "warning", "failure"):
+        raise ValueError(f"unknown notice type {kind!r}")
+    form = urllib.parse.urlencode({"tag": tag, "title": title[:250], "body": body[:1800], "type": kind}).encode()
+    req = urllib.request.Request(f"{url.rstrip('/')}/notify/{urllib.parse.quote(key, safe='')}", data=form, method="POST",
+                                 headers={"Content-Type": "application/x-www-form-urlencoded"})
+    try:
+        with opener(req, timeout=timeout) as r:
+            r.read()
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"Apprise refused the notice ({exc.code})") from None
+    except (urllib.error.URLError, OSError) as exc:
+        raise RuntimeError(f"cannot reach Apprise: {getattr(exc, 'reason', exc)}") from None
 
 
 def is_ticker(target: str) -> bool:

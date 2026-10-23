@@ -482,6 +482,18 @@ class ButtonTests(unittest.TestCase):
         _, r = w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])
         self.assertEqual(r["result"]["content"][0]["text"], "hs-tmeuze did delete_document")
 
+    def test_the_link_is_dropped_only_when_buttons_are_on_and_only_for_ha_channels(self):
+        ha = {"notify_default": {"kind": "ha", "service": "mobile_app_x"}}
+        w = World(self, confirm_timeout=0.3, settings=dict(self.HELPER, **ha), helper_reader=lambda *a: "")
+        w.call("hs_ushy__delete_document", token=w.keys["ushy"])               # ushy has no channel of their own
+        self.assertEqual(w.notes[0][1], {"kind": "ha", "service": ["mobile_app_x"], "link": False})   # (person, default, ...)
+        w = World(self, confirm_timeout=0.3, settings=ha)                      # no helper: the link is all there is
+        w.call("hs_ushy__delete_document", token=w.keys["ushy"])
+        self.assertEqual(w.notes[0][1], {"kind": "ha", "service": ["mobile_app_x"], "link": True})
+        w = World(self, confirm_timeout=0.3, settings=self.HELPER, helper_reader=lambda *a: "")
+        w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])           # Ticker is passed through untouched
+        self.assertEqual(w.notes[0][0], {"kind": "ticker", "category": "Novak tmeuze"})
+
     def test_a_pressed_deny_does_nothing(self):
         w = self.world(lambda w: f"NOVAK_DENY_{self.token(w)}" if w.notes else "")
         _, r = w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])
@@ -513,6 +525,13 @@ class ButtonTests(unittest.TestCase):
         self.assertEqual([p for p, _ in sent], ["/api/services/notify/mobile_app_pyrite", "/api/services/notify/mobile_app_aquarius"])
         actions = sent[0][1]["data"]["actions"]
         self.assertEqual([a["action"] for a in actions[:2]], ["NOVAK_APPROVE_TOK123", "NOVAK_DENY_TOK123"])
+        self.assertIn("clickAction", sent[0][1]["data"])                                # a link unless told not to
+        sent.clear()
+        notify.send(dict(cfg, link=False), {}, "http://ha", "t", "T", "m", "http://gw/approve/TOK123", post)
+        data = sent[0][1]["data"]
+        self.assertNotIn("clickAction", data)
+        self.assertNotIn("url", data)
+        self.assertEqual(len(data["actions"]), 2)                                       # buttons only
         self.assertIn("pyrite", out)
         self.assertIn("aquarius", out)
 

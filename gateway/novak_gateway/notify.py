@@ -64,10 +64,15 @@ def send(person_notify: dict, default: dict, ha_url: str, ha_token: str,
         # Real buttons: a press fires mobile_app_notification_action in Home Assistant,
         # whose automation writes the action id into the approval helper, and the gateway
         # reads that (service.py). The link stays as a fallback.
-        data = {"url": url, "clickAction": url, "tag": f"novak-{token[:16]}",
+        data = {"tag": f"novak-{token[:16]}",
                 "actions": [{"action": f"NOVAK_APPROVE_{token}", "title": "Approve"},
-                            {"action": f"NOVAK_DENY_{token}", "title": "Deny", "destructive": True},
-                            {"action": "URI", "title": "Review", "uri": url}]}
+                            {"action": f"NOVAK_DENY_{token}", "title": "Deny", "destructive": True}]}
+        if cfg.get("link", True):
+            # The review page is on the tailnet, so it only works there. With the helper
+            # configured (link: false) the notification carries no link at all, and a tap
+            # on its body just opens the app.
+            data.update({"url": url, "clickAction": url})
+            data["actions"].append({"action": "URI", "title": "Review", "uri": url})
         sent, errors = [], []
         for svc in services:
             svc = str(svc).removeprefix("notify.")

@@ -138,8 +138,12 @@ class Gateway:
         person = identity.person
         try:
             groups = self.dir.settings.get("notify_groups") or {}
-            sent = self.notifier(notify_mod.expand((person.notify if person else {}), groups),
-                                 notify_mod.expand(self.dir.settings.get("notify_default") or {}, groups),
+            buttons = bool(self.dir.settings.get("approval_helper"))
+            def channel(cfg):
+                cfg = notify_mod.expand(cfg, groups)
+                return {**cfg, "link": not buttons} if cfg.get("kind") == "ha" else cfg
+            sent = self.notifier(channel(person.notify if person else {}),
+                                 channel(self.dir.settings.get("notify_default") or {}),
                                  self.env.get("GATEWAY_HA_URL", ""), self.env.get("GATEWAY_HA_TOKEN", ""),
                                  f"Confirm: {tool.replace('_', ' ')}", f"{entry.name}: {tool}. Tap to review.", url)
         except Exception as exc:

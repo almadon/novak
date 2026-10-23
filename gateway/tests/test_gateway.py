@@ -482,6 +482,12 @@ class ButtonTests(unittest.TestCase):
         _, r = w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])
         self.assertEqual(r["result"]["content"][0]["text"], "hs-tmeuze did delete_document")
 
+    def test_with_buttons_on_the_notification_carries_no_link(self):
+        w = self.world(lambda w: "")
+        w.gw.dir.settings["confirm_timeout_s"] = 0.3
+        w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])
+        self.assertFalse(w.notes[0][0]["link"] if isinstance(w.notes[0][0], dict) else True)
+
     def test_a_pressed_deny_does_nothing(self):
         w = self.world(lambda w: f"NOVAK_DENY_{self.token(w)}" if w.notes else "")
         _, r = w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])
@@ -513,6 +519,13 @@ class ButtonTests(unittest.TestCase):
         self.assertEqual([p for p, _ in sent], ["/api/services/notify/mobile_app_pyrite", "/api/services/notify/mobile_app_aquarius"])
         actions = sent[0][1]["data"]["actions"]
         self.assertEqual([a["action"] for a in actions[:2]], ["NOVAK_APPROVE_TOK123", "NOVAK_DENY_TOK123"])
+        self.assertIn("clickAction", sent[0][1]["data"])                                # a link unless told not to
+        sent.clear()
+        notify.send(dict(cfg, link=False), {}, "http://ha", "t", "T", "m", "http://gw/approve/TOK123", post)
+        data = sent[0][1]["data"]
+        self.assertNotIn("clickAction", data)
+        self.assertNotIn("url", data)
+        self.assertEqual(len(data["actions"]), 2)                                       # buttons only
         self.assertIn("pyrite", out)
         self.assertIn("aquarius", out)
 

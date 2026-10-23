@@ -164,7 +164,7 @@ may be a notify service (`mobile_app_pyrite`), a list of them, or a name from
 `notify_groups` in `gateway.yaml` (`mgmt: [mobile_app_pyrite, mobile_app_aquarius]` sends
 to both phones; whichever presses first decides, and a decision is final).
 
-A button press is an event inside Home Assistant (`mobile_app_notification_action`). The
+With `approval_helper` set the notification has no link: the review page is on the tailnet, so a tap on the body just opens the app. A button press is an event inside Home Assistant (`mobile_app_notification_action`). The
 gateway cannot subscribe to events without an admin token, and it should not hold one, so
 the press is passed on through a helper the gateway can read with its ordinary token:
 

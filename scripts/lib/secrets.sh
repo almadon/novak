@@ -10,9 +10,13 @@
 # one, and asking for a per-secret system daemon (gnome-keyring, `pass`+GPG,
 # systemd-creds) would be real new infrastructure for one CLI, on a platform
 # whose own real deployment (Spire, decision #28/#33) already stores these
-# as plain values directly in .env today. So on Linux that IS the store:
-# secret_set/secret_get read and write the real value in .env, same file
-# `novak config` already edits. This is a REAL, LOWER security bar than
+# as plain values directly in .env today. So on Linux a file IS the store:
+# `secrets.env` next to .env (decision #69), mode 600, holding nothing but
+# secrets, so .env can be printed, diffed and pasted without leaking one.
+# secret_get reads secrets.env and falls back to a legacy line in .env;
+# secret_set writes secrets.env and removes any copy left in .env, so a
+# deployment migrates one secret at a time, and `novak secret migrate` does
+# the rest at once. This is a REAL, LOWER security bar than
 # Keychain — say so, don't pretend otherwise — traded for something that
 # works unattended on a host with no per-user session at all. File
 # permissions (600, root-owned — enforced by secret_set) are what stands in
@@ -22,11 +26,14 @@
 # `uname -s`.
 NOVAK_SECRETS_PLATFORM="${NOVAK_SECRETS_PLATFORM:-$(uname -s)}"
 
+# Where Linux secrets live: SECRETS_FILE if set, else secrets.env beside $ENV_FILE.
+secrets_file() { echo "${SECRETS_FILE:-$(dirname "$ENV_FILE")/secrets.env}"; }
+
 secrets_backend_label() {
   if [ "$NOVAK_SECRETS_PLATFORM" = "Darwin" ]; then
     echo "macOS Keychain, account $(whoami)"
   else
-    echo "$ENV_FILE, plaintext (no OS keychain on Linux — see scripts/lib/secrets.sh)"
+    echo "$(secrets_file), plaintext (no OS keychain on Linux — see scripts/lib/secrets.sh)"
   fi
 }
 
@@ -35,8 +42,12 @@ secret_get() {
   if [ "$NOVAK_SECRETS_PLATFORM" = "Darwin" ]; then
     security find-generic-password -s "novak/${1}" -w 2>/dev/null || true
   else
-    [ -f "$ENV_FILE" ] || return 0
-    grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true
+    local sf v; sf="$(secrets_file)"
+    v=""
+    [ -f "$sf" ] && v="$(grep -E "^${1}=" "$sf" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+    # Not migrated yet: a deployment from before secrets.env keeps its value in .env.
+    [ -n "$v" ] || { [ -f "$ENV_FILE" ] && v="$(grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true)"; }
+    printf '%s\n' "$v"
   fi
 }
 
@@ -57,19 +68,33 @@ secret_set() {
     fi
     [ "$(secret_get "$key")" = "$val" ] || return 1
   else
-    [ -f "$ENV_FILE" ] || return 1
-    local tmp; tmp="$(mktemp)"
-    if grep -qE "^${key}=" "$ENV_FILE"; then
-      awk -v k="$key" -v v="$val" '
-        $0 ~ "^" k "=" && !done { print k "=" v; done=1; next } { print }
-      ' "$ENV_FILE" > "$tmp"
+    local sf; sf="$(secrets_file)"
+    # umask first: the file must never exist, even for a moment, readable by others.
+    [ -f "$sf" ] || { (umask 077; : > "$sf") || return 1; }
+    local tmp; tmp="$(umask 077; mktemp)"
+    if grep -qE "^${key}=" "$sf"; then
+      # ENVIRON, not -v: awk -v would interpret a backslash in the value as an escape.
+      K="$key" V="$val" awk '
+        index($0, ENVIRON["K"] "=") == 1 && !done { print ENVIRON["K"] "=" ENVIRON["V"]; done=1; next } { print }
+      ' "$sf" > "$tmp"
     else
-      cp "$ENV_FILE" "$tmp"
+      cp "$sf" "$tmp"
       printf '%s=%s\n' "$key" "$val" >> "$tmp"
     fi
-    mv "$tmp" "$ENV_FILE"
-    chmod 600 "$ENV_FILE"
+    mv "$tmp" "$sf"
+    chmod 600 "$sf"
+    secret_drop_legacy "$key"
   fi
+}
+
+# Linux: remove a secret's line from .env (it has moved to secrets.env, or been deleted).
+secret_drop_legacy() {
+  [ -f "$ENV_FILE" ] || return 0
+  grep -qE "^${1}=" "$ENV_FILE" || return 0
+  local tmp; tmp="$(mktemp)"
+  grep -vE "^${1}=" "$ENV_FILE" > "$tmp" || true      # exit 1 just means "no lines left"
+  cat "$tmp" > "$ENV_FILE"                              # in place: keeps .env's owner and mode
+  rm -f "$tmp"
 }
 
 # $1 = VAR name. Same generation logic on both platforms (openssl rand),
@@ -87,10 +112,12 @@ secret_delete() {
   if [ "$NOVAK_SECRETS_PLATFORM" = "Darwin" ]; then
     security delete-generic-password -s "novak/$key" >/dev/null 2>&1 || true
   else
-    [ -f "$ENV_FILE" ] || return 0
-    local tmp; tmp="$(mktemp)"
-    grep -vE "^${key}=" "$ENV_FILE" > "$tmp" && mv "$tmp" "$ENV_FILE"
-    chmod 600 "$ENV_FILE"
+    local sf; sf="$(secrets_file)"
+    if [ -f "$sf" ]; then
+      local tmp; tmp="$(umask 077; mktemp)"
+      grep -vE "^${key}=" "$sf" > "$tmp" || true; mv "$tmp" "$sf"; chmod 600 "$sf"
+    fi
+    secret_drop_legacy "$key"
   fi
 }
 
@@ -114,15 +141,48 @@ secret_verify() {
   fi
 }
 
-# Linux only: is $ENV_FILE actually locked down? Meaningful here in a way
-# it isn't on Darwin, since Linux secrets live IN this file. Prints
-# "ok" or a reason string.
+# Linux only: is the secrets file actually locked down? Prints "ok" or a reason string.
+# A secret still sitting in .env (not yet migrated) is reported too, because .env is the file
+# people print and paste.
 secret_permcheck() {
   [ "$NOVAK_SECRETS_PLATFORM" = "Darwin" ] && { echo "ok"; return 0; }
-  [ -f "$ENV_FILE" ] || { echo "missing"; return 0; }
-  local perms; perms="$(stat -c '%a' "$ENV_FILE" 2>/dev/null || stat -f '%Lp' "$ENV_FILE" 2>/dev/null)"
+  local sf; sf="$(secrets_file)"
+  [ -f "$sf" ] || { echo "missing ($sf: run novak up, or novak secret migrate)"; return 0; }
+  local perms; perms="$(stat -c '%a' "$sf" 2>/dev/null || stat -f '%Lp' "$sf" 2>/dev/null)"
   case "$perms" in
-    600|400) echo "ok" ;;
-    *) echo "loose ($perms, not 600)" ;;
+    600|400) ;;
+    *) echo "loose ($perms, not 600)"; return 0 ;;
   esac
+  local n; n="$(secrets_in_env | wc -l | tr -d ' ')"
+  [ "$n" = "0" ] && echo "ok" || echo "$n secret(s) still in $ENV_FILE: run novak secret migrate"
+}
+
+# Names in .env that hold a secret and should not: the declared secrets, plus anything named
+# like one (*_KEY, *_TOKEN, *_SECRET, *_PASSWORD) so a secret added by hand is not missed.
+# Reads names only, never values. Needs SECRET_VARS (scripts/lib/vars.sh).
+secrets_in_env() {
+  [ -f "$ENV_FILE" ] || return 0
+  local name
+  while IFS= read -r name; do
+    if [[ "$name" =~ (_KEY|_TOKEN|_SECRET|_PASSWORD)$ ]]; then echo "$name"; continue; fi
+    local v; for v in "${SECRET_VARS[@]:-}"; do [ "$v" = "$name" ] && { echo "$name"; break; }; done
+  done < <(grep -oE '^[A-Z][A-Z0-9_]*=' "$ENV_FILE" | tr -d '=' | sort -u)
+}
+
+# Moves every secret in .env to secrets.env. A placeholder (set-in-keychain and friends) is
+# dropped, not moved: it was never a value. Prints "moved NAME" or "dropped NAME" per name,
+# never a value.
+secrets_migrate() {
+  local name val
+  for name in $(secrets_in_env); do
+    val="$(grep -E "^${name}=" "$ENV_FILE" | head -1 | cut -d= -f2-)"
+    case "$val" in
+      ""|set-in-keychain|EDIT-ME|changeme) secret_drop_legacy "$name"; echo "dropped $name (placeholder)" ;;
+      *) if [ -n "$(grep -E "^${name}=" "$(secrets_file)" 2>/dev/null)" ]; then
+           secret_drop_legacy "$name"; echo "dropped $name (secrets.env already had it)"
+         else
+           secret_set "$name" "$val" && [ "$(secret_get "$name")" = "$val" ] && echo "moved $name" || { echo "FAILED $name"; return 1; }
+         fi ;;
+    esac
+  done
 }

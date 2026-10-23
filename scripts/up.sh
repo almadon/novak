@@ -66,6 +66,23 @@ source "$REPO_DIR/scripts/lib/vars.sh"
 # shellcheck source=lib/secrets.sh
 source "$REPO_DIR/scripts/lib/secrets.sh"
 
+# Linux keeps secrets in secrets.env beside .env (decision #69); create it empty and private so
+# the first `novak secret set` has somewhere to write. macOS uses the Keychain and has no such file.
+_secrets_env_file=""
+if [ "$PLATFORM" != "Darwin" ]; then
+  [ -f "$(secrets_file)" ] || (umask 077; : > "$(secrets_file)")
+  chmod 600 "$(secrets_file)" 2>/dev/null || true
+  _secrets_env_file="$(secrets_file)"
+  # A secret still in .env (an install from before secrets.env, or a fresh copy of .env.example)
+  # moves across now, so no manual step is needed after an update. Prints names, never values.
+  _moved="$(secrets_migrate 2>&1)" || ui_warn "could not move every secret out of .env: run 'novak secret migrate'"
+  if [ -n "$_moved" ]; then
+    ui_section "🔐" "Secrets file"
+    ui_ok "$(printf '%s\n' "$_moved" | grep -c '^moved') secret(s) moved from .env to $(secrets_file)"
+    [ "${NOVAK_VERBOSE:-}" = "1" ] && printf '%s\n' "$_moved" | while read -r _l; do ui_dim "$_l"; done
+  fi
+fi
+
 loaded_secrets=()
 for var in "${SECRET_VARS[@]}"; do
   if val="$(secret_get "$var")" && [ -n "$val" ]; then
@@ -74,7 +91,7 @@ for var in "${SECRET_VARS[@]}"; do
   fi
 done
 ui_section "🔐" "Secrets"
-if [ "$PLATFORM" = "Darwin" ]; then _secret_src="the Keychain"; else _secret_src="$ENV_FILE"; fi
+if [ "$PLATFORM" = "Darwin" ]; then _secret_src="the Keychain"; else _secret_src="$(secrets_file)"; fi
 ui_ok "${#loaded_secrets[@]} loaded from ${_secret_src}"
 if [ "${NOVAK_VERBOSE:-}" = "1" ]; then
   for var in "${loaded_secrets[@]}"; do ui_dim "🔑 ${var}"; done
@@ -355,6 +372,7 @@ ui_section "📋" "Status"
 _ps="$(docker compose \
   --project-directory "$NOVAK_HOME" \
   --env-file "$NOVAK_HOME/.env" \
+  ${_secrets_env_file:+--env-file "$_secrets_env_file"} \
   -f "$REPO_DIR/docker-compose.yml" \
   -f "$NOVAK_HOME/docker-compose.mcp.yml" \
   ps --format 'table {{.Service}}\t{{.Status}}\t{{.Ports}}')"

@@ -294,6 +294,18 @@ cmd_secret() {
       echo
       printf '%s\n' "$val"
       ;;
+    migrate)
+      if [ "$PLATFORM" = "Darwin" ]; then
+        dim "  macOS keeps secrets in the Keychain; there is nothing to migrate."
+      else
+        bold "Moving secrets out of $ENV_FILE into $(secrets_file)"
+        echo
+        local moved; moved="$(secrets_migrate)" || { red "$moved"; exit 1; }
+        if [ -n "$moved" ]; then echo "$moved" | sed 's/^/  /'; else dim "  Nothing to move: no secret is in $ENV_FILE."; fi
+        echo
+        dim "  Run 'novak up' to apply. .env is now configuration only."
+      fi
+      ;;
     verify)
       bold "Unattended readability"
       echo
@@ -304,9 +316,9 @@ cmd_secret() {
         dim "  failing."
       else
         dim "  Linux has nothing that can hang the way a Keychain auth dialog"
-        dim "  can — this just confirms each secret has a real value, and that"
-        dim "  $ENV_FILE itself is actually locked down (600), since that file"
-        dim "  IS the store here."
+        dim "  can — this just confirms each secret has a real value, that"
+        dim "  $(secrets_file) is actually locked down (600), since that file"
+        dim "  IS the store here, and that no secret is left in $ENV_FILE."
       fi
       echo
       local v state failed=0
@@ -322,9 +334,9 @@ cmd_secret() {
       if [ "$PLATFORM" != "Darwin" ]; then
         local perm; perm="$(secret_permcheck)"
         if [ "$perm" = "ok" ]; then
-          grn "  $ENV_FILE permissions: ok"
+          grn "  $(secrets_file): permissions ok, nothing left in $ENV_FILE"
         else
-          red "  $ENV_FILE permissions: $perm — fix with: chmod 600 $ENV_FILE"
+          red "  $(secrets_file): $perm"
           failed=1
         fi
       fi
@@ -1075,6 +1087,8 @@ compose() {
   fi
   local args=(env COMPOSE_PROFILES="$all_profiles" docker compose --project-directory "$NOVAK_HOME" -f "$REPO_DIR/docker-compose.yml")
   [ -f "$ENV_FILE" ] && args+=(--env-file "$ENV_FILE")
+  # Secrets last, so a value here wins (Linux only: on macOS they come from the Keychain via up.sh).
+  [ "$PLATFORM" != "Darwin" ] && [ -f "$(secrets_file)" ] && args+=(--env-file "$(secrets_file)")
   [ -f "$NOVAK_HOME/docker-compose.mcp.yml" ] && args+=(-f "$NOVAK_HOME/docker-compose.mcp.yml")
   "${args[@]}" "$@"
 }

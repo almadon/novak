@@ -67,6 +67,7 @@ works identically on both platforms.
 | `novak secret list` | which secrets exist — never their values |
 | `novak secret set KEY` | store one, prompting without echo |
 | `novak secret set KEY --generate` | generate and store one, never displaying it |
+| `novak secret migrate` | Linux: move any secret still in `.env` into `secrets.env` (names only are printed). `novak up` does this by itself, so it rarely needs running by hand |
 | `novak secret verify` | do they read back unattended, or would a prompt hang boot? |
 | `novak secret show KEY` | print one, for pasting into a client |
 | `novak up` | apply config and start |

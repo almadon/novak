@@ -92,8 +92,10 @@ def configured_vars() -> set[str]:
     """
     found = {k for k, v in os.environ.items() if v.strip() not in PLACEHOLDERS}
 
-    env_file = NOVAK_HOME / ".env"
-    if env_file.exists():
+    # .env is configuration; secrets.env (Linux, decision #69) holds the secrets.
+    for env_file in (NOVAK_HOME / ".env", NOVAK_HOME / "secrets.env"):
+        if not env_file.exists():
+            continue
         for line in env_file.read_text().splitlines():
             line = line.strip()
             if not line or line.startswith("#") or "=" not in line:
@@ -434,6 +436,9 @@ def main() -> int:
     env_file = project_dir / ".env"
     if env_file.exists():
         cmd += ["--env-file", str(env_file)]
+    secrets_file = project_dir / "secrets.env"          # last, so its values win
+    if secrets_file.exists():
+        cmd += ["--env-file", str(secrets_file)]
     cmd += ["-f", str(REPO_DIR / "docker-compose.yml"), "-f", str(OUTPUT),
             "up", "-d", "--remove-orphans"]
     try:

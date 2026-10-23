@@ -6,11 +6,11 @@
 # SECRETS DO NOT BELONG HERE. `key_env` names the secret that holds a connection's key
 # (`novak secret set`); the value is read at apply time and never written to this file.
 # The applier signs in with OWUI_ADMIN_API_KEY, an admin API key made once in Open WebUI
-# (Settings, Account, API keys; needs OWUI_ENABLE_API_KEYS=true).
+# (Settings, Account, API keys; needs OWUI_ENABLE_API_KEYS=true). Make it on a dedicated
+# service account, not on a person's own account.
 #
 # Only what is listed here is managed. A connection or model preset not named here is
-# left alone, and a preset keeps its other settings (description, sharing, parameters):
-# the applier changes just the default tools and the system prompt.
+# left alone, and an existing preset keeps its other settings (sharing, parameters).
 
 openwebui:
   # Where the applier reaches Open WebUI from this host. Blank = http://127.0.0.1:$OPENWEBUI_PORT
@@ -27,14 +27,52 @@ openwebui:
       # Names the person: the gateway trusts this client to say who is asking.
       headers: {X-Novak-User: "{{USER_EMAIL}}"}
 
-  # A preset named here gets these tools switched on by default, so a new chat can act
-  # instead of describing what it would do, and a system prompt built from the persona
-  # plus the rules for using tools. Open WebUI sends its own system message whenever tools
-  # are on, which makes the router skip the persona (decision #38), so the preset carries it.
+    # The same gateway, narrowed to the house: a preset can switch a whole connection on but not
+    # single tools, so the lean Home preset gets a connection that only offers Home Assistant's.
+    - id: novak-home
+      name: Novak house
+      description: Lights, devices and the state of the house only.
+      type: mcp
+      url: http://gateway:8000/mcp
+      auth_type: bearer
+      key_env: OWUI_GATEWAY_KEY
+      headers: {X-Novak-User: "{{USER_EMAIL}}", X-Novak-Scope: "ha-*"}
+
+  # What people pick from. The router's own roles (chat, deep, task, ha-voice) are plumbing,
+  # not choices, so they are hidden from the picker (they keep working underneath, and keep
+  # their sharing) and these presets sit on top of them. A new preset is shared with the same
+  # people as the model it is built on. Open WebUI sends its own system message whenever tools
+  # are on, which makes the router skip the persona (decision #38), so each preset carries the
+  # persona and rules itself, built from the prompt files named here.
   models:
-    - id: chat
+    - id: novak
+      name: Novak
+      description: Your everyday assistant, with the house, tasks, notes and memory.
+      base: chat
       tools: [novak-gateway]
-      system_files: [prompts/novak-chat.md, prompts/novak-tools.md]
-    - id: deep
+      system_files: [prompts/novak-chat.md, prompts/novak-tools.md, prompts/novak-house.md]
+
+    - id: novak-deep
+      name: Novak Deep
+      description: Slower and more careful, for hard questions and long reasoning. Same tools.
+      base: deep
       tools: [novak-gateway]
-      system_files: [prompts/novak-chat.md, prompts/novak-tools.md]
+      system_files: [prompts/novak-chat.md, prompts/novak-tools.md, prompts/novak-house.md]
+
+    - id: home
+      name: Home
+      description: Lights, devices and the house. Quick, short answers.
+      base: chat                       # VERIFY: try the smaller model on a real lighting request
+      tools: [novak-home]
+      system_files: [prompts/novak-tools.md, prompts/novak-house.md, prompts/novak-home.md]
+
+    - id: code
+      name: Code
+      description: Coding sessions. No house or account tools, more room to think.
+      base: deep
+      system_files: [prompts/novak-code.md]
+
+    - {id: chat, hidden: true}
+    - {id: deep, hidden: true}
+    - {id: task, hidden: true}
+    - {id: ha-voice, hidden: true}

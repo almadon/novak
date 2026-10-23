@@ -3139,3 +3139,30 @@ and parameters.
 Open WebUI growing a supported config-as-code mechanism, or per-user presets that this should
 manage too.
 
+## 67. The picker offers presets, not router roles
+
+`chat`, `deep`, `task` and `ha-voice` are router roles (decision #21): plumbing that picks a
+model and carries a persona. Open WebUI listed them as if they were choices, so nobody could say
+when to use `chat` and when `task`, and nothing made tool use or the house easy to reach.
+
+### What was decided
+
+`registry/openwebui.yaml` defines what people pick: **Novak** (everyday, every tool), **Novak
+Deep** (the same, slower and more careful), **Home** (lights and devices only, short answers),
+and **Code** (coding, no house or account tools), each with a plain description. The router
+roles are hidden from the picker (they keep working underneath, and keep their sharing) and
+each preset is shared with the same people as the model it is built on. Home gets its own
+connection scoped with `X-Novak-Scope: ha-*` ([gateway.md](gateway.md)), because a preset can
+switch on a whole connection but not single tools. Prompts are split by purpose
+(`novak-tools`, `novak-house`, `novak-home`, `novak-code`) so a rule lives in one place.
+
+### What it costs
+
+- Old chats keep their raw model id and still work, but new chats start from the presets.
+- Home's base model is a guess until a real lighting request has been run on the smaller model.
+- Hiding only changes entries that already exist; a model with no entry is left as it was.
+
+### What would make it worth revisiting
+
+Per-user presets, or Open WebUI picking tools per preset natively (then the scoped connection goes).
+

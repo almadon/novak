@@ -104,6 +104,9 @@ def load_config(path: Path) -> dict:
         for t in m.get("tools") or []:
             if t not in seen:
                 raise ConfigError(f"model {m['id']}: tool {t!r} is not a tool server in this file")
+        caps = m.get("capabilities")
+        if caps is not None and not (isinstance(caps, dict) and all(isinstance(v, bool) for v in caps.values())):
+            raise ConfigError(f"model {m['id']}: capabilities must be a mapping of name to true/false")
         for f in ("base", "access_from"):
             if m.get(f) and not ID_RE.match(m[f]):
                 raise ConfigError(f"model {m['id']}: {f} must be a model id with no spaces")
@@ -199,7 +202,7 @@ def model_changes(spec: dict, have: dict | None, servers: list[dict], repo: Path
     if have is None:
         if spec.get("hidden") and not spec.get("base"):
             return None, []
-        meta = {"toolIds": tools, "capabilities": {}}
+        meta = {"toolIds": tools, "capabilities": dict(spec.get("capabilities") or {})}
         if spec.get("description"):
             meta["description"] = spec["description"]
         if spec.get("hidden"):
@@ -222,6 +225,12 @@ def model_changes(spec: dict, have: dict | None, servers: list[dict], repo: Path
     if "hidden" in spec and bool(spec["hidden"]) != bool(meta.get("hidden")):
         meta["hidden"] = bool(spec["hidden"])
         what.append("hidden from the picker" if spec["hidden"] else "shown in the picker")
+    caps = dict(meta.get("capabilities") or {})
+    for k, v in (spec.get("capabilities") or {}).items():
+        if caps.get(k) != v:
+            caps[k] = v
+            what.append(f"capability {k}: {'on' if v else 'off'}")
+    meta["capabilities"] = caps
     current = list(meta.get("toolIds") or [])
     merged = current + [t for t in tools if t not in current]       # ours added, anything else kept
     if merged != current:

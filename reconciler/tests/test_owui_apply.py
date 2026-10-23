@@ -233,6 +233,30 @@ class OwuiApplyTests(unittest.TestCase):
         self.assertEqual(self.run_main("--apply")[0], 0)
         self.assertEqual(FakeOwui.state["posts"], [])                            # and it is idempotent
 
+    def test_capabilities_are_set_on_create_and_merged_on_update_without_losing_others(self):
+        self.menu([{"id": "home", "base": "chat", "capabilities": {"builtin_tools": False}}])
+        self.run_main("--apply")
+        self.assertEqual(FakeOwui.state["models"]["home"]["meta"]["capabilities"], {"builtin_tools": False})
+        FakeOwui.state["models"]["chat"] = self.existing_chat(meta={"capabilities": {"vision": True, "builtin_tools": True}})
+        self.menu([{"id": "chat", "capabilities": {"builtin_tools": False}}])
+        code, out = self.run_main("--apply")
+        self.assertIn("capability builtin_tools: off", out)
+        self.assertEqual(FakeOwui.state["models"]["chat"]["meta"]["capabilities"], {"vision": True, "builtin_tools": False})
+        FakeOwui.state["posts"].clear()
+        self.assertEqual(self.run_main("--apply")[0], 0)
+        self.assertEqual(FakeOwui.state["posts"], [])
+
+    def test_a_non_boolean_capability_is_refused_at_load(self):
+        self.menu([{"id": "home", "base": "chat", "capabilities": {"builtin_tools": "no"}}])
+        self.assertEqual(self.run_main("--apply")[0], 2)
+        self.assertEqual(FakeOwui.state["posts"], [])
+
+    def test_every_shipped_preset_turns_off_the_built_in_tools(self):
+        cfg = owui_apply.load_config(REPO / "registry" / "openwebui.yaml")
+        for m in cfg["models"]:
+            if not m.get("hidden"):
+                self.assertEqual(m["capabilities"], {"builtin_tools": False}, m["id"])
+
     def test_a_preset_can_use_a_connection_without_the_gateway_tools(self):
         self.menu([{"id": "code", "name": "Code", "base": "deep", "system_files": ["prompts/tools.md"]}])
         self.run_main("--apply")

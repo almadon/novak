@@ -29,6 +29,8 @@ SECRET_VARS=(
   INGEST_TOKEN
   INGEST_HA_TOKEN
   INGEST_GATEWAY_KEY
+  OWUI_ADMIN_API_KEY
+  OWUI_GATEWAY_KEY
   GATEWAY_HA_TOKEN
 )
 
@@ -106,6 +108,8 @@ EXTERNAL_SECRETS=(
   TINYAUTH_OIDC_CLIENT_SECRET
   INGEST_HA_TOKEN
   INGEST_GATEWAY_KEY
+  OWUI_ADMIN_API_KEY
+  OWUI_GATEWAY_KEY
   GATEWAY_HA_TOKEN
 )
 # OPEN_TERMINAL_API_KEY is the same shape as HINDSIGHT_API_KEY: we generate
@@ -149,6 +153,8 @@ secret_desc() {
     TINYAUTH_OIDC_CLIENT_SECRET) echo "Portal (TinyAuth): its client secret in Pocket ID. Copy from Pocket ID" ;;
     HA_DRIFT_TOKEN)             echo "Home Assistant: read-only token for 'novak drift --live'" ;;
     INGEST_TOKEN)               echo "Ingest: bearer token recorders and adapters send" ;;
+    OWUI_ADMIN_API_KEY)         echo "Open WebUI: an admin's API key, for 'novak owui' (Settings, Account, API keys)" ;;
+    OWUI_GATEWAY_KEY)           echo "Open WebUI: the gateway client key it presents (novak gateway client open-webui)" ;;
     INGEST_GATEWAY_KEY)         echo "Ingest: trusted gateway client key (novak gateway client ingest)" ;;
     INGEST_HA_TOKEN)            echo "Ingest: Home Assistant token for approval notifications" ;;
     GATEWAY_HA_TOKEN)           echo "Gateway: Home Assistant token for removal-confirmation notifications" ;;

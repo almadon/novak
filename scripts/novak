@@ -57,6 +57,7 @@
 #                             its credential to the new variable name
 #   novak omlx apply          apply registry/omlx.yaml (models, profiles, TTLs)
 #   novak router apply        apply registry/engines.yaml -> router/config.yaml
+#   novak owui [drift|apply]  check, or make, Open WebUI match registry/openwebui.yaml
 #                              (decision #28; run 'novak restart router' after)
 #   novak checklist           phase-by-phase deploy-checklist.md walk-through
 #   novak guided-setup        prompt for whatever's still unconfigured
@@ -378,6 +379,24 @@ cmd_omlx() {
 # no secrets, same as reconciler/reconcile.py — engines.yaml carries
 # variable NAMES, and LiteLLM resolves os.environ/VARNAME itself inside the
 # router container. Doesn't restart the router; the applier says so.
+# Open WebUI keeps its tool connections and model presets in its own database. This makes it
+# match registry/openwebui.yaml (`apply`) or reports where it differs (`drift`, the default).
+# It signs in with an admin API key and presents the gateway client key by NAME from the file:
+# neither is written anywhere, and the file holds no secret.
+cmd_owui() {
+  need_env
+  local py="$NOVAK_HOME/.venv/bin/python"; [ -x "$py" ] || py="$(command -v python3)"
+  local flag=""
+  case "${1:-drift}" in
+    apply) flag="--apply" ;;
+    drift|check|"") ;;
+    *) red "unknown: novak owui $1"; dim "  novak owui drift | apply"; exit 1 ;;
+  esac
+  OWUI_ADMIN_API_KEY="$(secret_get OWUI_ADMIN_API_KEY)" OWUI_GATEWAY_KEY="$(secret_get OWUI_GATEWAY_KEY)" \
+    OPENWEBUI_PORT="$(envval OPENWEBUI_PORT)" NOVAK_HOME="$NOVAK_HOME" \
+    "$py" "$REPO_DIR/reconciler/owui_apply.py" $flag
+}
+
 cmd_router() {
   case "${1:-apply}" in
     apply)
@@ -1510,6 +1529,7 @@ case "${1:-menu}" in
   adopt)    cmd_adopt ;;
   omlx)     shift; cmd_omlx "$@" ;;
   router)   shift; cmd_router "$@" ;;
+  owui)     shift; cmd_owui "$@" ;;
   doctor)   cmd_status ;;   # same checks up.sh runs, without starting anything
   checklist) cmd_checklist ;;
   guided-setup) cmd_guided_setup ;;

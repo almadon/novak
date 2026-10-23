@@ -43,7 +43,7 @@ if [ ! -f "$NOVAK_HOME/registry/mcp-servers.yaml" ]; then
   ui_seeded "$NOVAK_HOME/registry/mcp-servers.yaml" "(edit it there, not in the repo)"
 fi
 
-for f in people.yaml gateway.yaml; do
+for f in people.yaml gateway.yaml openwebui.yaml; do
   if [ ! -f "$NOVAK_HOME/registry/$f" ]; then
     cp "$REPO_DIR/registry/$f" "$NOVAK_HOME/registry/$f"
     ui_seeded "$NOVAK_HOME/registry/$f" "(edit it there, not in the repo)"

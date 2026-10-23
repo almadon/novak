@@ -29,6 +29,7 @@ class Identity:
     name: str                # person name, or "household"
     via: str                 # oidc | client:<name> | key
     person: object = None
+    scope: tuple = ()        # entry globs this connection narrows itself to; empty = everything it may use
 
 
 class OIDC:
@@ -67,6 +68,15 @@ def looks_like_jwt(token: str) -> bool:
 
 def authenticate(d: Directory, headers, oidc: OIDC | None, path_key: str | None = None,
                  household_path: bool = False) -> Identity:
+    """Who is asking, and (optionally) which of their entries this connection wants. The scope
+    header only ever narrows: a connection cannot reach more than its person may."""
+    ident = _authenticate(d, headers, oidc, path_key, household_path)
+    ident.scope = tuple(p.strip() for p in (headers.get("X-Novak-Scope") or "").split(",") if p.strip())
+    return ident
+
+
+def _authenticate(d: Directory, headers, oidc: OIDC | None, path_key: str | None = None,
+                  household_path: bool = False) -> Identity:
     auth = headers.get("Authorization", "")
     token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
 

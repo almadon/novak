@@ -466,6 +466,38 @@ class HaMcpFilterTests(unittest.TestCase):
         self.assertEqual(policy.classify("ha_remove_todo_item", ov), "destructive")      # removals are held anyway
 
 
+class ScopeTests(unittest.TestCase):
+    """A connection may narrow itself to some entries (Open WebUI's Home preset sees only the house)."""
+
+    def test_a_scope_narrows_what_a_person_sees(self):
+        w = World(self)
+        _, everything = w.tools(token=w.keys["owui"], headers={"X-Novak-User": "t@example.com"})
+        _, scoped = w.tools(token=w.keys["owui"], headers={"X-Novak-User": "t@example.com", "X-Novak-Scope": "hs-t*"})
+        self.assertTrue(everything)
+        self.assertTrue(scoped)
+        self.assertTrue(all(n.startswith("hs_tmeuze__") for n in scoped))
+        self.assertLessEqual(set(scoped), set(everything))
+
+    def test_a_scope_that_matches_nothing_shows_nothing(self):
+        w = World(self)
+        self.assertEqual(w.tools(token=w.keys["tmeuze"], headers={"X-Novak-Scope": "nothing-*"})[1], [])
+
+    def test_a_scope_can_never_reach_someone_elses_entry(self):
+        w = World(self)
+        _, names = w.tools(token=w.keys["tmeuze"], headers={"X-Novak-Scope": "hs-*"})      # broad glob, still only tmeuze's own
+        self.assertTrue(all(n.startswith("hs_tmeuze__") for n in names))
+        _, r = w.call("hs_ushy__recall", token=w.keys["tmeuze"], headers={"X-Novak-Scope": "hs-*"})
+        self.assertTrue(r["result"]["isError"])
+
+    def test_a_scoped_connection_cannot_call_outside_its_scope(self):
+        w = World(self)
+        _, r = w.call("hs_tmeuze__recall", token=w.keys["tmeuze"], headers={"X-Novak-Scope": "elsewhere-*"})
+        self.assertTrue(r["result"]["isError"])
+        self.assertEqual([m for m, *_ in w.seen["hs-tmeuze"] if m == "tools/call"], [])
+        _, r = w.call("hs_tmeuze__recall", token=w.keys["tmeuze"], headers={"X-Novak-Scope": "hs-tmeuze"})
+        self.assertEqual(r["result"]["content"][0]["text"], "hs-tmeuze did recall")
+
+
 class ButtonTests(unittest.TestCase):
     """Approve and Deny buttons on the phone: Home Assistant writes the pressed action into a helper."""
     HELPER = {"approval_helper": "input_text.novak_approval"}

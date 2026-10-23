@@ -201,3 +201,11 @@ second helper and the page reads that:
 With several requests waiting the page shows the newest; the notification buttons on each
 phone still carry their own request's token, so none is lost.
 
+## Narrowing a connection: `X-Novak-Scope`
+
+A connection may send `X-Novak-Scope: <entry glob>[, ...]` to see only some of the entries
+its person may already use (`ha-*` for the house alone). It only ever narrows: a scope cannot
+add an entry the person is not allowed, and a call outside it is refused as an unknown tool.
+Open WebUI uses it to give a "Home" preset a connection that offers just the house tools, since
+a preset can switch on a whole connection but not individual tools.
+

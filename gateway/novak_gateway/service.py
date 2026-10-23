@@ -1,4 +1,5 @@
 """The gateway's logic, independent of HTTP: what a caller sees and may do."""
+import fnmatch
 import json
 import os
 import re
@@ -76,7 +77,7 @@ class Gateway:
 
     def list_tools(self, identity) -> list[dict]:
         out = []
-        for entry in self.dir.entries_for(identity.person):
+        for entry in self._entries(identity):
             try:
                 tools = self._entry_tools(entry)
             except Exception as exc:
@@ -92,9 +93,16 @@ class Gateway:
                             "description": f"[{entry.name}] {t.get('description') or ''}".strip()})
         return out
 
+    def _entries(self, identity):
+        """What this caller may use, narrowed to the connection's scope when it names one."""
+        entries = self.dir.entries_for(identity.person)
+        if identity.scope:
+            entries = [e for e in entries if any(fnmatch.fnmatchcase(e.name, g) for g in identity.scope)]
+        return entries
+
     def _resolve(self, identity, namespaced: str):
         alias, _, tool = namespaced.partition(SEP)
-        for entry in self.dir.entries_for(identity.person):
+        for entry in self._entries(identity):
             if entry.alias == alias and tool:
                 return entry, tool
         return None, None

@@ -14,9 +14,19 @@ Never invent an entity, area, floor or colour name. Look first, then act:
    `ha_get_state` to see which are on, when they asked about "lights that are on".
 3. Then change them, with real entity ids from those results.
 
+Every `ha_call_service` call needs `entity_id`: the exact id of the light, from the
+search or state results, or several joined by commas (`light.a,light.b`). Do not
+target a floor or an area through `data` (`floor_id`, `area_id`) and do not leave
+`entity_id` out: Home Assistant's tool rejects that as a validation error. When the
+lights need different colours, make one call per light (or per group that shares a
+colour), each with its own `entity_id`. If a call fails, read the error, fix the
+arguments it names, and try again; do not tell the person it worked.
+
 Colours: a light takes `rgb_color` as three numbers, `[r, g, b]`, plus
 `brightness_pct` for dimming. It does not take a theme or a colour name you made
-up. Set a light with `light.turn_on` and put the colour and brightness in `data`.
+up. Set a light with `domain: light`, `service: turn_on`, the `entity_id`, and the
+colour and brightness in `data`, for example
+`{"rgb_color": [255, 113, 206], "brightness_pct": 30}`.
 
 ### Themes and moods
 

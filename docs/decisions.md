@@ -3166,33 +3166,28 @@ switch on a whole connection but not single tools. Prompts are split by purpose
 
 Per-user presets, or Open WebUI picking tools per preset natively (then the scoped connection goes).
 
-## 69. Secrets live in their own file
+## 68. Open WebUI signs in through Pocket ID only
 
-On Linux the secret store was `.env` itself, the same file people print, diff and paste to get help.
-Showing it during this project printed a live Home Assistant token. One file for both configuration
-and secrets means every habit that is safe for configuration (cat it, share it, commit an example of
-it) is unsafe for the secrets in it.
+The original local superadmin has a password nobody holds and no way to use 2FA (Open WebUI
+offers none for local accounts here), which is not acceptable for an admin account, and it
+cannot be locked down by recovering it.
 
 ### What was decided
 
-On Linux, secrets are in `secrets.env` beside `.env`, mode 600, holding nothing else. `.env` is
-configuration and safe to show. `novak secret set` writes `secrets.env` and removes any copy left
-in `.env`; `secret_get` reads `secrets.env` and falls back to a legacy `.env` line, so a deployment
-migrates one secret at a time. `novak up` moves whatever is still in `.env` across (declared secrets
-and anything named `*_KEY`, `*_TOKEN`, `*_SECRET`, `*_PASSWORD`; a placeholder is dropped, not moved),
-printing names only. Compose reads both files, `secrets.env` last. macOS is unchanged: the Keychain.
+`OWUI_ENABLE_LOGIN_FORM=false` and `OWUI_ENABLE_PASSWORD_AUTH=false` hide the form and make the
+password endpoints refuse, so the only way in is Pocket ID (which has its own 2FA). Both
+default to true in the repo so a fresh install can sign in at all. API keys are separate and keep
+working, so the service account that `novak owui` uses is unaffected. There is no URL that
+brings the form back and no per-subnet switch inside Open WebUI: it is one variable, set back to
+true and `novak up` if Pocket ID is ever down. A reverse proxy could also restrict the password
+endpoint (`/api/v1/auths/signin`) by source address, but that would keep a local account alive.
 
 ### What it costs
 
-- The secrets are still plaintext on disk, as before: this narrows how often they are shown, not what
-  an attacker who can read the host's files gets. A directory of one file per secret, or Docker's
-  `_FILE` convention, would be better still, but most of the images here do not read `*_FILE` yet.
-- Anything that copies `.env` as "the config" (a backup, a support paste) now omits the secrets, so a
-  restore needs `secrets.env` too.
-- A secret a person adds to `.env` by hand with an unusual name is not caught until it is named like
-  one or listed in `scripts/lib/vars.sh`.
+If Pocket ID is down or misconfigured nobody can sign in until the variable is flipped on the
+host. That is a deliberate trade: the host is the break-glass, and it is already the trust root.
 
 ### What would make it worth revisiting
 
-Images that read `*_FILE`, or a secret manager (Vault, a systemd credential store) worth the new service.
+Open WebUI offering 2FA for local accounts, or a second identity provider as a fallback.
 

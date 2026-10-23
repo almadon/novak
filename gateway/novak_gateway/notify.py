@@ -17,6 +17,25 @@ def _post(ha_url, token, path, body, timeout=15):
         raise RuntimeError(f"Home Assistant refused ({exc.code}): {exc.read().decode()[:200]}") from exc
 
 
+def describe(entry: str, tool: str, args: dict | None) -> str:
+    """One short line saying what is being asked, for a person deciding on their phone."""
+    a = args or {}
+    if a.get("domain") and a.get("service"):
+        what = f"{a['domain']}.{a['service']} {a.get('entity_id') or ''}".strip()
+    else:
+        what = ", ".join(f"{k}={str(v)[:40]}" for k, v in list(a.items())[:4])
+    return f"{entry}: {tool} {what}".strip()
+
+
+def pending_value(token: str, person: str, text: str) -> str:
+    """What the approvals page reads: a JSON object kept under Home Assistant's 255-character
+    limit for an input_text, trimming the description rather than the token."""
+    base = {"t": token, "who": person, "do": ""}
+    room = 255 - len(json.dumps(base, separators=(",", ":"))) - 2
+    base["do"] = text[:max(room, 0)]
+    return json.dumps(base, separators=(",", ":"))
+
+
 def read_state(ha_url, token, entity, timeout=10) -> str:
     """The state of one Home Assistant entity (the approval helper), or ''."""
     req = urllib.request.Request(f"{ha_url.rstrip('/')}/api/states/{entity}",
@@ -67,6 +86,9 @@ def send(person_notify: dict, default: dict, ha_url: str, ha_token: str,
         data = {"tag": f"novak-{token[:16]}",
                 "actions": [{"action": f"NOVAK_APPROVE_{token}", "title": "Approve"},
                             {"action": f"NOVAK_DENY_{token}", "title": "Deny", "destructive": True}]}
+        if cfg.get("page"):
+            # A path inside Home Assistant opens in the app (an external address opens a browser).
+            data["clickAction"] = cfg["page"]
         if cfg.get("link", True):
             # The review page is on the tailnet, so it only works there. With the helper
             # configured (link: false) the notification carries no link at all, and a tap

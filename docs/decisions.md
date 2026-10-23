@@ -3082,3 +3082,27 @@ A gateway token allowed to subscribe to events (an admin one is more than it nee
 a Home Assistant action that can POST without YAML (then the automation could call the
 gateway directly).
 
+## 65. A tap opens an approvals page, not a link
+
+Removing the tailnet link left a tap on the notification landing on Home Assistant's home
+page, with no way to see what was being asked. A button cannot show the arguments of a call.
+
+### What was decided
+
+While a confirmation waits, the gateway writes a short description (who, which call) into an
+`input_text` helper through the service API and clears it after, and the notification's tap
+opens a dashboard inside the app that renders it with Approve and Deny. The gateway's token is
+not an admin one: `POST /api/states` returned 401, service calls do not, so the helper is the
+channel. A full HACS integration (entities, services, a real panel, history) is the later,
+larger answer and would replace this workaround.
+
+### What it costs
+
+- More Home Assistant setup that lives outside this repo (a helper, two scripts, a dashboard).
+- One request is shown at a time; the newest wins. 255 characters is room for the call's
+  gist, not its full arguments.
+
+### What would make it worth revisiting
+
+The HACS integration, or a gateway token allowed to create states.
+

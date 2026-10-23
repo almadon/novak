@@ -3166,3 +3166,33 @@ switch on a whole connection but not single tools. Prompts are split by purpose
 
 Per-user presets, or Open WebUI picking tools per preset natively (then the scoped connection goes).
 
+## 69. Secrets live in their own file
+
+On Linux the secret store was `.env` itself, the same file people print, diff and paste to get help.
+Showing it during this project printed a live Home Assistant token. One file for both configuration
+and secrets means every habit that is safe for configuration (cat it, share it, commit an example of
+it) is unsafe for the secrets in it.
+
+### What was decided
+
+On Linux, secrets are in `secrets.env` beside `.env`, mode 600, holding nothing else. `.env` is
+configuration and safe to show. `novak secret set` writes `secrets.env` and removes any copy left
+in `.env`; `secret_get` reads `secrets.env` and falls back to a legacy `.env` line, so a deployment
+migrates one secret at a time. `novak up` moves whatever is still in `.env` across (declared secrets
+and anything named `*_KEY`, `*_TOKEN`, `*_SECRET`, `*_PASSWORD`; a placeholder is dropped, not moved),
+printing names only. Compose reads both files, `secrets.env` last. macOS is unchanged: the Keychain.
+
+### What it costs
+
+- The secrets are still plaintext on disk, as before: this narrows how often they are shown, not what
+  an attacker who can read the host's files gets. A directory of one file per secret, or Docker's
+  `_FILE` convention, would be better still, but most of the images here do not read `*_FILE` yet.
+- Anything that copies `.env` as "the config" (a backup, a support paste) now omits the secrets, so a
+  restore needs `secrets.env` too.
+- A secret a person adds to `.env` by hand with an unusual name is not caught until it is named like
+  one or listed in `scripts/lib/vars.sh`.
+
+### What would make it worth revisiting
+
+Images that read `*_FILE`, or a secret manager (Vault, a systemd credential store) worth the new service.
+

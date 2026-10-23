@@ -3166,3 +3166,28 @@ switch on a whole connection but not single tools. Prompts are split by purpose
 
 Per-user presets, or Open WebUI picking tools per preset natively (then the scoped connection goes).
 
+## 68. Open WebUI signs in through Pocket ID only
+
+The original local superadmin has a password nobody holds and no way to use 2FA (Open WebUI
+offers none for local accounts here), which is not acceptable for an admin account, and it
+cannot be locked down by recovering it.
+
+### What was decided
+
+`OWUI_ENABLE_LOGIN_FORM=false` and `OWUI_ENABLE_PASSWORD_AUTH=false` hide the form and make the
+password endpoints refuse, so the only way in is Pocket ID (which has its own 2FA). Both
+default to true in the repo so a fresh install can sign in at all. API keys are separate and keep
+working, so the service account that `novak owui` uses is unaffected. There is no URL that
+brings the form back and no per-subnet switch inside Open WebUI: it is one variable, set back to
+true and `novak up` if Pocket ID is ever down. A reverse proxy could also restrict the password
+endpoint (`/api/v1/auths/signin`) by source address, but that would keep a local account alive.
+
+### What it costs
+
+If Pocket ID is down or misconfigured nobody can sign in until the variable is flipped on the
+host. That is a deliberate trade: the host is the break-glass, and it is already the trust root.
+
+### What would make it worth revisiting
+
+Open WebUI offering 2FA for local accounts, or a second identity provider as a fallback.
+

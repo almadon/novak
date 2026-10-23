@@ -122,6 +122,9 @@ def send(person_notify: dict, default: dict, ha_url: str, ha_token: str,
         post(ha_url, ha_token, "/api/services/supernotify/notify",
              {"title": title, "message": message, "target": target, "priority": cfg.get("priority", "high"),
               "force_resend": True,              # a repeated request is a new request, not a duplicate
+              # Only the delivery named below. Left implicit, Supernotify also sends a plain copy through
+              # the person's notify entity, so the phone buzzes twice (found on the first live run).
+              "delivery_selection": "explicit",
               "actions": [{"action": f"NOVAK_APPROVE_{token}", "title": "Approve"},
                           {"action": f"NOVAK_DENY_{token}", "title": "Deny"}],
               "delivery": {"mobile_push": {"data": mobile}}})

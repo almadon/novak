@@ -3256,6 +3256,8 @@ alerts must not depend on Home Assistant being up, and Supernotify has no entry 
 - A test that was meant to be a simulation sent a real notification to two phones, because `dry_run` was
   placed inside `advanced`; a simulation is only a simulation when the flag is at the top level.
 - Both of a person's phones receive the request and either can answer; the first press decides.
+- Left to choose deliveries itself, Supernotify also sent a plain copy through the person's notify entity (two
+  notifications for one request, found on the first live run). The call now names `delivery_selection: explicit`.
 
 ### What would make it worth revisiting
 

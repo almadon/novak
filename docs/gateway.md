@@ -223,4 +223,20 @@ The call's shape was checked against a live install, because a wrong guess is no
 `delivery` and `dry_run` go at the **top level** of the call (inside `advanced` they are passed to the phone
 as plain data), and `delivery.mobile_push.target` is a list. A simulated call (`dry_run: simulate`) sends
 nothing and is not recorded.
+## Lean tool lists: `X-Novak-Tools` and the house tools
+
+A model can only use the tools that fit in its context. The models here have an 8,192-token window;
+Home Assistant's own tools are about 21,000 tokens of definitions for the house alone and the gateway
+offers 79 tools in all (about 34,000). A model given them loses the start of its prompt, so it ignores
+its instructions and invents arguments.
+
+- **`X-Novak-Tools: <glob>[, ...]`** limits one connection to the tools whose namespaced name
+  (`<entry>__<tool>`) matches. Like the scope header it only narrows. The Open WebUI registry uses it
+  to give the main connection about ten tools (about 2,400 tokens) and the Home connection two.
+- **The house tools** (`house__house_state`, `house__lights_set`, about 450 tokens together) are built
+  into the gateway and run on the person's own Home Assistant entry (`house: {entry: ha-mcp}` in
+  `gateway.yaml`; blank turns them off). They take floor and area names ("floor 2" matches areas labelled
+  `L2`), resolve the lights themselves, and an unknown name returns an error that lists the real ones.
+  They touch only lights, so nothing needs a confirmation, and they are offered only to someone who has
+  that entry. The household and anyone without a Home Assistant entry do not get them.
 

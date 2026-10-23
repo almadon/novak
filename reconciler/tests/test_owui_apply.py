@@ -283,7 +283,10 @@ class OwuiApplyTests(unittest.TestCase):
         home = next(m for m in cfg["models"] if m["id"] == "home")
         self.assertEqual(home["tools"], ["novak-home"])
         scoped = next(s for s in cfg["tool_servers"] if s["id"] == "novak-home")
-        self.assertEqual(scoped["headers"]["X-Novak-Scope"], "ha-*")                # Home sees the house and nothing else
+        self.assertEqual(scoped["headers"]["X-Novak-Scope"], "house")               # Home sees the house and nothing else
+        self.assertEqual(scoped["headers"]["X-Novak-Tools"], "house__*")
+        main = next(s for s in cfg["tool_servers"] if s["id"] == "novak-gateway")
+        self.assertIn("house__*", main["headers"]["X-Novak-Tools"])                  # the main connection is on a tool diet too
         self.assertNotIn("tools", next(m for m in cfg["models"] if m["id"] == "code"))   # Code has no house or account tools
 
 

@@ -53,7 +53,7 @@ def fake_backend(tools, name):
 class World:
     """Two people, a household, three backends, a gateway, and an HTTP server."""
 
-    def __init__(self, test, oidc=None, notifier=None, confirm_timeout=5, settings=None):
+    def __init__(self, test, oidc=None, notifier=None, confirm_timeout=5, settings=None, helper_reader=None):
         self.dir = Path(tempfile.mkdtemp())
         test.addCleanup(lambda: __import__("shutil").rmtree(self.dir, ignore_errors=True))
         self.srvs = {}
@@ -87,7 +87,8 @@ class World:
         self.audit = Audit(str(self.dir / "audit.db"))
         self.approvals = Approvals(str(self.dir / "approvals.db"))
         self.gw = Gateway(self.dir, self.audit, self.approvals, "http://gw.test", self.env,
-                          notifier=notifier or (lambda *a: self.notes.append(a) or "test"))
+                          notifier=notifier or (lambda *a: self.notes.append(a) or "test"),
+                          **({"helper_reader": helper_reader, "helper_poll_s": 0.05} if helper_reader else {}))
         self.server = make_server(self.gw, oidc, "127.0.0.1", 0)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         test.addCleanup(self.server.shutdown)
@@ -462,6 +463,69 @@ class HaMcpFilterTests(unittest.TestCase):
         self.assertEqual(policy.classify("ha_bulk_control", ov), "destructive")
         self.assertEqual(policy.classify("ha_search", ov), "read")
         self.assertEqual(policy.classify("ha_remove_todo_item", ov), "destructive")      # removals are held anyway
+
+
+class ButtonTests(unittest.TestCase):
+    """Approve and Deny buttons on the phone: Home Assistant writes the pressed action into a helper."""
+    HELPER = {"approval_helper": "input_text.novak_approval"}
+
+    def world(self, press, **kw):
+        w = World(self, confirm_timeout=3, settings=dict(self.HELPER, **kw.pop("settings", {})),
+                  helper_reader=lambda url, tok, ent: press(w))
+        return w
+
+    def token(self, w):
+        return w.notes[0][6].rsplit("/", 1)[1] if w.notes else None
+
+    def test_a_pressed_approve_runs_the_held_call(self):
+        w = self.world(lambda w: f"NOVAK_APPROVE_{self.token(w)}" if w.notes else "")
+        _, r = w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])
+        self.assertEqual(r["result"]["content"][0]["text"], "hs-tmeuze did delete_document")
+
+    def test_a_pressed_deny_does_nothing(self):
+        w = self.world(lambda w: f"NOVAK_DENY_{self.token(w)}" if w.notes else "")
+        _, r = w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])
+        self.assertTrue(r["result"]["isError"])
+        self.assertIn("declined", r["result"]["content"][0]["text"])
+        self.assertEqual([m for m, *_ in w.seen["hs-tmeuze"] if m == "tools/call"], [])
+
+    def test_an_old_or_foreign_action_is_ignored(self):
+        w = self.world(lambda w: "NOVAK_APPROVE_somebody-elses-token", )
+        w.gw.dir.settings["confirm_timeout_s"] = 0.4
+        _, r = w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])
+        self.assertIn("No confirmation", r["result"]["content"][0]["text"])
+        self.assertEqual([m for m, *_ in w.seen["hs-tmeuze"] if m == "tools/call"], [])
+
+    def test_a_helper_that_cannot_be_read_does_not_break_the_wait(self):
+        def broken(w):
+            raise OSError("ha down")
+        w = self.world(broken)
+        w.gw.dir.settings["confirm_timeout_s"] = 0.4
+        _, r = w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])
+        self.assertIn("No confirmation", r["result"]["content"][0]["text"])
+
+    def test_the_notification_carries_the_buttons_and_reaches_every_phone_in_the_group(self):
+        from novak_gateway import notify
+        sent = []
+        post = lambda url, tok, path, body: sent.append((path, body))
+        cfg = notify.expand({"kind": "ha", "service": "mgmt"}, {"mgmt": ["mobile_app_pyrite", "mobile_app_aquarius"]})
+        out = notify.send(cfg, {}, "http://ha", "t", "Confirm: x", "m", "http://gw/approve/TOK123", post)
+        self.assertEqual([p for p, _ in sent], ["/api/services/notify/mobile_app_pyrite", "/api/services/notify/mobile_app_aquarius"])
+        actions = sent[0][1]["data"]["actions"]
+        self.assertEqual([a["action"] for a in actions[:2]], ["NOVAK_APPROVE_TOK123", "NOVAK_DENY_TOK123"])
+        self.assertIn("pyrite", out)
+        self.assertIn("aquarius", out)
+
+    def test_one_phone_failing_does_not_hide_the_other(self):
+        from novak_gateway import notify
+        def post(url, tok, path, body):
+            if "pyrite" in path:
+                raise RuntimeError("offline")
+        out = notify.send({"kind": "ha", "service": ["mobile_app_pyrite", "mobile_app_aquarius"]}, {}, "http://ha", "t",
+                          "T", "M", "http://gw/approve/TOK", post)
+        self.assertIn("aquarius", out)
+        with self.assertRaises(RuntimeError):
+            notify.send({"kind": "ha", "service": ["mobile_app_pyrite"]}, {}, "http://ha", "t", "T", "M", "http://gw/approve/TOK", post)
 
 
 class ArgRuleTests(unittest.TestCase):

@@ -123,6 +123,8 @@ DEFAULT_SETTINGS = {
     "confirm_timeout_s": 180,
     "tool_overrides": {},
     "arg_rules": {},
+    "notify_groups": {},
+    "approval_helper": "",
     "tool_filters": [],
     "clients": [],
     "oidc": {},

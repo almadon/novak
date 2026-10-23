@@ -6,7 +6,7 @@ from pathlib import Path
 
 from . import directory, notify as notify_mod
 from .mcp import MCPError, Upstream
-from .policy import classify
+from .policy import classify, relaxed
 
 SEP = "__"
 TOOLS_TTL_S = 60
@@ -63,8 +63,12 @@ class Gateway:
         self._tools[entry.name] = (self.clock(), tools)
         return tools
 
-    def _kind(self, entry, tool) -> str:
-        return classify(tool, (self.dir.settings.get("tool_overrides") or {}).get(entry.name))
+    def _kind(self, entry, tool, args=None) -> str:
+        kind = classify(tool, (self.dir.settings.get("tool_overrides") or {}).get(entry.name))
+        rule = ((self.dir.settings.get("arg_rules") or {}).get(entry.name) or {}).get(tool)
+        if kind == "destructive" and rule and relaxed(rule, args):
+            return rule.get("to", "modify")
+        return kind
 
     def list_tools(self, identity) -> list[dict]:
         out = []
@@ -100,7 +104,7 @@ class Gateway:
         if not directory.tool_allowed(self.dir.settings.get("tool_filters"), entry.name, tool):
             self.audit.record(identity, entry.name, tool, None, "denied", "not offered", args=args)
             return text_result(f"Unknown tool '{namespaced}'.", True)
-        kind = self._kind(entry, tool)
+        kind = self._kind(entry, tool, args)
         if kind in self.dir.settings.get("confirm", ["destructive"]):
             if identity.kind == "household":
                 self.audit.record(identity, entry.name, tool, kind, "denied", "household cannot confirm", args=args)

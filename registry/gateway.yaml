@@ -15,6 +15,10 @@ gateway:
 
   # Used when a person has no notify block of their own.
   notify_default: {}
+  # Approvals through Supernotify (a Home Assistant integration): `notify: {kind: supernotify, target:
+  # person.<ha person>}` for a person (`novak person set NAME --supernotify person.x`), or a list of
+  # people for notify_default. Supernotify finds that person's phones from Home Assistant itself, so
+  # a new phone needs no change here. See docs/gateway.md.
   # Names for several Home Assistant notify services, so one confirmation reaches every
   # phone in a group: `notify: {kind: ha, service: mgmt}` below sends to each of these.
   notify_groups: {}

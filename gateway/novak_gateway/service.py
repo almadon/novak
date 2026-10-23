@@ -151,7 +151,11 @@ class Gateway:
 
             def channel(cfg):
                 cfg = notify_mod.expand(cfg, groups)
-                return {**cfg, "link": not buttons, "page": page} if cfg.get("kind") == "ha" else cfg
+                if cfg.get("kind") == "ha":
+                    return {**cfg, "link": not buttons, "page": page}
+                if cfg.get("kind") == "supernotify":
+                    return {**cfg, "page": page}              # Supernotify always carries buttons
+                return cfg
             sent = self.notifier(channel(person.notify if person else {}),
                                  channel(self.dir.settings.get("notify_default") or {}),
                                  self.env.get("GATEWAY_HA_URL", ""), self.env.get("GATEWAY_HA_TOKEN", ""),

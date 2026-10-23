@@ -3231,3 +3231,34 @@ mobile notifications ([gateway.md](gateway.md)).
 
 Apprise (or a successor) carrying actionable callbacks, which would let approvals move too.
 
+## 72. Supernotify routes Novak's approvals; Apprise stays the fleet's
+
+Decision #70 put plain notices on Apprise and left approvals on hand-picked Home Assistant notify services
+(`mobile_app_<device>`, with a `notify_groups` hack for "both phones"). The household then installed
+Supernotify in Home Assistant for guests and other purposes, and it fits Novak's person-directed messages
+better than the hack: it builds each person's phones from Home Assistant's own people.
+
+### What was decided
+
+Approvals go through `supernotify.notify` (`kind: supernotify`, target a person entity). A new phone is
+added to the person in Home Assistant and the gateway needs no change; `notify_groups` stays for anyone who
+prefers it. The buttons still come back through the `mobile_app_notification_action` automation and the
+approval helper, because Supernotify only handles its own snooze actions. Checked live before relying on it:
+the service takes `actions`, `delivery` and `dry_run` at the top level of the call, delivery targets are a
+list, and `actions`, `clickAction` and `tag` reach the Companion app unchanged. A real button press on an
+Android phone reached the helper. Apprise remains the fleet's alerting layer (decision #70): infrastructure
+alerts must not depend on Home Assistant being up, and Supernotify has no entry point outside Home Assistant.
+
+### What it costs
+
+- One more integration in Home Assistant to keep updated, and a dependency on its call shape, which a
+  release could change (the tests pin the shape the gateway sends, not what Supernotify accepts).
+- A test that was meant to be a simulation sent a real notification to two phones, because `dry_run` was
+  placed inside `advanced`; a simulation is only a simulation when the flag is at the top level.
+- Both of a person's phones receive the request and either can answer; the first press decides.
+
+### What would make it worth revisiting
+
+Supernotify handling arbitrary action callbacks itself (the helper and automation could then go), or a
+documented external entry point.
+

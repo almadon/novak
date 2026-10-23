@@ -209,3 +209,18 @@ add an entry the person is not allowed, and a call outside it is refused as an u
 Open WebUI uses it to give a "Home" preset a connection that offers just the house tools, since
 a preset can switch on a whole connection but not individual tools.
 
+## Approvals through Supernotify
+
+`notify: {kind: supernotify, target: person.tyler_meuse}` (set with `novak person set NAME --supernotify
+person.tyler_meuse`) sends the confirmation through [Supernotify](https://supernotify.rhizomatics.org.uk),
+a Home Assistant integration. It reads each person's phones from Home Assistant's own people, so a new
+phone is added in Home Assistant and nothing here changes. The call carries the Approve and Deny buttons
+and the page a tap opens; the press comes back through the same automation and helper as before
+([the buttons](#approve-and-deny-buttons)). `notify_default` takes a list of people, for anything that is
+not one person's.
+
+The call's shape was checked against a live install, because a wrong guess is not harmless: `actions`,
+`delivery` and `dry_run` go at the **top level** of the call (inside `advanced` they are passed to the phone
+as plain data), and `delivery.mobile_push.target` is a list. A simulated call (`dry_run: simulate`) sends
+nothing and is not recorded.
+

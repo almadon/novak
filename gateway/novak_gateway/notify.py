@@ -106,4 +106,24 @@ def send(person_notify: dict, default: dict, ha_url: str, ha_token: str,
         if not sent:
             raise RuntimeError("; ".join(errors) or "no notify service named")
         return "ha:" + ",".join(sent) + (f" (failed: {'; '.join(errors)})" if errors else "")
+    if kind == "supernotify":
+        # Supernotify (a Home Assistant integration) picks the person's phones from HA's own
+        # people and carries the buttons through. Fields are top level in the call; the target is
+        # a person entity (person.tyler_meuse) or several. Verified against a live install
+        # (decision #72): actions, clickAction and tag reach the Companion app unchanged.
+        token = url.rstrip("/").rsplit("/", 1)[-1]
+        target = cfg.get("target") or []
+        target = [target] if isinstance(target, str) else list(target)
+        if not target:
+            raise RuntimeError("supernotify channel needs a target (a person entity such as person.tyler_meuse)")
+        mobile = {"tag": f"novak-{token[:16]}"}
+        if cfg.get("page"):
+            mobile["clickAction"] = cfg["page"]
+        post(ha_url, ha_token, "/api/services/supernotify/notify",
+             {"title": title, "message": message, "target": target, "priority": cfg.get("priority", "high"),
+              "force_resend": True,              # a repeated request is a new request, not a duplicate
+              "actions": [{"action": f"NOVAK_APPROVE_{token}", "title": "Approve"},
+                          {"action": f"NOVAK_DENY_{token}", "title": "Deny"}],
+              "delivery": {"mobile_push": {"data": mobile}}})
+        return "supernotify:" + ",".join(target)
     return f"unknown notification kind {kind!r}"

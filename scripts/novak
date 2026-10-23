@@ -58,6 +58,7 @@
 #   novak omlx apply          apply registry/omlx.yaml (models, profiles, TTLs)
 #   novak router apply        apply registry/engines.yaml -> router/config.yaml
 #   novak owui [drift|apply]  check, or make, Open WebUI match registry/openwebui.yaml
+#   novak pi [config|hint]    models.json for the Pi coding agent, and its editing rules
 #                              (decision #28; run 'novak restart router' after)
 #   novak checklist           phase-by-phase deploy-checklist.md walk-through
 #   novak guided-setup        prompt for whatever's still unconfigured
@@ -408,6 +409,22 @@ cmd_owui() {
   OWUI_ADMIN_API_KEY="$(secret_get OWUI_ADMIN_API_KEY)" OWUI_GATEWAY_KEY="$(secret_get OWUI_GATEWAY_KEY)" \
     OPENWEBUI_PORT="$(envval OPENWEBUI_PORT)" NOVAK_HOME="$NOVAK_HOME" \
     "$py" "$REPO_DIR/reconciler/owui_apply.py" $flag
+}
+
+# Pi (https://pi.dev), a terminal coding agent, pointed at the router (decision #73).
+#   novak pi config   print a models.json for ~/.pi/agent/models.json (no key in it)
+#   novak pi hint     print the editing rules for local models (prompts/novak-pi.md)
+cmd_pi() {
+  need_env
+  local py="$NOVAK_HOME/.venv/bin/python"; [ -x "$py" ] || py="$(command -v python3)"
+  case "${1:-config}" in
+    config)
+      ROUTER_BIND="$(envval ROUTER_BIND)" ROUTER_PORT="$(envval ROUTER_PORT)" HOST_NAME="$(envval HOST_NAME)" \
+        OLLAMA_CONTEXT_LENGTH="$(envval OLLAMA_CONTEXT_LENGTH)" "$py" "$REPO_DIR/reconciler/pi_config.py" ;;
+    hint)
+      awk 'f{print} /^---$/{f=1}' "$REPO_DIR/prompts/novak-pi.md" ;;
+    *) red "unknown: novak pi $1"; dim "  novak pi config | hint"; exit 1 ;;
+  esac
 }
 
 cmd_router() {
@@ -1545,6 +1562,7 @@ case "${1:-menu}" in
   omlx)     shift; cmd_omlx "$@" ;;
   router)   shift; cmd_router "$@" ;;
   owui)     shift; cmd_owui "$@" ;;
+  pi)       shift; cmd_pi "$@" ;;
   doctor)   cmd_status ;;   # same checks up.sh runs, without starting anything
   checklist) cmd_checklist ;;
   guided-setup) cmd_guided_setup ;;

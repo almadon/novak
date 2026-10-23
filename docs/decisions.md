@@ -3292,3 +3292,30 @@ Built-in Open WebUI tools are off on every preset (decision #66). The house prom
 
 A larger context window, or Open WebUI deferring tool definitions until needed, which would let the lists grow.
 
+## 73. Pi runs in the terminal, on the router for small work
+
+The wish was to use the Pi coding agent with Open WebUI. Pi edits files and runs commands, so it belongs
+in a terminal beside the code; Open WebUI stays the place for chat, snippets and review (the `Code`
+preset). Bridging them (Pi's RPC mode behind an Open WebUI function, or Pi inside the Open Terminal
+sandbox, which is classed dangerous) would add a new thing with shell access for little gain.
+
+### What was decided
+
+`novak pi config` prints a Pi `models.json` that lists the router's `chat` and `deep` roles as a provider,
+with the window the models really have and the key as `$ROUTER_API_KEY` (never written). `novak pi hint`
+prints editing rules (`prompts/novak-pi.md`) to append to Pi's system prompt. Hosted providers go in the
+same file when you choose to use them; keys for them are your own, and keeping them in `secrets.env` and
+reaching them through the router is possible later but not built.
+
+### What it costs
+
+- The local models are weak coding agents without help. A real rename task looped, because the model
+  repeated an ambiguous `edit` about a hundred times; four lines of rules fixed it (4 seconds, verified).
+  Each new loop may need another rule.
+- An 8,192-token window fits small tasks. The `deep` model would need most of the 16 GB card and would
+  evict the voice model, so coding with it competes with voice for the GPU.
+
+### What would make it worth revisiting
+
+More VRAM or a larger-window model, at which point the router could offer a `code` role.
+

@@ -640,6 +640,52 @@ class ApprovalsPageTests(unittest.TestCase):
         self.assertEqual(len(sent[0]["data"]["actions"]), 2)
 
 
+class SupernotifyTests(unittest.TestCase):
+    """Approvals through Supernotify (decision #72): Home Assistant's people pick the phones."""
+
+    def send(self, cfg, url="http://gw/approve/TOK123"):
+        from novak_gateway import notify
+        sent = []
+        out = notify.send(cfg, {}, "http://ha", "t", "Confirm: x", "m", url, lambda u, tok, path, body: sent.append((path, body)))
+        return out, sent
+
+    def test_the_call_has_the_shape_supernotify_accepts(self):
+        out, sent = self.send({"kind": "supernotify", "target": "person.tyler_meuse", "page": "/novak-approvals/approvals"})
+        (path, body), = sent
+        self.assertEqual(path, "/api/services/supernotify/notify")
+        self.assertEqual(body["target"], ["person.tyler_meuse"])
+        self.assertEqual((body["title"], body["message"], body["priority"]), ("Confirm: x", "m", "high"))
+        self.assertEqual([a["action"] for a in body["actions"]], ["NOVAK_APPROVE_TOK123", "NOVAK_DENY_TOK123"])
+        self.assertEqual(body["delivery"], {"mobile_push": {"data": {"tag": "novak-TOK123", "clickAction": "/novak-approvals/approvals"}}})
+        self.assertTrue(body["force_resend"])                                   # the same request twice is two requests
+        for wrongly_nested in ("advanced", "dry_run"):
+            self.assertNotIn(wrongly_nested, body)                              # these must never be sent by accident
+        self.assertEqual(out, "supernotify:person.tyler_meuse")
+
+    def test_several_people_and_no_page(self):
+        out, sent = self.send({"kind": "supernotify", "target": ["person.a", "person.b"]})
+        self.assertEqual(sent[0][1]["target"], ["person.a", "person.b"])
+        self.assertEqual(sent[0][1]["delivery"]["mobile_push"]["data"], {"tag": "novak-TOK123"})   # no clickAction without a page
+
+    def test_a_channel_with_no_target_is_an_error_not_a_broadcast(self):
+        for cfg in ({"kind": "supernotify"}, {"kind": "supernotify", "target": []}):
+            with self.assertRaises(RuntimeError):
+                self.send(cfg)
+
+    def test_a_held_call_goes_through_supernotify_and_a_button_press_decides_it(self):
+        sent = []
+        w = World(self, confirm_timeout=3, settings={"approval_helper": "input_text.novak_approval",
+                                                      "approval_page": "/novak-approvals/approvals"},
+                  helper_reader=lambda url, tok, ent: f"NOVAK_APPROVE_{w.tok}" if getattr(w, "tok", None) else "",
+                  notifier=lambda person, default, url, tok, title, msg, link: (sent.append((person, link)) or setattr(w, "tok", link.rsplit("/", 1)[1]) or "ok"))
+        w.gw.dir.people["tmeuze"].notify = {"kind": "supernotify", "target": "person.tyler_meuse"}
+        _, r = w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])
+        self.assertEqual(r["result"]["content"][0]["text"], "hs-tmeuze did delete_document")
+        person_cfg = sent[0][0]
+        self.assertEqual((person_cfg["kind"], person_cfg["target"], person_cfg["page"]),
+                         ("supernotify", "person.tyler_meuse", "/novak-approvals/approvals"))
+
+
 class ArgRuleTests(unittest.TestCase):
     """A held tool lets harmless calls through, judged by the call's own arguments."""
     RULE = {"to": "modify", "allow": {"light": ["turn_on", "turn_off"], "scene": ["turn_on"]}}

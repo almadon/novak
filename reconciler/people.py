@@ -2,9 +2,9 @@
 """Manage the gateway's directory: `novak person ...` and `novak gateway ...`.
 
   people.py add NAME [--names a,b] [--emails x,y] [--entries e1,e2]
-                     [--bank] [--ticker CATEGORY | --ha-service SERVICE] [--yes]
+                     [--bank] [--ticker CATEGORY | --ha-service SERVICE | --supernotify PERSON_ENTITY] [--yes]
   people.py list
-  people.py set NAME [--names a,b] [--emails x,y] [--ticker CATEGORY | --ha-service SERVICE | --no-notify]
+  people.py set NAME [--names a,b] [--emails x,y] [--ticker CATEGORY | --ha-service SERVICE | --supernotify PERSON_ENTITY | --no-notify]
   people.py key NAME              new gateway key for a person (shown once)
   people.py attach NAME ENTRY...  give a person registry entries
   people.py detach NAME ENTRY...
@@ -192,6 +192,8 @@ def cmd_add(a):
         notify = {"kind": "ticker", "category": a.ticker}
     elif a.ha_service:
         notify = {"kind": "ha", "service": a.ha_service}
+    elif a.supernotify:
+        notify = {"kind": "supernotify", "target": a.supernotify}
     elif not a.yes:
         c = instances.ask(answers, "ticker", f"Ticker category for {name}'s confirmations (blank to skip)", "")
         notify = {"kind": "ticker", "category": c} if c else {}
@@ -260,6 +262,8 @@ def cmd_set(a):
         p["notify"] = {"kind": "ticker", "category": a.ticker}
     elif a.ha_service:
         p["notify"] = {"kind": "ha", "service": a.ha_service}
+    elif a.supernotify:
+        p["notify"] = {"kind": "supernotify", "target": a.supernotify}
     elif a.no_notify:
         p.pop("notify", None)
     backup(PEOPLE)
@@ -472,13 +476,13 @@ def main():
     s.add_argument("name")
     s.add_argument("--names"); s.add_argument("--emails"); s.add_argument("--entries")
     s.add_argument("--bank", action="store_true")
-    s.add_argument("--ticker"); s.add_argument("--ha-service")
+    s.add_argument("--ticker"); s.add_argument("--ha-service"); s.add_argument("--supernotify")
     s.add_argument("--accepted-by"); s.add_argument("--no-key", action="store_true")
     s.add_argument("--set", action="append"); s.add_argument("--yes", action="store_true")
     sub.add_parser("list")
     st = sub.add_parser("set"); st.add_argument("name")
     st.add_argument("--names"); st.add_argument("--emails")
-    st.add_argument("--ticker"); st.add_argument("--ha-service"); st.add_argument("--no-notify", action="store_true")
+    st.add_argument("--ticker"); st.add_argument("--ha-service"); st.add_argument("--supernotify"); st.add_argument("--no-notify", action="store_true")
     k = sub.add_parser("key"); k.add_argument("name")
     for c in ("attach", "detach"):
         x = sub.add_parser(c); x.add_argument("name"); x.add_argument("entries", nargs="+")

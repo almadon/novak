@@ -49,6 +49,7 @@ openwebui:
       name: Novak
       description: Your everyday assistant, with the house, tasks, notes and memory.
       base: chat
+      capabilities: {builtin_tools: false}   # no ask_user and friends: the persona and gateway tools do the work
       tools: [novak-gateway]
       system_files: [prompts/novak-chat.md, prompts/novak-tools.md, prompts/novak-house.md]
 
@@ -56,6 +57,7 @@ openwebui:
       name: Novak Deep
       description: Slower and more careful, for hard questions and long reasoning. Same tools.
       base: deep
+      capabilities: {builtin_tools: false}   # no ask_user and friends: the persona and gateway tools do the work
       tools: [novak-gateway]
       system_files: [prompts/novak-chat.md, prompts/novak-tools.md, prompts/novak-house.md]
 
@@ -63,6 +65,7 @@ openwebui:
       name: Home
       description: Lights, devices and the house. Quick, short answers.
       base: chat                       # VERIFY: try the smaller model on a real lighting request
+      capabilities: {builtin_tools: false}   # no ask_user and friends: the persona and gateway tools do the work
       tools: [novak-home]
       system_files: [prompts/novak-tools.md, prompts/novak-house.md, prompts/novak-home.md]
 
@@ -70,6 +73,7 @@ openwebui:
       name: Code
       description: Coding sessions. No house or account tools, more room to think.
       base: deep
+      capabilities: {builtin_tools: false}   # no ask_user and friends: the persona and gateway tools do the work
       system_files: [prompts/novak-code.md]
 
     - {id: chat, hidden: true}

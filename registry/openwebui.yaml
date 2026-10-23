@@ -1,0 +1,40 @@
+# What Open WebUI should look like, applied by `novak owui apply` and checked by
+# `novak owui drift` (decision #66). Open WebUI keeps these in its own database, so
+# without this they are whatever someone last clicked: the tool connection vanished
+# once, and a new chat has no tools unless someone remembers to switch them on.
+#
+# SECRETS DO NOT BELONG HERE. `key_env` names the secret that holds a connection's key
+# (`novak secret set`); the value is read at apply time and never written to this file.
+# The applier signs in with OWUI_ADMIN_API_KEY, an admin API key made once in Open WebUI
+# (Settings, Account, API keys; needs OWUI_ENABLE_API_KEYS=true).
+#
+# Only what is listed here is managed. A connection or model preset not named here is
+# left alone, and a preset keeps its other settings (description, sharing, parameters):
+# the applier changes just the default tools and the system prompt.
+
+openwebui:
+  # Where the applier reaches Open WebUI from this host. Blank = http://127.0.0.1:$OPENWEBUI_PORT
+  url: ""
+
+  tool_servers:
+    - id: novak-gateway
+      name: Novak gateway
+      description: Each person's own tools (house, tasks, notes, memory), through the gateway.
+      type: mcp
+      url: http://gateway:8000/mcp
+      auth_type: bearer
+      key_env: OWUI_GATEWAY_KEY            # from `novak gateway client open-webui`
+      # Names the person: the gateway trusts this client to say who is asking.
+      headers: {X-Novak-User: "{{USER_EMAIL}}"}
+
+  # A preset named here gets these tools switched on by default, so a new chat can act
+  # instead of describing what it would do, and a system prompt built from the persona
+  # plus the rules for using tools. Open WebUI sends its own system message whenever tools
+  # are on, which makes the router skip the persona (decision #38), so the preset carries it.
+  models:
+    - id: chat
+      tools: [novak-gateway]
+      system_files: [prompts/novak-chat.md, prompts/novak-tools.md]
+    - id: deep
+      tools: [novak-gateway]
+      system_files: [prompts/novak-chat.md, prompts/novak-tools.md]

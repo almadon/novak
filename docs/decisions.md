@@ -3106,3 +3106,36 @@ larger answer and would replace this workaround.
 
 The HACS integration, or a gateway token allowed to create states.
 
+## 66. Open WebUI's configuration is declared and applied, like everything else
+
+Open WebUI holds its tool connections and model presets in its own database, which the
+reconciler never touched. So they were whatever someone last clicked, and it showed: the
+gateway connection vanished once, a new chat had the gateway's tools switched off by default
+(the model, with no tools, said it had dimmed the lights and had done nothing), and the
+persona never reached `chat` once tools were on (decision #38) because Open WebUI sends its
+own system message.
+
+### What was decided
+
+`registry/openwebui.yaml` declares the gateway connection and, per model preset, which tools
+are on by default and a system prompt built from the persona plus `prompts/novak-tools.md`
+(never claim an action without a tool result; look up before acting; turn a theme into a real
+palette; do not ask permission for harmless requests). `novak owui drift` reports differences
+and exits non-zero; `novak owui apply` fixes them through Open WebUI's admin API. It touches
+only what the file names: other connections stay, and a preset keeps its description, sharing
+and parameters.
+
+### What it costs
+
+- It needs an admin API key (`OWUI_ADMIN_API_KEY`), made once in Open WebUI, and the gateway
+  client key by name (`OWUI_GATEWAY_KEY`). Neither is stored in the repo or the file.
+- An edit made by hand in Open WebUI to a managed field is overwritten by the next apply; that
+  is the point, and `drift` shows it first.
+- The API's shapes were read from the running version (0.12.3), not a published contract, so
+  a release that moves them breaks the applier loudly (an HTTP error), not silently.
+
+### What would make it worth revisiting
+
+Open WebUI growing a supported config-as-code mechanism, or per-user presets that this should
+manage too.
+

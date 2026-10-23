@@ -81,6 +81,7 @@ works identically on both platforms.
 | `novak drift` | where this deployment differs from the repo (aliases: `verify`, `check`) |
 | `novak drift --live` | also greps router logs for persona injection silently skipped (decision #38) |
 | `novak omlx apply` | apply `registry/omlx.yaml` — models, profiles, TTLs |
+| `novak owui drift` / `apply` | check, or make, Open WebUI's tool connections and model presets match `registry/openwebui.yaml` (decision #66); needs `OWUI_ADMIN_API_KEY` |
 | `novak router apply` | apply `registry/engines.yaml` -> `router/config.yaml` (decision #28); needs `novak restart router` after |
 
 ---

@@ -122,6 +122,7 @@ DEFAULT_SETTINGS = {
     "confirm": ["destructive"],
     "confirm_timeout_s": 180,
     "tool_overrides": {},
+    "arg_rules": {},
     "tool_filters": [],
     "clients": [],
     "oidc": {},

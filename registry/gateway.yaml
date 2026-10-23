@@ -62,3 +62,23 @@ gateway:
   # Acting on a device through ha-mcp needs a tap: a service call can unlock a door.
   tool_overrides:
     ha-mcp: {ha_call_service: destructive, ha_bulk_control: destructive}
+  # ...except the kinds of call nobody needs to approve. A rule lets a held tool through
+  # when the call's domain and service (or every bulk operation) are listed; anything
+  # else, including a raw ws_command or a target in another domain, is still held.
+  # Lights, scenes, media and fans: changing a colour should not need a tap, and a
+  # "vaporwave" theme is several calls.
+  arg_rules:
+    ha-mcp:
+      ha_call_service:
+        to: modify
+        allow:
+          light: [turn_on, turn_off, toggle]
+          scene: [turn_on]
+          fan: [turn_on, turn_off, toggle, set_percentage]
+          media_player: [media_play, media_pause, media_stop, media_next_track, media_previous_track,
+                         volume_set, volume_mute, volume_up, volume_down, turn_on, turn_off]
+      ha_bulk_control:
+        to: modify
+        allow:
+          light: ["on", "off", "toggle"]   # quoted: bare on/off are YAML booleans
+          fan: ["on", "off", "toggle"]

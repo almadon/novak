@@ -53,7 +53,7 @@ def fake_backend(tools, name):
 class World:
     """Two people, a household, three backends, a gateway, and an HTTP server."""
 
-    def __init__(self, test, oidc=None, notifier=None, confirm_timeout=5):
+    def __init__(self, test, oidc=None, notifier=None, confirm_timeout=5, settings=None):
         self.dir = Path(tempfile.mkdtemp())
         test.addCleanup(lambda: __import__("shutil").rmtree(self.dir, ignore_errors=True))
         self.srvs = {}
@@ -79,7 +79,8 @@ class World:
             "household": {"entries": ["hs-household"], "key_sha256": sha256(self.keys["household"])}}))
         (self.dir / "gateway.yaml").write_text(yaml.safe_dump({"gateway": {
             "confirm_timeout_s": confirm_timeout, "notify_default": {"kind": "ticker", "category": "Novak"},
-            "clients": [{"name": "open-webui", "key_sha256": sha256(self.keys["owui"]), "user_header": "X-Novak-User"}]}}))
+            "clients": [{"name": "open-webui", "key_sha256": sha256(self.keys["owui"]), "user_header": "X-Novak-User"}],
+            **(settings or {})}}))
         self.env = {"TOK_HS_TMEUZE": "backend-secret-tmeuze", "TOK_HS_USHY": "backend-secret-ushy",
                     "TOK_HS_HOUSEHOLD": "backend-secret-house", "GATEWAY_HA_URL": "http://ha", "GATEWAY_HA_TOKEN": "t"}
         self.notes = []
@@ -461,6 +462,58 @@ class HaMcpFilterTests(unittest.TestCase):
         self.assertEqual(policy.classify("ha_bulk_control", ov), "destructive")
         self.assertEqual(policy.classify("ha_search", ov), "read")
         self.assertEqual(policy.classify("ha_remove_todo_item", ov), "destructive")      # removals are held anyway
+
+
+class ArgRuleTests(unittest.TestCase):
+    """A held tool lets harmless calls through, judged by the call's own arguments."""
+    RULE = {"to": "modify", "allow": {"light": ["turn_on", "turn_off"], "scene": ["turn_on"]}}
+
+    def shipped_rule(self, tool="ha_call_service"):
+        from pathlib import Path as P
+        g = yaml.safe_load((P(__file__).resolve().parents[2] / "registry" / "gateway.yaml").read_text())["gateway"]
+        return g["arg_rules"]["ha-mcp"][tool]
+
+    def test_a_listed_domain_and_service_passes_and_everything_else_does_not(self):
+        from novak_gateway.policy import relaxed
+        r = self.shipped_rule()
+        self.assertTrue(relaxed(r, {"domain": "light", "service": "turn_on", "data": {"rgb_color": [255, 0, 128]}}))
+        self.assertTrue(relaxed(r, {"domain": "light", "service": "turn_on", "entity_id": "light.a, light.b"}))
+        self.assertTrue(relaxed(r, {"domain": "scene", "service": "turn_on", "entity_id": "scene.movie"}))
+        self.assertFalse(relaxed(r, {"domain": "lock", "service": "unlock", "entity_id": "lock.front"}))
+        self.assertFalse(relaxed(r, {"domain": "light", "service": "delete"}))
+        self.assertFalse(relaxed(r, {"domain": "light", "service": "turn_on", "entity_id": "lock.front"}))   # target in another domain
+        self.assertFalse(relaxed(r, {"domain": "light", "service": "turn_on", "ws_command": "config/entity_registry/remove"}))
+        self.assertFalse(relaxed(r, {"service": "turn_on"}))                                  # no domain
+        self.assertFalse(relaxed(r, {}))
+        self.assertFalse(relaxed(None, {"domain": "light", "service": "turn_on"}))
+        self.assertFalse(relaxed({"allow": {}}, {"domain": "light", "service": "turn_on"}))
+
+    def test_bulk_control_needs_every_operation_to_be_harmless(self):
+        from novak_gateway.policy import relaxed
+        r = self.shipped_rule("ha_bulk_control")
+        ok = [{"entity_id": "light.a", "action": "on", "parameters": {"brightness_pct": 30}}, {"entity_id": "light.b", "action": "off"}]
+        self.assertTrue(relaxed(r, {"operations": ok}))
+        self.assertFalse(relaxed(r, {"operations": ok + [{"entity_id": "lock.front", "action": "off"}]}))
+        self.assertFalse(relaxed(r, {"operations": [{"entity_id": "light.a", "action": "delete"}]}))
+
+    def test_through_the_gateway_a_harmless_call_runs_and_a_risky_one_is_held(self):
+        w = World(self, confirm_timeout=0.3, settings={"arg_rules": {"hs-tmeuze": {"delete_document": self.RULE}}})
+        _, r = w.call("hs_tmeuze__delete_document", {"domain": "light", "service": "turn_on"}, token=w.keys["tmeuze"])
+        self.assertEqual(r["result"]["content"][0]["text"], "hs-tmeuze did delete_document")
+        self.assertEqual(w.notes, [])                                                       # no approval was asked for
+        _, r = w.call("hs_tmeuze__delete_document", {"domain": "lock", "service": "unlock"}, token=w.keys["tmeuze"])
+        self.assertTrue(r["result"]["isError"])
+        self.assertIn("No confirmation", r["result"]["content"][0]["text"])
+        self.assertEqual(len(w.notes), 1)
+
+    def test_a_harmless_call_is_fine_for_the_household_too(self):
+        w = World(self, settings={"arg_rules": {"hs-household": {"delete_document": self.RULE}}})
+        _, r = w.call("hs_household__delete_document", {"domain": "light", "service": "turn_on"},
+                       token=w.keys["household"], path="/mcp/household")
+        self.assertEqual(r["result"]["content"][0]["text"], "hs-household did delete_document")   # a lamp is a lamp
+        _, r = w.call("hs_household__delete_document", {"domain": "lock", "service": "unlock"},
+                      token=w.keys["household"], path="/mcp/household")
+        self.assertTrue(r["result"]["isError"])                                              # still needs a person to confirm
 
 
 class AccountOwnershipTests(unittest.TestCase):

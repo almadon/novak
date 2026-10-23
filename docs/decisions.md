@@ -2998,3 +2998,30 @@ Ticker category live under `owners.people` in `registry/ingest.yaml`.
 
 Per-recording identity from the recorder itself (a signed owner claim) instead
 of a label map, once more than one person's device uploads to the same inbox.
+
+
+## 63. Harmless device calls do not need a tap
+
+Decision #58 held `ha_call_service` and `ha_bulk_control` for confirmation, because a
+service call can unlock a door. In use that meant a "vaporwave" lighting theme (several
+calls) waited three minutes for taps nobody answered, and then did nothing.
+
+### What was decided
+
+`arg_rules` in `registry/gateway.yaml` lets a held tool through when the call's own
+arguments are harmless: its `domain` and `service` (or every bulk operation's entity
+domain and action) are on a short list. Shipped: lights, scenes, fans, media players.
+Anything that does not clearly match stays held: no domain, a target in another domain,
+a raw `ws_command`, an unlisted service. Locks, alarms, covers and climate still ask.
+
+### What it costs
+
+- The gateway now reads call arguments to classify, not only the tool name; a wrong list
+  could let a bad call through, so the list is short, tested, and quoted
+  (a bare `on`/`off` in YAML is a boolean, which a test now guards).
+- A light left on is not undone by a missing approval; that is the accepted trade.
+
+### What would make it worth revisiting
+
+If a listed domain turns out to control something that matters (a smart plug on a
+heater, modelled as a `light`), narrow it or move that entity to a different domain.

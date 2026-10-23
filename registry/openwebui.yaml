@@ -24,19 +24,24 @@ openwebui:
       url: http://gateway:8000/mcp
       auth_type: bearer
       key_env: OWUI_GATEWAY_KEY            # from `novak gateway client open-webui`
-      # Names the person: the gateway trusts this client to say who is asking.
-      headers: {X-Novak-User: "{{USER_EMAIL}}"}
+      # X-Novak-User names the person: the gateway trusts this client to say who is asking.
+      # X-Novak-Tools keeps the tool list small. The models have an 8,192-token context window
+      # and the gateway offers 79 tools (about 34,000 tokens of definitions); a model given all of
+      # them loses the start of its prompt. These are the few that matter, about 2,400 tokens
+      # (decision #71): the house, memory, tasks, and reading notes.
+      headers:
+        X-Novak-User: "{{USER_EMAIL}}"
+        X-Novak-Tools: "house__*,hindsight_*__recall,hindsight_*__retain,tududi_*__list_tasks,tududi_*__get_task,tududi_*__search,tududi_*__add_to_inbox,tududi_*__complete_task,outline_*__fetch,outline_*__list_documents"
 
-    # The same gateway, narrowed to the house: a preset can switch a whole connection on but not
-    # single tools, so the lean Home preset gets a connection that only offers Home Assistant's.
+    # Just the lights: for the lean Home preset, a few hundred tokens of tools.
     - id: novak-home
       name: Novak house
-      description: Lights, devices and the state of the house only.
+      description: Lights and the state of the house only.
       type: mcp
       url: http://gateway:8000/mcp
       auth_type: bearer
       key_env: OWUI_GATEWAY_KEY
-      headers: {X-Novak-User: "{{USER_EMAIL}}", X-Novak-Scope: "ha-*"}
+      headers: {X-Novak-User: "{{USER_EMAIL}}", X-Novak-Scope: "house", X-Novak-Tools: "house__*"}
 
   # What people pick from. The router's own roles (chat, deep, task, ha-voice) are plumbing,
   # not choices, so they are hidden from the picker (they keep working underneath, and keep

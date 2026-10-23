@@ -15,6 +15,10 @@ gateway:
 
   # Used when a person has no notify block of their own.
   notify_default: {}
+  # The lean house tools (house__house_state, house__lights_set) run on this person-owned registry
+  # entry and are offered only to someone who has it. Blank turns them off. See docs/gateway.md.
+  house: {entry: ha-mcp}
+
   # Names for several Home Assistant notify services, so one confirmation reaches every
   # phone in a group: `notify: {kind: ha, service: mgmt}` below sends to each of these.
   notify_groups: {}

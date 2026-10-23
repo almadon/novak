@@ -368,6 +368,26 @@ if [ "$omlx_wanted" = "yes" ] && [ -f "$REPO_DIR/reconciler/omlx_apply.py" ]; th
   fi
 fi
 
+# Open WebUI forgets its tool connections whenever it restarts (OWUI_PERSISTENT_CONFIG=false makes
+# the environment authoritative, decision #66), so re-apply registry/openwebui.yaml once it is
+# healthy. Idempotent and quiet when nothing differs; skipped when no admin key is set yet.
+if [ -f "$NOVAK_HOME/registry/openwebui.yaml" ] && [ -n "${OWUI_ADMIN_API_KEY:-}" ] \
+   && [ "$OWUI_ADMIN_API_KEY" != "set-in-keychain" ] && docker ps --format '{{.Names}}' | grep -q 'open-webui'; then
+  ui_section "🪟" "Open WebUI"
+  _owui_port="$(envval OPENWEBUI_PORT)"; _owui_port="${_owui_port:-13400}"
+  for _i in $(seq 1 30); do
+    [ "$(curl -s -m 3 -o /dev/null -w '%{http_code}' "http://127.0.0.1:${_owui_port}/health" || true)" = "200" ] && break
+    sleep 3
+  done
+  if _owui_out="$(OPENWEBUI_PORT="$_owui_port" NOVAK_HOME="$NOVAK_HOME" "$PY" "$REPO_DIR/reconciler/owui_apply.py" --apply 2>&1)"; then
+    if printf '%s' "$_owui_out" | grep -q 'matches the file'; then ui_ok "matches registry/openwebui.yaml"
+    else ui_ok "re-applied registry/openwebui.yaml"; printf '%s\n' "$_owui_out" | grep -E '^  (add|change)' | while read -r _l; do ui_dim "$_l"; done; fi
+  else
+    ui_warn "could not apply registry/openwebui.yaml: run 'novak owui drift' to see why"
+    printf '%s\n' "$_owui_out" | tail -3 | while read -r _l; do ui_dim "$_l"; done
+  fi
+fi
+
 ui_section "📋" "Status"
 _ps="$(docker compose \
   --project-directory "$NOVAK_HOME" \

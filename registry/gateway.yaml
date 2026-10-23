@@ -15,6 +15,16 @@ gateway:
 
   # Used when a person has no notify block of their own.
   notify_default: {}
+  # Names for several Home Assistant notify services, so one confirmation reaches every
+  # phone in a group: `notify: {kind: ha, service: mgmt}` below sends to each of these.
+  notify_groups: {}
+  #   mgmt: [mobile_app_pyrite, mobile_app_aquarius]
+  # The Home Assistant helper (an input_text) that Approve and Deny buttons write to,
+  # which is how a button press reaches the gateway without a browser or an admin token.
+  # See docs/gateway.md "Approve and Deny buttons". Blank turns the buttons off; the
+  # notification still carries a link.
+  approval_helper: ""
+  #   approval_helper: input_text.novak_approval
 
   # Clients trusted to name the user in a header (Open WebUI). Only as safe as
   # the network: nothing but that client may be able to reach the gateway.

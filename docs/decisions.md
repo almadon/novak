@@ -3025,3 +3025,32 @@ a raw `ws_command`, an unlisted service. Locks, alarms, covers and climate still
 
 If a listed domain turns out to control something that matters (a smart plug on a
 heater, modelled as a `light`), narrow it or move that entity to a different domain.
+
+## 64. Confirmations are buttons on the phone, not a link
+
+Ticker's tap-to-open link did not work for the person it was meant for, and it needed a
+browser, Tailscale and a page. Ticker stays what it was chosen for (an easy alert channel
+for things like leaks); approvals move to Home Assistant's own mobile notifications.
+
+### What was decided
+
+`kind: ha` notifications carry Approve and Deny buttons. A press fires a Home Assistant
+event; one automation writes the pressed action into an `input_text` helper; the gateway,
+while an approval is waiting, reads that helper with its non-admin token and decides only
+for the matching token. `notify_groups` lets one confirmation reach several phones
+(`mgmt`: pyrite and aquarius).
+
+### What it costs
+
+- Home Assistant needs a helper and one automation; they live in HA, not in this repo.
+  The setup is documented in [gateway.md](gateway.md), and a missing helper degrades to
+  the link, not to a hang.
+- A press takes a second or two to land, and polling runs only while something waits.
+- Anyone who can fire that HA event can approve; in practice that is an HA admin.
+
+### What would make it worth revisiting
+
+A gateway token allowed to subscribe to events (an admin one is more than it needs), or
+a Home Assistant action that can POST without YAML (then the automation could call the
+gateway directly).
+

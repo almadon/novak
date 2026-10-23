@@ -3125,6 +3125,13 @@ and exits non-zero; `novak owui apply` fixes them through Open WebUI's admin API
 only what the file names: other connections stay, and a preset keeps its description, sharing
 and parameters.
 
+### Found afterwards
+
+With `OWUI_PERSISTENT_CONFIG=false` Open WebUI reads its connection settings from the environment at
+every start and drops what was set at runtime, which is why the gateway connection kept vanishing.
+`novak up` therefore re-applies the registry once Open WebUI is healthy (quietly, and only when an
+admin key is set). Model presets live in its database and survive restarts; connections do not.
+
 ### What it costs
 
 - It needs an admin API key (`OWUI_ADMIN_API_KEY`), made once in Open WebUI, and the gateway

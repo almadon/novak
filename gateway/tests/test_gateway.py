@@ -482,11 +482,17 @@ class ButtonTests(unittest.TestCase):
         _, r = w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])
         self.assertEqual(r["result"]["content"][0]["text"], "hs-tmeuze did delete_document")
 
-    def test_with_buttons_on_the_notification_carries_no_link(self):
-        w = self.world(lambda w: "")
-        w.gw.dir.settings["confirm_timeout_s"] = 0.3
-        w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])
-        self.assertFalse(w.notes[0][0]["link"] if isinstance(w.notes[0][0], dict) else True)
+    def test_the_link_is_dropped_only_when_buttons_are_on_and_only_for_ha_channels(self):
+        ha = {"notify_default": {"kind": "ha", "service": "mobile_app_x"}}
+        w = World(self, confirm_timeout=0.3, settings=dict(self.HELPER, **ha), helper_reader=lambda *a: "")
+        w.call("hs_ushy__delete_document", token=w.keys["ushy"])               # ushy has no channel of their own
+        self.assertEqual(w.notes[0][1], {"kind": "ha", "service": ["mobile_app_x"], "link": False})   # (person, default, ...)
+        w = World(self, confirm_timeout=0.3, settings=ha)                      # no helper: the link is all there is
+        w.call("hs_ushy__delete_document", token=w.keys["ushy"])
+        self.assertEqual(w.notes[0][1], {"kind": "ha", "service": ["mobile_app_x"], "link": True})
+        w = World(self, confirm_timeout=0.3, settings=self.HELPER, helper_reader=lambda *a: "")
+        w.call("hs_tmeuze__delete_document", token=w.keys["tmeuze"])           # Ticker is passed through untouched
+        self.assertEqual(w.notes[0][0], {"kind": "ticker", "category": "Novak tmeuze"})
 
     def test_a_pressed_deny_does_nothing(self):
         w = self.world(lambda w: f"NOVAK_DENY_{self.token(w)}" if w.notes else "")

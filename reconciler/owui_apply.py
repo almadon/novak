@@ -104,6 +104,9 @@ def load_config(path: Path) -> dict:
         for t in m.get("tools") or []:
             if t not in seen:
                 raise ConfigError(f"model {m['id']}: tool {t!r} is not a tool server in this file")
+        for f in ("base", "access_from"):
+            if m.get(f) and not ID_RE.match(m[f]):
+                raise ConfigError(f"model {m['id']}: {f} must be a model id with no spaces")
     cfg["tool_servers"], cfg["models"] = servers, cfg.get("models") or []
     return cfg
 
@@ -179,16 +182,46 @@ def connection_diff(want: dict, have: dict | None, spec: dict, env) -> list[str]
     return out
 
 
-def model_changes(spec: dict, have: dict | None, servers: list[dict], repo: Path):
-    """(new model form, [what changed]) for one preset; the form is None when nothing changes."""
+def grants_of(model: dict | None) -> list[dict]:
+    """A model's sharing as the dicts Open WebUI's create form takes."""
+    return [{"principal_type": g.get("principal_type"), "principal_id": g.get("principal_id"),
+             "permission": g.get("permission")} for g in (model or {}).get("access_grants") or []]
+
+
+def model_changes(spec: dict, have: dict | None, servers: list[dict], repo: Path, access: list[dict] | None = None):
+    """(new model form, [what changed]) for one preset; the form is None when nothing changes.
+
+    A preset with a `base` wraps that model under its own name, description and prompt. A
+    `hidden: true` entry only hides an existing entry (it keeps its sharing): a model with no
+    entry of its own is left alone rather than given one that would change who can see it."""
     tools = [tool_id(t, servers) for t in spec.get("tools") or []]
     system = system_prompt(spec, repo)
     if have is None:
+        if spec.get("hidden") and not spec.get("base"):
+            return None, []
         meta = {"toolIds": tools, "capabilities": {}}
-        params = {"system": system} if system else {}
-        return ({"id": spec["id"], "name": spec.get("name", spec["id"]), "meta": meta, "params": params,
-                 "is_active": True}, ["create the preset"])
+        if spec.get("description"):
+            meta["description"] = spec["description"]
+        if spec.get("hidden"):
+            meta["hidden"] = True
+        form = {"id": spec["id"], "name": spec.get("name", spec["id"]), "base_model_id": spec.get("base"),
+                "meta": meta, "params": {"system": system} if system else {}, "is_active": True}
+        if access is not None:
+            form["access_grants"] = access
+        return form, ["create the preset" + (f" on {spec['base']}" if spec.get("base") else "")]
     meta, params, what = dict(have.get("meta") or {}), dict(have.get("params") or {}), []
+    name = have.get("name") or spec["id"]
+    if spec.get("name") and spec["name"] != name:
+        what.append(f"name: {name!r} -> {spec['name']!r}")
+        name = spec["name"]
+    if spec.get("base") and spec["base"] != have.get("base_model_id"):
+        what.append(f"based on {spec['base']}")
+    if spec.get("description") is not None and spec["description"] != meta.get("description"):
+        meta["description"] = spec["description"]
+        what.append("description set")
+    if "hidden" in spec and bool(spec["hidden"]) != bool(meta.get("hidden")):
+        meta["hidden"] = bool(spec["hidden"])
+        what.append("hidden from the picker" if spec["hidden"] else "shown in the picker")
     current = list(meta.get("toolIds") or [])
     merged = current + [t for t in tools if t not in current]       # ours added, anything else kept
     if merged != current:
@@ -199,7 +232,7 @@ def model_changes(spec: dict, have: dict | None, servers: list[dict], repo: Path
         params["system"] = system
     if not what:
         return None, []
-    return ({"id": have["id"], "name": have.get("name") or spec["id"], "base_model_id": have.get("base_model_id"),
+    return ({"id": have["id"], "name": name, "base_model_id": spec.get("base") or have.get("base_model_id"),
              "meta": meta, "params": params, "is_active": have.get("is_active", True)}, what)
 
 
@@ -231,7 +264,11 @@ def run(cfg: dict, api, env, repo: Path, apply: bool, out=print) -> int:
 
     for spec in cfg["models"]:
         have = api.call("GET", f"/api/v1/models/model?id={spec['id']}")
-        form, what = model_changes(spec, have, servers, repo)
+        access = None
+        if have is None and (spec.get("access_from") or spec.get("base")):
+            source = api.call("GET", f"/api/v1/models/model?id={spec.get('access_from') or spec['base']}")
+            access = grants_of(source) if source else None            # same people see the new preset as see its base
+        form, what = model_changes(spec, have, servers, repo, access)
         if form is None:
             out(f"  ok       model {spec['id']}")
             continue

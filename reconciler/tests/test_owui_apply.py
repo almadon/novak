@@ -204,11 +204,63 @@ class OwuiApplyTests(unittest.TestCase):
         self.assertEqual(self.run_main("--apply")[0], 2)
         self.assertEqual(FakeOwui.state["posts"], [])
 
+    def menu(self, models):
+        cfg = yaml.safe_load(self.file.read_text())
+        cfg["openwebui"]["models"] = models
+        self.file.write_text(yaml.safe_dump(cfg))
+
+    def test_a_preset_on_a_base_is_shared_with_the_same_people_as_the_base(self):
+        FakeOwui.state["models"]["chat"] = self.existing_chat(access_grants=[
+            {"principal_type": "group", "principal_id": "family", "permission": "read", "id": "g1", "extra": "x"}])
+        self.menu([{"id": "novak", "name": "Novak", "description": "Everyday.", "base": "chat",
+                    "tools": ["novak-gateway"], "system_files": ["prompts/persona.md"]}])
+        self.run_main("--apply")
+        made = FakeOwui.state["models"]["novak"]
+        self.assertEqual((made["name"], made["base_model_id"], made["meta"]["description"]), ("Novak", "chat", "Everyday."))
+        self.assertEqual(made["access_grants"], [{"principal_type": "group", "principal_id": "family", "permission": "read"}])
+        self.assertEqual(made["meta"]["toolIds"], ["server:mcp:novak-gateway"])
+
+    def test_hiding_a_model_keeps_everything_else_and_skips_one_with_no_entry(self):
+        FakeOwui.state["models"]["chat"] = self.existing_chat()
+        self.menu([{"id": "chat", "hidden": True}, {"id": "task", "hidden": True}])
+        code, out = self.run_main("--apply")
+        chat = FakeOwui.state["models"]["chat"]
+        self.assertTrue(chat["meta"]["hidden"])
+        self.assertEqual((chat["meta"]["description"], chat["params"]["temperature"], chat["access_grants"]),
+                         ("mine", 0.2, [{"principal_id": "group-1"}]))
+        self.assertNotIn("task", FakeOwui.state["models"])                       # no entry made for it
+        FakeOwui.state["posts"].clear()
+        self.assertEqual(self.run_main("--apply")[0], 0)
+        self.assertEqual(FakeOwui.state["posts"], [])                            # and it is idempotent
+
+    def test_a_preset_can_use_a_connection_without_the_gateway_tools(self):
+        self.menu([{"id": "code", "name": "Code", "base": "deep", "system_files": ["prompts/tools.md"]}])
+        self.run_main("--apply")
+        self.assertEqual(FakeOwui.state["models"]["code"]["meta"]["toolIds"], [])
+
+    def test_the_scope_header_reaches_a_second_connection(self):
+        cfg = yaml.safe_load(self.file.read_text())
+        cfg["openwebui"]["tool_servers"].append({"id": "novak-home", "name": "Novak house", "type": "mcp", "url": "http://gateway:8000/mcp",
+                                                  "key_env": "OWUI_GATEWAY_KEY",
+                                                  "headers": {"X-Novak-User": "{{USER_EMAIL}}", "X-Novak-Scope": "ha-*"}})
+        self.file.write_text(yaml.safe_dump(cfg))
+        self.run_main("--apply")
+        home = [c for c in FakeOwui.state["connections"] if c["info"]["id"] == "novak-home"][0]
+        self.assertEqual(home["headers"]["X-Novak-Scope"], "ha-*")
+
     def test_the_shipped_template_is_valid_and_its_prompts_exist(self):
         cfg = owui_apply.load_config(REPO / "registry" / "openwebui.yaml")
-        for m in cfg["models"]:
+        shown = [m for m in cfg["models"] if not m.get("hidden")]
+        self.assertEqual([m["id"] for m in shown], ["novak", "novak-deep", "home", "code"])
+        self.assertEqual({m["id"] for m in cfg["models"] if m.get("hidden")}, {"chat", "deep", "task", "ha-voice"})
+        for m in shown:
             self.assertTrue(owui_apply.system_prompt(m, REPO))
-        self.assertEqual({m["id"] for m in cfg["models"]}, {"chat", "deep"})
+            self.assertTrue(m["description"] and m["base"])
+        home = next(m for m in cfg["models"] if m["id"] == "home")
+        self.assertEqual(home["tools"], ["novak-home"])
+        scoped = next(s for s in cfg["tool_servers"] if s["id"] == "novak-home")
+        self.assertEqual(scoped["headers"]["X-Novak-Scope"], "ha-*")                # Home sees the house and nothing else
+        self.assertNotIn("tools", next(m for m in cfg["models"] if m["id"] == "code"))   # Code has no house or account tools
 
 
 if __name__ == "__main__":

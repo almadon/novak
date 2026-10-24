@@ -236,7 +236,7 @@ servers:
       url: https://github.com/vectorize-io/hindsight
       license: MIT
     risk:
-      level: normal
+      level: standard
       why:
         - "Holds code-project notes only; the prompt forbids personal content, but a model can slip."
       accepted_by: tmeuze

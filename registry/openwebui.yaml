@@ -43,6 +43,17 @@ openwebui:
       key_env: OWUI_GATEWAY_KEY
       headers: {X-Novak-User: "{{USER_EMAIL}}", X-Novak-Scope: "house", X-Novak-Tools: "house__*"}
 
+    # Coding memory only: the project-notes bank, never the personal one. The Code preset may run on a
+    # hosted model, so it gets this and nothing else (decision #75).
+    - id: novak-code
+      name: Novak code memory
+      description: Recall and retain notes about code projects.
+      type: mcp
+      url: http://gateway:8000/mcp
+      auth_type: bearer
+      key_env: OWUI_GATEWAY_KEY
+      headers: {X-Novak-User: "{{USER_EMAIL}}", X-Novak-Scope: "code-memory-*", X-Novak-Tools: "code_memory_*__recall,code_memory_*__retain"}
+
   # What people pick from. The router's own roles (chat, deep, task, ha-voice) are plumbing,
   # not choices, so they are hidden from the picker (they keep working underneath, and keep
   # their sharing) and these presets sit on top of them. A new preset is shared with the same
@@ -76,9 +87,10 @@ openwebui:
 
     - id: code
       name: Code
-      description: Coding sessions. No house or account tools, more room to think.
+      description: Coding sessions. No house or account tools, a separate memory for code projects.
       base: deep
       capabilities: {builtin_tools: false}   # no ask_user and friends: the persona and gateway tools do the work
+      tools: [novak-code]
       system_files: [prompts/novak-code.md]
 
     - {id: chat, hidden: true}

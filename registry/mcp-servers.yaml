@@ -222,6 +222,26 @@ servers:
       accepted_by: tmeuze
       accepted_on: 2026-08-19
 
+  # A second bank per person for coding knowledge only (decision #75): project layout, decisions,
+  # commands, fixes. The Code preset may run on a hosted model, so it reaches this bank and never
+  # `hindsight-<name>`. The name must not start with `hindsight`, or the personal presets' tool
+  # allowlist would pick it up too.
+  - name: code-memory-tmeuze
+    kind: external
+    url: http://hindsight:8888/mcp/code-tmeuze/
+    auth: HINDSIGHT_API_KEY
+    enabled: true
+    clients: [open-webui]
+    source:
+      url: https://github.com/vectorize-io/hindsight
+      license: MIT
+    risk:
+      level: normal
+      why:
+        - "Holds code-project notes only; the prompt forbids personal content, but a model can slip."
+      accepted_by: tmeuze
+      accepted_on: 2026-10-24
+
   - name: vikunja
     image: node:22-alpine
     command: >

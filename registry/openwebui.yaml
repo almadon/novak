@@ -69,7 +69,7 @@ openwebui:
     - id: home
       name: Home
       description: Lights, devices and the house. Quick, short answers.
-      base: chat                       # VERIFY: try the smaller model on a real lighting request
+      base: task                       # the 4B: chose the right tool and arguments on four lighting requests, 0.3 to 1.9 s, and it is always loaded (decision #74)
       capabilities: {builtin_tools: false}   # no ask_user and friends: the persona and gateway tools do the work
       tools: [novak-home]
       system_files: [prompts/novak-tools.md, prompts/novak-house.md, prompts/novak-home.md]

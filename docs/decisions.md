@@ -3334,6 +3334,11 @@ it, and `house_state`, as a ledger: call once when a chat needs it, work from it
 when asked. `list_tasks` leaves the Open WebUI allowlist; `get_task`, `search`, `add_to_inbox` and
 `complete_task` stay.
 
+The `Home` preset now sits on the 4B (`task`) instead of the 14B. Checked directly through the router with the
+Home prompts and the two house tools, nothing executed: on four requests (vaporwave on floor 2, kitchen off,
+floor 1 at 20%, what is on) the 4B picked the right tool and sensible arguments each time, in 0.3 to 1.9 s
+against 0.6 to 4.2 s for the 14B. The 4B is already loaded for voice, so it never waits on a cold load.
+
 ### What it costs
 
 - Tasks past the first 25, and anything beyond Tududi's `today` and `upcoming` views, are summarised as a

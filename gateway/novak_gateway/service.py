@@ -9,6 +9,7 @@ from pathlib import Path
 
 from . import directory, notify as notify_mod
 from .house import ALIAS as HOUSE_ALIAS, House
+from .tasks import ALIAS as TASKS_ALIAS, Tasks
 from .mcp import MCPError, Upstream
 from .policy import classify, relaxed
 
@@ -34,6 +35,7 @@ class Gateway:
         self._upstreams: dict[str, Upstream] = {}
         self._tools: dict[str, tuple[float, list]] = {}
         self.house = House(self)
+        self.tasks = Tasks(self)
 
     # configuration ------------------------------------------------------------
     @property
@@ -95,6 +97,8 @@ class Gateway:
                             "description": f"[{entry.name}] {t.get('description') or ''}".strip()})
         if self._house_entry(identity):
             out += self.house.tools()
+        if self._tasks_entry(identity):
+            out += self.tasks.tools()
         if identity.tools:
             out = [t for t in out if self._tool_wanted(identity, t["name"])]
         return out
@@ -108,6 +112,13 @@ class Gateway:
         (they have that entry, and the connection's scope has not narrowed `house` away)."""
         entry = self.house.entry_for(identity)
         if entry and identity.scope and not any(fnmatch.fnmatchcase(HOUSE_ALIAS, g) for g in identity.scope):
+            return None
+        return entry
+
+    def _tasks_entry(self, identity):
+        """The person's Tududi entry for the lean tasks snapshot, unless the scope has narrowed it away."""
+        entry = self.tasks.entry_for(identity)
+        if entry and identity.scope and not any(fnmatch.fnmatchcase(g, TASKS_ALIAS) or fnmatch.fnmatchcase(entry.name, g) for g in identity.scope):
             return None
         return entry
 
@@ -140,8 +151,25 @@ class Gateway:
         self.audit.record(identity, HOUSE_ALIAS, tool, kind, "allowed", outcome, (self.clock() - t0) * 1000, args)
         return result
 
+    def _call_tasks(self, identity, namespaced: str, args: dict) -> dict:
+        t0 = self.clock()
+        entry = self._tasks_entry(identity)
+        tool = namespaced.partition(SEP)[2]
+        if not entry or not self._tool_wanted(identity, namespaced):
+            self.audit.record(identity, None, namespaced, None, "denied", "not one of this caller's tools", args=args)
+            return text_result(f"Unknown tool '{namespaced}'.", True)
+        try:
+            result, kind = self.tasks.call(entry, tool, args or {})
+            outcome = "error" if result.get("isError") else "ok"
+        except Exception as exc:
+            result, kind, outcome = text_result(f"The tasks snapshot could not reach Tududi: {exc}", True), "read", f"error: {exc}"
+        self.audit.record(identity, TASKS_ALIAS, tool, kind, "allowed", outcome, (self.clock() - t0) * 1000, args)
+        return result
+
     def call_tool(self, identity, namespaced: str, args: dict) -> dict:
         t0 = self.clock()
+        if namespaced.startswith(TASKS_ALIAS + SEP):
+            return self._call_tasks(identity, namespaced, args)
         if namespaced.startswith(HOUSE_ALIAS + SEP):
             return self._call_house(identity, namespaced, args)
         entry, tool = self._resolve(identity, namespaced)

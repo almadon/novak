@@ -426,6 +426,7 @@ services:
       GATEWAY_HA_URL: "${GATEWAY_HA_URL:-${HA_URL:-}}"
       GATEWAY_OIDC_ISSUER: "${GATEWAY_OIDC_ISSUER:-}"
       GATEWAY_OIDC_AUDIENCE: "${GATEWAY_OIDC_AUDIENCE:-}"
+      TZ: "${INGEST_TZ:-UTC}"          # what "today" means for the tasks snapshot
       # Changes when the mounted gateway code does, so compose recreates the
       # container after a pull instead of leaving it on the old code (lib/rev.sh).
       GATEWAY_CODE_REV: "${GATEWAY_CODE_REV:-}"

@@ -239,4 +239,10 @@ its instructions and invents arguments.
   `L2`), resolve the lights themselves, and an unknown name returns an error that lists the real ones.
   They touch only lights, so nothing needs a confirmation, and they are offered only to someone who has
   that entry. The household and anyone without a Home Assistant entry do not get them.
+- **The tasks snapshot** (`tasks__tasks_state`, about 100 tokens) is built in the same way on the person's
+  own Tududi entry (the first entry whose name starts with `tududi`). It reads `list_tasks` for today and
+  upcoming, drops the seventy-odd fields Tududi returns per task, and answers with a few lines: overdue,
+  due today, the next seven days, later or undated, each task as `#id name | due | priority | status`.
+  "Today" follows the gateway's `TZ` (set from `INGEST_TZ`). Completing or adding goes through the ordinary
+  Tududi tools, which take the ids shown. It reads only, and people without a Tududi entry do not get it.
 

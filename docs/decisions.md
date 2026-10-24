@@ -3319,3 +3319,35 @@ reaching them through the router is possible later but not built.
 
 More VRAM or a larger-window model, at which point the router could offer a `code` role.
 
+
+## 74. Tasks come as a snapshot, like the house
+
+Date: 2026-10-24
+
+### What was decided
+
+The gateway offers one more small built-in tool, `tasks_state`, on the person's own Tududi entry. Tududi's
+`list_tasks` returns about seventy fields per task (around 2,000 characters), so two tasks already cost over
+1,000 tokens of an 8,192-token window. The snapshot calls it for today and upcoming, merges the two, and
+returns a few lines grouped by overdue, today, next seven days and later, with task ids. The prompt treats
+it, and `house_state`, as a ledger: call once when a chat needs it, work from it, refresh after a change or
+when asked. `list_tasks` leaves the Open WebUI allowlist; `get_task`, `search`, `add_to_inbox` and
+`complete_task` stay.
+
+The `Home` preset now sits on the 4B (`task`) instead of the 14B. Checked directly through the router with the
+Home prompts and the two house tools, nothing executed: on four requests (vaporwave on floor 2, kitchen off,
+floor 1 at 20%, what is on) the 4B picked the right tool and sensible arguments each time, in 0.3 to 1.9 s
+against 0.6 to 4.2 s for the 14B. The 4B is already loaded for voice, so it never waits on a cold load.
+
+### What it costs
+
+- Tasks past the first 25, and anything beyond Tududi's `today` and `upcoming` views, are summarised as a
+  count, not listed. Search covers the rest.
+- The snapshot is only as fresh as the call; the model must be told to refresh after changes (the prompt does).
+- It finds Tududi by the entry name prefix `tududi`, and reads status and priority codes as observed (0, 1, 2
+  for priority; 1 in progress, 4 waiting; 2, 3, 5 finished). VERIFY against Tududi's source if a state is
+  mislabelled.
+
+### What would make it worth revisiting
+
+A model with a larger context, or Tududi shipping a compact list option.

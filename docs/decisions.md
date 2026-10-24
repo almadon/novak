@@ -3351,3 +3351,31 @@ against 0.6 to 4.2 s for the 14B. The 4B is already loaded for voice, so it neve
 ### What would make it worth revisiting
 
 A model with a larger context, or Tududi shipping a compact list option.
+
+
+## 75. Code sessions get their own memory bank, and may use hosted models
+
+Date: 2026-10-24
+
+### What was decided
+
+The `Code` preset is the one place hosted models are allowed (the provider keys will live in the router, one
+router key for Open WebUI and Pi). Because what is said there leaves the house, it must never touch the
+personal bank. Each person who codes gets a second Hindsight bank, `code-<name>`, registered as the entry
+`code-memory-<name>`, and the preset reaches only that: a connection `novak-code` scoped to
+`code-memory-*` with `recall` and `retain` only. The name does not start with `hindsight`, so the personal
+presets' allowlist (`hindsight_*__recall`) cannot match it. The prompt tells the model to recall project notes
+at the start and retain layout, decisions, commands and fixes, and never anything personal. Tests pin the
+isolation both ways.
+
+### What it costs
+
+- Separation rests on entry names and scope headers, plus a prompt instruction. A model can still retain
+  something personal if the user pastes it; the bank holds code notes only by instruction.
+- Banks share one Hindsight tenant key (decision on the auth gap), so isolation is by gateway routing only.
+- Pi talks to the router, not the gateway, so it does not yet read or write this bank.
+
+### What would make it worth revisiting
+
+Hindsight per-bank keys, or Pi gaining a gateway connection.
+

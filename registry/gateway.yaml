@@ -54,9 +54,11 @@ gateway:
   # kept here still need confirmation. Delete this block to offer everything.
   tool_filters:
     - entries: "hindsight-*"
-      allow: [recall, retain, sync_retain, reflect, list_memories, get_memory, update_memory,
+      allow: &memory_tools [recall, retain, sync_retain, reflect, list_memories, get_memory, update_memory,
               invalidate_memory, list_documents, get_document, delete_document, list_tags,
               get_bank, search_knowledge_base, get_knowledge_page, get_knowledge_base_tree]
+    - entries: "code-memory-*"
+      allow: *memory_tools
     - entries: "tududi-*"
       allow: [list_tasks, get_task, create_task, update_task, complete_task, delete_task, add_subtask,
               add_task_comment, list_task_comments, get_task_metrics, list_projects, get_project,

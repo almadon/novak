@@ -1,161 +1,109 @@
 # Where this got to
 
-Working notes for the current deployment. Delete this once the stack has
-run a while unattended with nothing below it worth flagging — see "On
-this file's own exit condition" below for why it hasn't been yet.
+Working notes for the current deployment. Delete this once the stack has run a
+while unattended with nothing below it worth flagging; see "On this file's own
+exit condition" below for why it has not been yet.
 
-**Last full rewrite:** 2026-09-10, from Spire (Unraid), covering everything
-since the previous version (2026-08-27, written from the original
-macOS host). That version is not reproduced here — see git history if the
-detail is ever needed again — because almost everything in it is now
-either done, superseded, or simply about the wrong host: Spire, not
-the macOS host, has been the real household deployment since decision #33.
+**Last full rewrite:** 2026-10-24, covering everything since the 2026-09-10 version
+(decisions #55 to #73). Earlier versions are in git history. Written in a long working
+session with live access to Spire and Home Assistant, so most items say what was checked
+directly and what was not.
 
-**Since then (2026-09-22, incremental, not a rewrite):** decisions
-#43-#49 — wake word training actually completed, a real persona drift
-detector, every remaining container image pinned, `CLAUDE.md` and a
-`LICENSE` added, every VERIFY licence in `credits.md` checked, and
-`security.md` rewritten against current reality. Written from a coding
-session with no live host access, so anything needing a real deployment
-to confirm is marked VERIFY below rather than claimed.
-
-**On this file's own exit condition:** the previous version said the
-stack was "close to" the point where this file could go away. It's
-closer now — Spire has run daily for weeks, survived a real reboot test
-unaided (decision #37) — but still not deleted, because the items under
-Open VERIFY below are genuinely unchecked, and because tonight's own work
-(the HA voice pipeline) is fresh enough that it hasn't had time to prove
-itself the way the rest of the stack has.
+**On this file's own exit condition:** Spire has run daily for weeks and survived a real
+reboot test (decision #37), but the identity, approvals and Open WebUI work below is days
+old and has had one or two real runs each, not the daily use that turns "verified once"
+into "trusted". The file can go when nothing under Open VERIFY is open and the newest
+decisions have lived through a few weeks.
 
 ## What is true right now
 
-- **Spire (Unraid, AMD RDNA4 GPU) is the sole production host.**
-  Hindsight, Open WebUI, the console, the router, Ollama, and
-  `openwakeword` all run there (decision #28/#33). The macOS host is kept only
-  for oMLX development; nothing in production depends on it being up.
-- **Home Assistant runs on its own separate hardware** (a Home Assistant
-  Yellow), reaching Spire's router over the LAN/tailnet — not part of the
-  `docker-compose.yml` stack at all. See [home-assistant.md](home-assistant.md).
-- **Voice went through a real overhaul tonight** (decisions #39–#42):
-  Novak's own whisper/piper containers are gone, replaced by HA's own
-  native Whisper/Piper add-ons; the conversation agent is now HA Core's
-  own native `litellm` integration (added HA 2026.8), not the HACS
-  `custom_conversation` this doc used to point at — that stays installed
-  as a documented fallback for HA versions before 2026.8, but isn't what
-  a fresh setup should reach for first. Persona-correct, device control
-  verified with real state changes, not just plausible response text.
-- **`novak status` reports `Config: ready`** on Spire. `novak drift` is
-  real and works, but only for what it says it covers: settings and the
-  registry, against the repo. It cannot see whether a client's persona
-  still matches `prompts/` — that check does not exist (see Decided, not
-  built, below).
-- The portal and TinyAuth exist in `docker-compose.yml` but stay off on
-  Spire on purpose (decision #34) — the VPS proxy already does that job;
-  see [proxy.md](proxy.md).
-- `admins.novak` (the Pocket ID group) governs three things: the console,
-  Open WebUI's admin role and model RBAC, and the portal (where it's
-  configured) — one group, three independent enforcement points, each
-  worth spot-checking against a live login rather than assumed
-  transitive from the others.
-- Konzol's role stays narrow on purpose: memory/registry-editing only,
-  not a dashboard. No plugin surface exists to fold it into Open WebUI,
-  and the portal (where deployed) covers the "one glass pane" want
-  instead.
+- **Spire (Unraid, AMD RDNA4, 16 GB VRAM) is the sole production host.** Open WebUI, the
+  router (LiteLLM v1.106.0, with its own key), Ollama on Vulkan, Hindsight, the gateway,
+  ingest and its Whisper container, the console (Konzol), the persona server, openWakeWord
+  and the Brave search MCP all run there. Models: `chat` is qwen3:14b, `deep` is a ByteShape
+  IQ4_XS build, `task` and `ha-voice` are a 4B instruct model. **Every model runs with an
+  8,192-token context window**, and the card is almost full with the 14B and the 4B loaded;
+  this limit shaped most of the recent decisions.
+- **Home Assistant runs on its own host**, `xenia` (tailnet address 100.125.1.10, public name
+  xenia.rmrg.casa), no longer the Yellow. It holds the Supernotify and HA-MCP integrations,
+  the household voice pipeline "Novak", one pipeline and agent per person ("Novak tmeuze",
+  "Novak ushy"), and the approvals helper, automation and dashboard.
+- **Identity is real.** Two people (tmeuze, ushy) plus a household. The gateway
+  ([gateway.md](gateway.md)) gives each person only their own tools with their own
+  credentials, holds removals until they confirm, filters tool lists, and audits who did
+  what (names of arguments, never values). Pocket ID (Inti) is the only way into Open WebUI
+  and the console; local sign-in is off (decision #68).
+- **Approvals reach a phone.** The gateway sends a held call through Supernotify to the
+  person's phone with Approve and Deny buttons; a press fires a Home Assistant event, an
+  automation writes it to a helper, and the gateway acts on it (decisions #64, #72). A tap
+  opens an approvals page in the app (decision #65). Light, scene, fan and media-player calls
+  need no tap (decision #63).
+- **The tool lists are lean.** The gateway offers two built-in house tools (about 450 tokens)
+  and a per-connection allowlist, because Home Assistant's own tools alone were about 21,000
+  tokens against an 8,192 window (decision #71).
+- **Open WebUI is declared, not clicked.** `registry/openwebui.yaml` defines the gateway
+  connections and the presets Novak, Novak Deep, Home and Code, with built-in tools off;
+  `novak up` re-applies it, because Open WebUI forgets its connections on restart
+  (decisions #66, #67).
+- **Ingest delivers as the recording's owner**, through the gateway, with plain notices through
+  Home Assistant (Apprise is wired but dormant for Novak, decisions #60, #70).
+- **Secrets live in `secrets.env`** (mode 600), not `.env`, which is now safe to print
+  (decision #69). **Hindsight listens on loopback only** (decision #62).
+- **Pi (a terminal coding agent) is installed on the owner's Mac** and can use the router;
+  `novak pi config` and `novak pi hint` help (decision #73, [pi.md](pi.md)).
+- `novak status` reports `Config: ready` on Spire.
 
-## Built since the last version of this file
+## Built since the last version
 
-- **Full Spire migration** (decision #28/#33) — was aspirational in the
-  previous version of this file, is complete now. Storage split per
-  decision #33: compose manifests/`.env` under Unraid's appdata path;
-  databases, media, and model weights on bulk storage
-  (`/mnt/teracache/Novak/{data,models,config}`).
-- **The `novak` CLI on Unraid**, built and tested end to end (decision
-  #35) — `status`, `secret`, `drift`, `adopt`, `ports`, `router apply`,
-  `checklist` all verified against the real host.
-- **The internal proxy moved onto Spire itself** (decision #36),
-  replacing a separate host that job used to need.
-- **A real reboot test, survived** (decision #37) — the deploy
-  checklist's Phase 11, actually run: all containers came back unaided,
-  no manual step. The previous version of this file listed this as an
-  open VERIFY item; it no longer is.
-- **A real Open WebUI persona bug found and fixed** (decision #38) — its
-  own Builtin Tools/Memory capabilities were silently sending a system
-  message that defeated the router's persona injection. Not something
-  `novak drift` could have caught (see the persona-drift-check gap
-  below, still open).
-- **Voice pipeline overhaul** (decisions #39–#42) — see above.
-- **"Hey Novak" microWakeWord training completed** (decision #43) — a
-  real `hey_novak.tflite` now exists, calibrated to 0.103 false-accepts/hour
-  at 0.992 recall, and is committed to
-  [`wakeword/microwakeword/`](../wakeword/microwakeword/) (decision #50).
-  Not yet on a device; see Open VERIFY below.
-- **A real persona drift check, for the failure mode that actually
-  happened** (decision #44) — `persona_hook.py` now logs `PERSONA_DRIFT`
-  whenever `chat`/`deep` silently skip persona injection because a
-  client sent its own system message (decision #38's bug, made
-  observable instead of silent). `novak drift --live` surfaces it from
-  the router's logs. Logic verified offline; not yet run against a live
-  router — see Open VERIFY below.
-- **Every container image now pins to a digest, not a moving tag**
-  (decision #45) — closes conformIT audit gap #4. `open-webui`,
-  `console`, `hindsight`, `openwakeword`, and `ollama` join `caddy`,
-  `tinyauth`, and `router`, which were already pinned. Not yet pulled on
-  a live host; see Open VERIFY below.
-- **`CLAUDE.md` added** (decision #46) — conformIT's required-file gap,
-  the one with the real immediate cost (conventions rediscovered by trial
-  and error across sessions). Also caught and removed a stale claim in
-  this file: `novak guided-setup` already existed and was never crossed
-  off "Not started" below.
-- **Every VERIFY licence in credits.md checked directly** (decision #47).
-  Notably: Open WebUI's real licence has a branding-retention clause
-  (this deployment is exempt, under its 50-user/30-day threshold), and
-  the microWakeWord trainer (decision #43) has no LICENSE file at all —
-  fine for local, never-redistributed use.
-- **Licensed MIT across all three repos** (decision #48) — the audit's
-  one "actively harmful to leave" gap, closed. Also fixed a second, more
-  stale claim found along the way: `novak-konzol`'s README said "never
-  built or run," while CI has published an image since 2026-08-21.
-- **`docs/security.md` rewritten** (decision #49) against what's actually
-  deployed — multi-platform secrets, the registry's risk levels, the
-  persona's enforcement role (and decisions #38/#44 as the concrete case
-  of it failing), and the real exposure table from `proxy.md`. Also fixed
-  two stale "persona drift check still doesn't exist" claims found in
-  `architecture.md` while cross-checking it, written before decision #44.
-- **The trained microWakeWord model is committed to the repo** (decision
-  #50), in [`wakeword/microwakeword/`](../wakeword/microwakeword/) —
-  matches the existing `wakeword/models/` convention for openWakeWord,
-  caught as an inconsistency in decision #43's original reasoning.
-  Cleaned up to one manifest in ESPHome's schema, authored as ours rather
-  than the trainer's (decision #51).
-- **Bind addresses and Ollama's profile** (decision #54): `ROUTER_BIND` and `OLLAMA_BIND` put the router and Ollama on the Tailscale IP instead of every interface, and `up.sh` now starts Ollama whenever an engine in `engines.yaml` points at this host's Ollama.
-- **HA pulls the voice persona** (decision #53, replacing decision #52's
-  approach): `persona/server.py` (the `persona` compose service) serves
-  `prompts/novak-voice.md` as JSON, an HA REST sensor polls it, and the
-  `ha-voice` agent's Instructions field is a template reading the sensor.
-  No pasted copy remains. `novak drift --live` checks the pull is healthy
-  by reading that one sensor with a non-admin `HA_DRIFT_TOKEN`. Decision
-  #52's check, which tried to read the Instructions field over HA's
-  websocket API, was run against a real HA and could not work: that API
-  returns no settings for a config entry's subentries.
+| Decision | What |
+|---|---|
+| #55 to #57 | No hidden reasoning for chat, the ByteShape `deep` build, the ingest extension |
+| #58 to #60 | The gateway, a keyed router, ingest through the gateway |
+| #62 | Hindsight on loopback only |
+| #63, #64, #65 | Harmless device calls need no tap; Approve and Deny buttons; an in-app approvals page |
+| #66, #67 | Open WebUI declared and applied; a picker of presets instead of router roles |
+| #68 | Open WebUI sign-in through Pocket ID only |
+| #69 | Secrets in their own file |
+| #70, #72 | Apprise for the fleet's alerts and plain notices; Supernotify for Novak's approvals |
+| #71 | Lean house tools, because the context window is small |
+| #73 | Pi in the terminal |
+
+## Verified live, and not
+
+**Checked directly on the running system:** the lighting request on the Home preset (one call,
+correct arguments, confirmed in Home Assistant); a held call approved from an Android phone and
+then run, with exactly one notification and both buttons; the Hindsight port refusing
+connections off the host; the secrets migration (21 secrets moved, none left in `.env`); local
+sign-in refused with a 403; the console's sign-in redirect accepted by Pocket ID after the
+callback address was corrected; the gateway's tool allowlists (Home about 300 tokens, the main
+connection about 2,200); Pi finishing a small task and, with four lines of editing rules, a
+rename across a file.
+
+**Not yet checked live:** a passkey sign-in to the console at `nv.sp.a64.one`; any of ushy's own
+flows beyond her tool list; the Apprise sender against a real Apprise (the fleet's key is not
+created yet); a house request in Home Assistant voice through the new pipelines.
 
 ## Decided, not built
 
-- **Persona push to clients** (decision #18's original proposal).
-  Superseded by the router existing at all (decision #23); not going to
-  be built.
-
-- **Ingest (decision #57) is built and tested offline, not deployed.** An
-  optional extension that turns recordings into notes and proposed tasks,
-  working only while the models are idle. Unit and pipeline tests pass; nothing
-  has run against Spire's Ollama or a real Whisper model yet. See
-  [ingest.md](ingest.md) for what to measure first.
-
-- **The gateway (decision #58) is built and tested offline.** It shows each
-  person only their own tools with their own credentials, holds removals until
-  they confirm, and logs who did what. See [gateway.md](gateway.md) for what is
-  and is not verified against live services.
+- **Persona push to clients** (decision #18's original proposal). Superseded by the router
+  existing at all (decision #23); not going to be built.
+- **A tasks snapshot for chat**, like `house_state` is for lights (decision #71's reasoning).
+- **Hosted-provider keys through the router**, so Open WebUI and Pi reach a hosted model with the
+  router key and the provider key stays in `secrets.env` (decision #73).
+- **A fallback notice when Home Assistant is down.** An approval request cannot reach a phone
+  while Home Assistant is unreachable (it expired silently during an outage); a plain Apprise
+  notice would at least say something is waiting.
+- **A larger context window for `chat`**, which depends on VRAM that has not been measured with
+  the 4B model loaded beside it.
 
 ## Open VERIFY items
+
+- **Supernotify's behaviour across a release.** The gateway's call shape was checked against v2.16.0
+  (top-level `actions`, `delivery` and `dry_run`; list-shaped delivery targets; one delivery named
+  explicitly). A release could change it; the tests pin what the gateway sends, not what
+  Supernotify accepts.
+- **The Home preset's base model.** It runs on the 14B `chat` model; whether the 4B is enough for
+  tool calls on the two lean house tools has not been tried.
 
 - Whether Hindsight has a trash, before trusting `delete` to be
   recoverable.
@@ -206,26 +154,12 @@ itself the way the rest of the stack has.
 
 ## Not started
 
-- Konzol has three placeholder pages and a design token layer, no
-  components — less urgent now that the portal (where deployed) covers
-  the cross-app viewing want that was the main pressure on it.
-- ~~No interactive first-run wizard~~ — stale claim, removed. `novak
-  guided-setup` (also menu item 4) has existed since 2026-09-04, before
-  this file's last full rewrite; it was simply never crossed off here.
-  Walks through whatever `novak status` would list as missing, asking for
-  each value. See [cli.md](cli.md)'s "Guided setup" section.
-- ~~`docs/security.md` wants rewriting~~ — done (decision #49). Was
-  describing a single-Mac, Qdrant-backed deployment; rewritten against
-  Spire, Hindsight, the router's persona-enforcement role, and the real
-  exposure table from [proxy.md](proxy.md).
-- ~~`LICENSE` file~~ — done (decision #48). MIT, across all three repos.
-- ~~`CLAUDE.md`~~ — done. `CHANGELOG.md` is still not started; conformIT's
-  own justification for it is about changes a *user* would notice, and
-  there's been no tagged release yet — worth starting at the first one
-  rather than now.
-- ~~**Version pinning**~~ — done (decision #45). Every image in
-  `docker-compose.yml` now pins to a digest, not a moving tag. Not yet
-  verified against a live pull; see Open VERIFY below.
+- Konzol has three placeholder pages and a design token layer, no components. Approvals and the
+  audit log are the likely first uses now that the data exists.
+- `CHANGELOG.md`: conformIT's own justification is about changes a user would notice, and there
+  has been no tagged release yet; worth starting at the first one.
+- The old claims about an interactive wizard, `docs/security.md`, `LICENSE`, `CLAUDE.md` and
+  version pinning are all done (decisions #45 to #49); see git history for the detail.
 
 ## Traps already hit, all documented (still true, still worth knowing)
 
@@ -267,3 +201,23 @@ itself the way the rest of the stack has.
   — a genuinely new variable needs the container recreated
   (`docker compose up -d <service>`, not just a restart), same lesson as
   the `reconciler` one above, hit while debugging tonight (decision #42).
+- **A simulation is only a simulation if the flag is where the service looks for it.** A Supernotify
+  call with `dry_run` inside `advanced` was not recognised and sent a real notification to two
+  phones; `dry_run` belongs at the top level of the call (decision #72).
+- **Left to choose, Supernotify sends twice**: through the phone's push delivery and again through
+  the person's notify entity. Name the delivery and set `delivery_selection: explicit`.
+- **A model silently loses the start of its prompt when it is longer than the window.** Ollama
+  truncates; the router and Open WebUI show nothing wrong, and the model "ignores" its
+  instructions. Measure tool definitions in tokens before offering them (decision #71).
+- **Open WebUI forgets runtime-set tool connections on restart** while `OWUI_PERSISTENT_CONFIG=false`;
+  model presets live in its database and survive (decision #66).
+- **Piping `novak up` or `novak update` into `head` can stop it before the containers are
+  recreated.** Closing the pipe sends SIGPIPE mid-run; let it finish, or send output to a file.
+- **A bare `on` or `off` in YAML is a boolean.** A rule listing `[on, off, toggle]` silently became
+  `[True, False, "toggle"]`; quote them.
+- **Open WebUI's own `ask_user` tool will be used by a small model in place of acting.** Turn
+  built-in tools off per preset (`capabilities.builtin_tools: false`).
+- **Pi's `edit` tool needs old text that matches in exactly one place**, and a small model will
+  repeat an ambiguous edit about a hundred times unless told to use `sed` (decision #73).
+- **A retired phone can re-register itself.** Disabling a Mobile App entry in Home Assistant was
+  undone once; sign the app out on the phone, then delete the device.

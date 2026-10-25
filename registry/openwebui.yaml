@@ -87,8 +87,8 @@ openwebui:
 
     - id: code
       name: Code
-      description: Coding sessions. No house or account tools, a separate memory for code projects.
-      base: deep
+      description: Coding sessions, offline. No house or account tools, a separate memory for code projects.
+      base: code                       # Qwen2.5-Coder 14B, local (decision #76)
       capabilities: {builtin_tools: false}   # no ask_user and friends: the persona and gateway tools do the work
       tools: [novak-code]
       system_files: [prompts/novak-code.md]

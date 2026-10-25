@@ -3379,3 +3379,31 @@ isolation both ways.
 
 Hindsight per-bank keys, or Pi gaining a gateway connection.
 
+
+## 76. Code runs offline on Qwen2.5-Coder by default
+
+Date: 2026-10-24
+
+### What was decided
+
+The `Code` preset sits on a new router role, `code`, served by `qwen2.5-coder:14b-ctx8k` on Ollama (the 9 GB
+Q4_K_M from the Ollama library, with `num_ctx 8192`, temperature 0.2, top_p 0.9, repeat_penalty 1.05 set in a
+Modelfile). It replaces `deep`, a 27B general model that evicts the voice model. Pi lists it first. The prompt
+now tells the model to say when a task has outgrown it (more than two or three files, a trace that will not
+fit, the same fix failed twice) and to suggest switching to a larger model, which in Open WebUI keeps the
+conversation. Hosted models (Anthropic, OpenAI, OpenRouter) will be extra router entries behind the same key,
+shown only on Code-style presets, once the keys are in `secrets.env`.
+
+### What it costs
+
+- It does not escalate by itself: the small model judges its own limits, and Open WebUI cannot switch models
+  mid-chat on its own. The user chooses.
+- The 14B coder and the 14B chat model do not stay loaded together; alternating costs about 11 seconds to load.
+  Measured: 13 then 32 tokens per second on a 250-token answer (first call cold, second warm), against 18 for
+  `chat` warm.
+- Qwen2.5-Coder is older than Qwen3-Coder-30B-A3B, which would need CPU offload at 16 GB of VRAM. Not tried.
+
+### What would make it worth revisiting
+
+More VRAM, or a newer coder model that fits in about 10 GB.
+

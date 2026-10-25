@@ -13,7 +13,7 @@ import json
 import os
 import sys
 
-ROLES = [("chat", "Novak chat"), ("deep", "Novak deep")]
+ROLES = [("code", "Novak code"), ("chat", "Novak chat"), ("deep", "Novak deep")]
 
 
 def build(url: str, context: int = 8192, max_tokens: int = 2048) -> dict:

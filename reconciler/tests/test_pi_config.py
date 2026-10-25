@@ -11,11 +11,11 @@ import pi_config  # noqa: E402
 
 
 class PiConfigTests(unittest.TestCase):
-    def test_the_provider_points_at_the_router_and_names_both_chat_roles(self):
+    def test_the_provider_points_at_the_router_and_names_the_code_and_chat_roles(self):
         cfg = pi_config.build("http://100.125.10.15:13402/v1/")
         p = cfg["providers"]["novak"]
         self.assertEqual((p["baseUrl"], p["api"]), ("http://100.125.10.15:13402/v1", "openai-completions"))
-        self.assertEqual([m["id"] for m in p["models"]], ["chat", "deep"])
+        self.assertEqual([m["id"] for m in p["models"]], ["code", "chat", "deep"])
 
     def test_the_key_is_an_environment_reference_never_a_value(self):
         text = json.dumps(pi_config.build("http://x/v1"))

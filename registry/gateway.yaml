@@ -19,9 +19,12 @@ gateway:
   # person.<ha person>}` for a person (`novak person set NAME --supernotify person.x`), or a list of
   # people for notify_default. Supernotify finds that person's phones from Home Assistant itself, so
   # a new phone needs no change here. See docs/gateway.md.
-  # The lean house tools (house__house_state, house__lights_set) run on this person-owned registry
-  # entry and are offered only to someone who has it. Blank turns them off. See docs/gateway.md.
-  house: {entry: ha-mcp}
+  # The lean house tools (house__house_state, house__lights_set) run on one Home Assistant instance,
+  # named by id, with that instance's service admin token (secret HA_<id>_ADMIN_API_TOKEN; address
+  # HA_<id>_URL, else GATEWAY_HA_URL). Only the people listed get them. Blank turns them off.
+  # Instance ids: 1 = your first Home Assistant. Keep that mapping in a comment here.
+  # Until a token exists, `entry: ha-mcp` still works as the older route. See docs/gateway.md.
+  house: {ha: 1, people: []}
 
   # Names for several Home Assistant notify services, so one confirmation reaches every
   # phone in a group: `notify: {kind: ha, service: mgmt}` below sends to each of these.

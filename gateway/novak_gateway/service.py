@@ -10,6 +10,7 @@ from pathlib import Path
 from . import directory, notify as notify_mod
 from .house import ALIAS as HOUSE_ALIAS, House
 from .tasks import ALIAS as TASKS_ALIAS, Tasks
+from .homeassistant import HAClient
 from .mcp import MCPError, Upstream
 from .policy import classify, relaxed
 
@@ -25,7 +26,8 @@ def text_result(message: str, error=False) -> dict:
 class Gateway:
     def __init__(self, registry_dir, audit, approvals, public_url, env=os.environ,
                  notifier=notify_mod.send, upstream_factory=Upstream, clock=time.time,
-                 helper_reader=notify_mod.read_state, helper_poll_s=1.5, publisher=notify_mod._post):
+                 helper_reader=notify_mod.read_state, helper_poll_s=1.5, publisher=notify_mod._post,
+                 ha_factory=HAClient):
         self.registry_dir = Path(registry_dir)
         self.audit, self.approvals = audit, approvals
         self.public_url, self.env, self.notifier = public_url.rstrip("/"), env, notifier
@@ -34,6 +36,7 @@ class Gateway:
         self._dir = directory.load(self.registry_dir)
         self._upstreams: dict[str, Upstream] = {}
         self._tools: dict[str, tuple[float, list]] = {}
+        self.ha_factory = ha_factory
         self.house = House(self)
         self.tasks = Tasks(self)
 
@@ -108,9 +111,9 @@ class Gateway:
         return not identity.tools or any(fnmatch.fnmatchcase(namespaced, g) for g in identity.tools)
 
     def _house_entry(self, identity):
-        """The Home Assistant entry the lean house tools run on, when this caller may use them
-        (they have that entry, and the connection's scope has not narrowed `house` away)."""
-        entry = self.house.entry_for(identity)
+        """Where the lean house tools run for this caller, if they may use them (the config names them
+        and the connection's scope has not narrowed `house` away)."""
+        entry = self.house.backend_for(identity)
         if entry and identity.scope and not any(fnmatch.fnmatchcase(HOUSE_ALIAS, g) for g in identity.scope):
             return None
         return entry

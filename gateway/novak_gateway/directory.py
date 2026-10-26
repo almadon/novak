@@ -123,7 +123,7 @@ DEFAULT_SETTINGS = {
     "confirm_timeout_s": 180,
     "tool_overrides": {},
     "arg_rules": {},
-    "house": {"entry": "ha-mcp"},
+    "house": {},
     "notify_groups": {},
     "approval_helper": "",
     "pending_helper": "",

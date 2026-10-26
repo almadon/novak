@@ -1,5 +1,7 @@
 import json
 import sys
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +13,7 @@ from novak_gateway import house  # noqa: E402
 from novak_gateway.approvals import Approvals  # noqa: E402
 from novak_gateway.audit import Audit  # noqa: E402
 from novak_gateway.auth import Identity  # noqa: E402
+from novak_gateway.homeassistant import HAClient, HAError  # noqa: E402
 from novak_gateway.service import Gateway  # noqa: E402
 
 # floor, area, id, name, state, brightness, rgb, supported_color_modes
@@ -56,7 +59,7 @@ class HouseTests(unittest.TestCase):
             "people": {"tmeuze": {"names": ["tmeuze"], "entries": ["ha-mcp"]},
                        "ushy": {"names": ["ushy"], "entries": ["hs-ushy"]}},
             "household": {"entries": []}}))
-        (self.dir / "gateway.yaml").write_text(yaml.safe_dump({"gateway": {}}))
+        (self.dir / "gateway.yaml").write_text(yaml.safe_dump({"gateway": {"house": {"entry": "ha-mcp"}}}))   # the older route
         self.ha = FakeHA()
         self.gw = Gateway(self.dir, Audit(str(self.dir / "a.db")), Approvals(str(self.dir / "p.db")), "http://gw", {},
                           notifier=lambda *a: "x", upstream_factory=lambda url, token: self.ha)
@@ -193,6 +196,101 @@ class HouseTests(unittest.TestCase):
         for given, want in (("#ff71ce", (255, 113, 206)), ("ff71ce", (255, 113, 206)), ("1,205,254", (1, 205, 254)),
                             ("[5, 255, 161]", (5, 255, 161)), ([185, 103, 255], (185, 103, 255)), ("256,0,0", None), ("red", None)):
             self.assertEqual(house.parse_color(given), want, given)
+
+
+class FakeRest:
+    """Stands in for HAClient: the direct route, with the service admin token."""
+
+    def __init__(self, url, token, rows=ROWS, fail=()):
+        self.url, self.token, self.rows, self.fail, self.calls = url, token, rows, set(fail), []
+
+    def template(self, template):
+        return json.dumps(self.rows)
+
+    def call_service(self, domain, service, entity_id, data=None):
+        self.calls.append((domain, service, entity_id, data or {}))
+        if entity_id in self.fail:
+            raise HAError("Home Assistant answered 400: boom")
+
+
+class DirectRouteTests(unittest.TestCase):
+    """House tools straight to Home Assistant with HA_<id>_ADMIN_API_TOKEN (decision #77)."""
+
+    def make(self, env, house=None):
+        self.dir = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(self.dir, ignore_errors=True))
+        (self.dir / "mcp-servers.yaml").write_text(yaml.safe_dump({"servers": [
+            {"name": "ha-mcp", "kind": "external", "url": "http://ha/mcp", "enabled": True}]}))
+        (self.dir / "people.yaml").write_text(yaml.safe_dump({
+            "people": {"tmeuze": {"names": ["tmeuze"], "entries": ["ha-mcp"]},
+                       "ushy": {"names": ["ushy"], "entries": []}},
+            "household": {"entries": []}}))
+        (self.dir / "gateway.yaml").write_text(yaml.safe_dump({"gateway": {"house": house or {"ha": 1, "people": ["tmeuze"]}}}))
+        self.made = []
+        def factory(url, token):
+            c = FakeRest(url, token)
+            self.made.append(c)
+            return c
+        gw = Gateway(self.dir, Audit(str(self.dir / "a.db")), Approvals(str(self.dir / "p.db")), "http://gw", env,
+                     notifier=lambda *a: "x", ha_factory=factory,
+                     upstream_factory=lambda url, token: self.fail("the ha-mcp route must not be used"))
+        return gw, Identity("person", "tmeuze", "key", gw.dir.find_person("tmeuze")), Identity("person", "ushy", "key", gw.dir.find_person("ushy"))
+
+    ENV = {"HA_1_URL": "http://xenia", "HA_1_ADMIN_API_TOKEN": "tok"}
+
+    def test_it_uses_the_instance_url_and_service_token_and_never_the_mcp_entry(self):
+        gw, me, _ = self.make(self.ENV)
+        r = gw.call_tool(me, "house__lights_set", {"where": "L2 Kitchen", "brightness_pct": 30})
+        self.assertFalse(r.get("isError"))
+        self.assertEqual((self.made[0].url, self.made[0].token), ("http://xenia", "tok"))
+        self.assertEqual(self.made[0].calls, [("light", "turn_on", "light.l2_bar", {"brightness_pct": 30}),
+                                              ("light", "turn_on", "light.l2_relay", {"brightness_pct": 30})])
+
+    def test_only_the_people_named_get_the_tools(self):
+        gw, me, ushy = self.make(self.ENV)
+        self.assertIn("house__house_state", [t["name"] for t in gw.list_tools(me)])
+        self.assertNotIn("house__house_state", [t["name"] for t in gw.list_tools(ushy)])
+        self.assertTrue(gw.call_tool(ushy, "house__house_state", {}).get("isError"))
+
+    def test_without_the_token_the_tools_are_not_offered(self):
+        gw, me, _ = self.make({"HA_1_URL": "http://xenia"})
+        self.assertNotIn("house__house_state", [t["name"] for t in gw.list_tools(me)])
+
+    def test_a_failure_from_home_assistant_is_reported_not_raised(self):
+        gw, me, _ = self.make(self.ENV)
+        gw.ha_factory = lambda url, token: FakeRest(url, token, fail={"light.l2_bar", "light.l2_relay"})
+        r = gw.call_tool(me, "house__lights_set", {"where": "L2 Kitchen", "brightness_pct": 20})
+        self.assertTrue(r["isError"])
+        self.assertIn("boom", r["content"][0]["text"])
+
+
+class HAClientTests(unittest.TestCase):
+    def setUp(self):
+        seen = self.seen = []
+        class H(BaseHTTPRequestHandler):
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                seen.append((self.path, self.headers["Authorization"], body))
+                code = 401 if self.headers["Authorization"] == "Bearer bad" else 200
+                out = b"[]" if self.path == "/api/template" else b"[]"
+                self.send_response(code); self.end_headers(); self.wfile.write(b"nope" if code == 401 else out)
+            def log_message(self, *a): pass
+        self.srv = HTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        self.addCleanup(self.srv.shutdown)
+        self.url = f"http://127.0.0.1:{self.srv.server_port}"
+
+    def test_the_two_calls_send_the_token_and_the_expected_bodies(self):
+        c = HAClient(self.url, "good")
+        self.assertEqual(c.template("{{ 1 }}"), "[]")
+        c.call_service("light", "turn_on", "light.a", {"brightness_pct": 5})
+        self.assertEqual(self.seen, [("/api/template", "Bearer good", {"template": "{{ 1 }}"}),
+                                     ("/api/services/light/turn_on", "Bearer good", {"entity_id": "light.a", "brightness_pct": 5})])
+
+    def test_a_refused_token_says_it_must_be_an_admin(self):
+        with self.assertRaises(HAError) as ctx:
+            HAClient(self.url, "bad").template("{{ 1 }}")
+        self.assertIn("admin", str(ctx.exception))
 
 
 if __name__ == "__main__":

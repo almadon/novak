@@ -6,9 +6,10 @@ ids, areas) and goes quiet after the first error. These tools are about 250 toke
 looking-up themselves: the model says "floor 2" and "vaporwave colours", and the gateway resolves the
 lights and makes the calls.
 
-They are built on the person's own Home Assistant entry (the same credential and the same
-permissions as the generic tools), offered only to someone who has one, and only ever touch lights,
-so nothing here needs a person's confirmation.
+They run on one Home Assistant instance, named by id in `gateway.yaml` (`house: {ha: 1, people: [...]}`),
+with that instance's service admin token (`HA_<id>_ADMIN_API_TOKEN`, address `HA_<id>_URL`), and only
+ever touch lights, so nothing here needs a person's confirmation. Until a deployment has that token they
+fall back to the older route, a person's `ha-mcp` entry (`house: {entry: ha-mcp}`); that goes when ha-mcp does.
 """
 import json
 import re
@@ -93,31 +94,64 @@ class Light:
         return " ".join(bits)
 
 
+class McpBackend:
+    """The older route: a person's ha-mcp entry."""
+
+    def __init__(self, gateway, entry):
+        self.gw, self.entry = gateway, entry
+
+    def _call(self, name, arguments):
+        res = self.gw._upstream(self.entry).call("tools/call", {"name": name, "arguments": arguments})
+        return res, " ".join(c.get("text", "") for c in res.get("content", []))
+
+    def template(self, template: str) -> str:
+        res, text = self._call("ha_eval_template", {"template": template})
+        if res.get("isError"):
+            raise RuntimeError(text[:200] or "Home Assistant refused the lookup")
+        try:
+            return json.loads(text)["result"]
+        except (ValueError, KeyError, TypeError) as exc:
+            raise RuntimeError(f"unexpected answer from Home Assistant ({exc})") from None
+
+    def call_service(self, domain, service, entity_id, data=None):
+        call = {"domain": domain, "service": service, "entity_id": entity_id, "wait": False}
+        if data:
+            call["data"] = data
+        res, text = self._call("ha_call_service", call)
+        if res.get("isError") or '"success": false' in text.replace('":false', '": false'):
+            raise RuntimeError(text[:80] or "refused")
+
+
 class House:
     def __init__(self, gateway):
         self.gw = gateway
 
-    # who may use it ---------------------------------------------------------------------
-    def entry_for(self, identity):
-        """The person's own Home Assistant entry, or None (then the tools are not offered)."""
-        name = (self.gw.dir.settings.get("house") or {}).get("entry")
-        if not name or identity.kind == "household" or not identity.person:
+    # who may use it, and over which route ----------------------------------------------------
+    def backend_for(self, identity):
+        """Where this caller's house tools run, or None (then they are not offered)."""
+        cfg = self.gw.dir.settings.get("house") or {}
+        if identity.kind == "household" or not identity.person:
             return None
-        return next((e for e in self.gw.dir.entries_for(identity.person) if e.name == name), None)
+        ha = cfg.get("ha")
+        if ha:
+            if identity.name not in (cfg.get("people") or []):
+                return None
+            url = self.gw.env.get(f"HA_{ha}_URL") or self.gw.env.get("GATEWAY_HA_URL") or ""
+            token = self.gw.env.get(f"HA_{ha}_ADMIN_API_TOKEN") or ""
+            if url and token and token not in ("set-in-keychain", "EDIT-ME", "changeme"):
+                return self.gw.ha_factory(url, token)
+        name = cfg.get("entry")
+        entry = next((e for e in self.gw.dir.entries_for(identity.person) if e.name == name), None) if name else None
+        return McpBackend(self.gw, entry) if entry else None
 
     def tools(self) -> list[dict]:
         return [{**t, "name": f"{ALIAS}{SEP}{t['name']}"} for t in TOOLS]
 
     # reading ------------------------------------------------------------------------------
-    def snapshot(self, entry) -> list[Light]:
-        res = self.gw._upstream(entry).call("tools/call", {"name": "ha_eval_template",
-                                                           "arguments": {"template": SNAPSHOT_TEMPLATE}})
-        text = " ".join(c.get("text", "") for c in res.get("content", []))
-        if res.get("isError"):
-            raise RuntimeError(text[:200] or "Home Assistant refused the lookup")
+    def snapshot(self, ha) -> list[Light]:
         try:
-            rows = json.loads(json.loads(text)["result"])
-        except (ValueError, KeyError, TypeError) as exc:
+            rows = json.loads(ha.template(SNAPSHOT_TEMPLATE))
+        except (ValueError, TypeError) as exc:
             raise RuntimeError(f"unexpected answer from Home Assistant ({exc})") from None
         return [Light(r) for r in rows]
 
@@ -216,13 +250,9 @@ class House:
                 if colors and l.color_capable:
                     data["rgb_color"] = list(colors[i % len(colors)])
                     i += 1
-            call = {"domain": "light", "service": service, "entity_id": l.id, "wait": False}
-            if data:
-                call["data"] = data
             try:
-                res = self.gw._upstream(entry).call("tools/call", {"name": "ha_call_service", "arguments": call})
-                text = " ".join(c.get("text", "") for c in res.get("content", []))
-                (failed if res.get("isError") or '"success": false' in text.replace('":false', '": false') else done).append((l, data, text))
+                entry.call_service("light", service, l.id, data)
+                done.append((l, data, ""))
             except Exception as exc:
                 failed.append((l, data, str(exc)))
         verb = "off" if state == "off" else "set"

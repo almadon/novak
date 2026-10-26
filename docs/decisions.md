@@ -3407,3 +3407,29 @@ shown only on Code-style presets, once the keys are in `secrets.env`.
 
 More VRAM, or a newer coder model that fits in about 10 GB.
 
+
+## 77. The house tools call Home Assistant directly, as a service account
+
+Date: 2026-10-26
+
+### What was decided
+
+`house_state` and `lights_set` no longer go through the `ha-mcp` server. The gateway calls HA's REST API itself
+(`POST /api/template`, `POST /api/services/light/...`) with `HA_<id>_ADMIN_API_TOKEN`, the token of a dedicated
+admin user, not a person's account. `<id>` is the instance number, as for Outline and Tududi (`OUTLINE_1_TMEUZE_API_KEY`):
+`HA_1_ADMIN_API_TOKEN` is instance 1, xenia. `ADMIN` is in the user slot because it is a service account. The
+people who get the tools are listed in `gateway.yaml` (`house: {ha: 1, people: [...]}`). This is a step to removing
+`ha-mcp`, which is rated dangerous (it edits config and automations and keeps its secret in a URL) and is no longer
+used by the voice agents. Until a deployment has the token the older `entry: ha-mcp` route still works.
+
+### What it costs
+
+- HA lets only an admin render templates, so the token is an admin token. The gateway uses it for two endpoints,
+  and the model never holds it, but if the gateway were compromised the token is powerful.
+- HA's logbook shows the service user as the actor, not the person; Novak's audit log still names the person.
+- The two other HA tokens (gateway, ingest, drift) keep their old names for now.
+
+### What would make it worth revisiting
+
+HA offering floor and area lookups to a non-admin token, which would let a limited token replace the admin one.
+

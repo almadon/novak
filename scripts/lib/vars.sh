@@ -16,6 +16,7 @@ SECRET_VARS=(
   BRAVE_API_KEY
   CONSOLE_AUTH_SECRET
   GATEWAY_HA_TOKEN
+  HA_1_ADMIN_API_TOKEN
   HA_DRIFT_TOKEN
   HINDSIGHT_API_KEY
   INGEST_APPRISE_KEY
@@ -101,6 +102,7 @@ CORE_SECRETS=(HINDSIGHT_API_KEY)
 EXTERNAL_SECRETS=(
   BRAVE_API_KEY
   GATEWAY_HA_TOKEN
+  HA_1_ADMIN_API_TOKEN
   HA_DRIFT_TOKEN
   INGEST_APPRISE_KEY
   INGEST_GATEWAY_KEY
@@ -161,6 +163,7 @@ secret_desc() {
     INGEST_GATEWAY_KEY)         echo "Ingest: trusted gateway client key (novak gateway client ingest)" ;;
     INGEST_HA_TOKEN)            echo "Ingest: Home Assistant token for approval notifications" ;;
     GATEWAY_HA_TOKEN)           echo "Gateway: Home Assistant token for removal-confirmation notifications" ;;
+    HA_1_ADMIN_API_TOKEN)       echo "Home Assistant instance 1 (xenia): service admin token for the house tools" ;;
     *)                          return 1 ;;
   esac
 }

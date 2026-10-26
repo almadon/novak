@@ -30,6 +30,10 @@ def needed_names(registry_dir: Path) -> list[str]:
     servers = [e for e in load("mcp-servers.yaml").get("servers") or [] if e.get("name") in wanted]
     # An address that is itself a credential (url_env) is passed like a token.
     names = {e["auth"] for e in servers if e.get("auth")} | {e["url_env"] for e in servers if e.get("url_env")}
+    # The house tools run on one Home Assistant instance by id: HA_<id>_ADMIN_API_TOKEN (and HA_<id>_URL).
+    ha = ((load("gateway.yaml").get("gateway") or {}).get("house") or {}).get("ha")
+    if ha:
+        names |= {f"HA_{ha}_ADMIN_API_TOKEN", f"HA_{ha}_URL"}
     return sorted(names | set(OWN))
 
 

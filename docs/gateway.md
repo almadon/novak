@@ -235,8 +235,8 @@ its instructions and invents arguments.
   to give the main connection about ten tools (about 2,400 tokens) and the Home connection two.
 - **The house tools** (`house__house_state`, `house__lights_set`, about 450 tokens together) are built
   into the gateway and call Home Assistant's REST API directly (`house: {ha: 1, people: [tmeuze]}` in
-  `gateway.yaml`; blank turns them off). `ha` is the instance id: the gateway reads `HA_1_URL` (else
-  `GATEWAY_HA_URL`) and the secret `HA_1_ADMIN_API_TOKEN`, a long-lived token of a dedicated admin user (HA
+  `gateway.yaml`; blank turns them off). `ha` is the instance id: the gateway reads `GATEWAY_HA_URL` (the
+  address of that instance) and the secret `HA_1_ADMIN_API_TOKEN`, a long-lived token of a dedicated admin user (HA
   lets only an admin render the template that finds floors and areas). Only the listed people get them, the
   household never does, and the model never sees the token: the gateway calls two endpoints, one template
   and `light` services. They take floor and area names ("floor 2" matches areas labelled `L2`), resolve the

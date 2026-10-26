@@ -22,7 +22,7 @@ class HouseCredentialTests(unittest.TestCase):
     def test_the_gateway_is_given_the_house_instance_credentials(self):
         names = self.names({"house": {"ha": 1, "people": ["tmeuze"]}})
         self.assertIn("HA_1_ADMIN_API_TOKEN", names)
-        self.assertIn("HA_1_URL", names)
+        self.assertNotIn("HA_1_URL", names)               # the address is GATEWAY_HA_URL, passed by compose
 
     def test_nothing_extra_when_the_house_tools_are_off(self):
         self.assertEqual(self.names({"house": {}}), ["GATEWAY_HA_TOKEN"])

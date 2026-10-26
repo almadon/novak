@@ -21,9 +21,9 @@ gateway:
   # a new phone needs no change here. See docs/gateway.md.
   # The lean house tools (house__house_state, house__lights_set) run on one Home Assistant instance,
   # named by id, with that instance's service admin token (secret HA_<id>_ADMIN_API_TOKEN; address
-  # HA_<id>_URL, else GATEWAY_HA_URL). Only the people listed get them. Blank turns them off.
+  # GATEWAY_HA_URL). Only the people listed get them. Blank turns them off.
   # Instance ids: 1 = your first Home Assistant. Keep that mapping in a comment here.
-  # Until a token exists, `entry: ha-mcp` still works as the older route. See docs/gateway.md.
+  # See docs/gateway.md.
   house: {ha: 1, people: []}
 
   # Names for several Home Assistant notify services, so one confirmation reaches every

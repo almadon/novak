@@ -241,8 +241,8 @@ its instructions and invents arguments.
   household never does, and the model never sees the token: the gateway calls two endpoints, one template
   and `light` services. They take floor and area names ("floor 2" matches areas labelled `L2`), resolve the
   lights themselves, and an unknown name returns an error that lists the real ones. They touch only lights,
-  so nothing needs a confirmation. While no token is set, `entry: ha-mcp` (a person's own ha-mcp entry)
-  still works as the older route.
+  so nothing needs a confirmation. A change shows in Home Assistant's state a few seconds later, so the
+  prompt tells the model to trust the result of `lights_set` instead of re-reading straight away.
 - **The tasks snapshot** (`tasks__tasks_state`, about 100 tokens) is built in the same way on the person's
   own Tududi entry (the first entry whose name starts with `tududi`). It reads `list_tasks` for today and
   upcoming, drops the seventy-odd fields Tududi returns per task, and answers with a few lines: overdue,

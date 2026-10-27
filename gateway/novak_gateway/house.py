@@ -7,9 +7,8 @@ looking-up themselves: the model says "floor 2" and "vaporwave colours", and the
 lights and makes the calls.
 
 They run on one Home Assistant instance, named by id in `gateway.yaml` (`house: {ha: 1, people: [...]}`),
-with that instance's service admin token (`HA_<id>_ADMIN_API_TOKEN`, address `HA_<id>_URL`), and only
-ever touch lights, so nothing here needs a person's confirmation. Until a deployment has that token they
-fall back to the older route, a person's `ha-mcp` entry (`house: {entry: ha-mcp}`); that goes when ha-mcp does.
+with that instance's service admin token (`HA_<id>_ADMIN_API_TOKEN`; address `GATEWAY_HA_URL`, or `HA_<id>_URL` to override), and only
+ever touch lights, so nothing here needs a person's confirmation.
 """
 import json
 import re
@@ -94,41 +93,13 @@ class Light:
         return " ".join(bits)
 
 
-class McpBackend:
-    """The older route: a person's ha-mcp entry."""
-
-    def __init__(self, gateway, entry):
-        self.gw, self.entry = gateway, entry
-
-    def _call(self, name, arguments):
-        res = self.gw._upstream(self.entry).call("tools/call", {"name": name, "arguments": arguments})
-        return res, " ".join(c.get("text", "") for c in res.get("content", []))
-
-    def template(self, template: str) -> str:
-        res, text = self._call("ha_eval_template", {"template": template})
-        if res.get("isError"):
-            raise RuntimeError(text[:200] or "Home Assistant refused the lookup")
-        try:
-            return json.loads(text)["result"]
-        except (ValueError, KeyError, TypeError) as exc:
-            raise RuntimeError(f"unexpected answer from Home Assistant ({exc})") from None
-
-    def call_service(self, domain, service, entity_id, data=None):
-        call = {"domain": domain, "service": service, "entity_id": entity_id, "wait": False}
-        if data:
-            call["data"] = data
-        res, text = self._call("ha_call_service", call)
-        if res.get("isError") or '"success": false' in text.replace('":false', '": false'):
-            raise RuntimeError(text[:80] or "refused")
-
-
 class House:
     def __init__(self, gateway):
         self.gw = gateway
 
-    # who may use it, and over which route ----------------------------------------------------
+    # who may use it ------------------------------------------------------------------------
     def backend_for(self, identity):
-        """Where this caller's house tools run, or None (then they are not offered)."""
+        """The Home Assistant client for this caller's house tools, or None (then they are not offered)."""
         cfg = self.gw.dir.settings.get("house") or {}
         if identity.kind == "household" or not identity.person:
             return None
@@ -140,9 +111,7 @@ class House:
             token = self.gw.env.get(f"HA_{ha}_ADMIN_API_TOKEN") or ""
             if url and token and token not in ("set-in-keychain", "EDIT-ME", "changeme"):
                 return self.gw.ha_factory(url, token)
-        name = cfg.get("entry")
-        entry = next((e for e in self.gw.dir.entries_for(identity.person) if e.name == name), None) if name else None
-        return McpBackend(self.gw, entry) if entry else None
+        return None
 
     def tools(self) -> list[dict]:
         return [{**t, "name": f"{ALIAS}{SEP}{t['name']}"} for t in TOOLS]
@@ -187,8 +156,8 @@ class House:
         return picked, unmatched
 
     # the two tools ---------------------------------------------------------------------------
-    def house_state(self, entry, args: dict) -> dict:
-        lights = self.snapshot(entry)
+    def house_state(self, ha, args: dict) -> dict:
+        lights = self.snapshot(ha)
         if not lights:
             return _text("No lights are assigned to any floor or area in Home Assistant.", True)
         where = (args or {}).get("where")
@@ -209,7 +178,7 @@ class House:
             lines.append(f"No match for: {', '.join(unmatched)}.")
         return _text("\n".join(lines))
 
-    def lights_set(self, entry, args: dict) -> dict:
+    def lights_set(self, ha, args: dict) -> dict:
         args = args or {}
         where = args.get("where")
         if not where:
@@ -231,7 +200,7 @@ class House:
             bad = [str(r) for r, c in zip(raw, colors) if c is None]
             return _text(f"Not colors: {', '.join(bad)}. Use hex like '#ff71ce' or 'r,g,b' with each 0 to 255.", True)
 
-        lights = self.snapshot(entry)
+        lights = self.snapshot(ha)
         scope, unmatched = self.match(lights, where)
         if not scope:
             return _text(f"No floor or area matches {where!r}. Floors and areas (lights on/total): {self.names(lights)}.", True)
@@ -251,7 +220,7 @@ class House:
                     data["rgb_color"] = list(colors[i % len(colors)])
                     i += 1
             try:
-                entry.call_service("light", service, l.id, data)
+                ha.call_service("light", service, l.id, data)
                 done.append((l, data, ""))
             except Exception as exc:
                 failed.append((l, data, str(exc)))
@@ -265,10 +234,10 @@ class House:
             parts.append(f"No match for: {', '.join(unmatched)}.")
         return _text(" ".join(p for p in parts if p.strip(". ")), error=not done)
 
-    def call(self, entry, tool: str, args: dict) -> tuple[dict, str]:
+    def call(self, ha, tool: str, args: dict) -> tuple[dict, str]:
         """(result, kind) for one house tool; kind is what the audit records."""
         if tool == "house_state":
-            return self.house_state(entry, args), "read"
+            return self.house_state(ha, args), "read"
         if tool == "lights_set":
-            return self.lights_set(entry, args), "modify"
+            return self.lights_set(ha, args), "modify"
         return _text(f"Unknown tool 'house{SEP}{tool}'.", True), "read"

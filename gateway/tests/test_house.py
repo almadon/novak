@@ -29,23 +29,23 @@ ROWS = [
 
 
 class FakeHA:
-    """Stands in for the person's Home Assistant MCP entry."""
+    """Stands in for HAClient: the lookup template and the light service."""
 
     def __init__(self, rows=ROWS, fail=()):
-        self.rows, self.fail, self.calls = rows, set(fail), []
+        self.rows, self.fail, self.calls, self.down = rows, set(fail), [], False
 
-    def call(self, method, params=None):
-        if method == "tools/list":
-            return {"tools": []}
-        name, args = params["name"], params["arguments"]
-        if name == "ha_eval_template":
-            return {"content": [{"type": "text", "text": json.dumps({"success": True, "result": json.dumps(self.rows)})}]}
-        if name == "ha_call_service":
-            self.calls.append(args)
-            if args["entity_id"] in self.fail:
-                return {"isError": True, "content": [{"type": "text", "text": '{"success": false, "error": "boom"}'}]}
-            return {"content": [{"type": "text", "text": '{"success": true}'}]}
-        raise AssertionError(name)
+    def template(self, template):
+        if self.down:
+            raise OSError("down")
+        return json.dumps(self.rows)
+
+    def call_service(self, domain, service, entity_id, data=None):
+        call = {"domain": domain, "service": service, "entity_id": entity_id}
+        if data:
+            call["data"] = data
+        self.calls.append(call)
+        if entity_id in self.fail:
+            raise HAError("Home Assistant answered 400: boom")
 
 
 class HouseTests(unittest.TestCase):
@@ -53,16 +53,16 @@ class HouseTests(unittest.TestCase):
         self.dir = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: __import__("shutil").rmtree(self.dir, ignore_errors=True))
         (self.dir / "mcp-servers.yaml").write_text(yaml.safe_dump({"servers": [
-            {"name": "ha-mcp", "kind": "external", "url": "http://ha/mcp", "enabled": True},
             {"name": "hs-ushy", "kind": "external", "url": "http://hs/mcp", "enabled": True}]}))
         (self.dir / "people.yaml").write_text(yaml.safe_dump({
-            "people": {"tmeuze": {"names": ["tmeuze"], "entries": ["ha-mcp"]},
+            "people": {"tmeuze": {"names": ["tmeuze"], "entries": []},
                        "ushy": {"names": ["ushy"], "entries": ["hs-ushy"]}},
             "household": {"entries": []}}))
-        (self.dir / "gateway.yaml").write_text(yaml.safe_dump({"gateway": {"house": {"entry": "ha-mcp"}}}))   # the older route
+        (self.dir / "gateway.yaml").write_text(yaml.safe_dump({"gateway": {"house": {"ha": 1, "people": ["tmeuze"]}}}))
         self.ha = FakeHA()
-        self.gw = Gateway(self.dir, Audit(str(self.dir / "a.db")), Approvals(str(self.dir / "p.db")), "http://gw", {},
-                          notifier=lambda *a: "x", upstream_factory=lambda url, token: self.ha)
+        self.gw = Gateway(self.dir, Audit(str(self.dir / "a.db")), Approvals(str(self.dir / "p.db")), "http://gw",
+                          {"GATEWAY_HA_URL": "http://xenia", "HA_1_ADMIN_API_TOKEN": "tok"},
+                          notifier=lambda *a: "x", ha_factory=lambda url, token: self.ha)
         self.me = Identity("person", "tmeuze", "key", self.gw.dir.find_person("tmeuze"))
         self.ushy = Identity("person", "ushy", "key", self.gw.dir.find_person("ushy"))
 
@@ -71,7 +71,7 @@ class HouseTests(unittest.TestCase):
         return r["content"][0]["text"], r.get("isError", False)
 
     # who gets them ----------------------------------------------------------------------------
-    def test_only_a_person_with_a_home_assistant_entry_is_offered_the_tools(self):
+    def test_only_the_people_named_are_offered_the_tools(self):
         self.assertEqual({t["name"] for t in self.gw.list_tools(self.me)} & {"house__house_state", "house__lights_set"},
                          {"house__house_state", "house__lights_set"})
         self.assertEqual([t["name"] for t in self.gw.list_tools(self.ushy) if t["name"].startswith("house__")], [])
@@ -129,7 +129,7 @@ class HouseTests(unittest.TestCase):
         self.assertEqual(by_id["light.l2_bar"]["data"], {"brightness_pct": 30, "rgb_color": [255, 113, 206]})
         self.assertEqual(by_id["light.l2_lamp"]["data"]["rgb_color"], [1, 205, 254])         # the next color, in turn
         self.assertEqual(by_id["light.l2_relay"]["data"], {"brightness_pct": 30})              # on/off only: dimmed, never colored
-        self.assertTrue(all(c["domain"] == "light" and c["service"] == "turn_on" and c["wait"] is False for c in self.ha.calls))
+        self.assertTrue(all(c["domain"] == "light" and c["service"] == "turn_on" for c in self.ha.calls))
         self.assertIn("3 light(s) set in floor 2 at 30%", text)
 
     def test_colors_cycle_when_there_are_more_lights_than_colors(self):
@@ -184,9 +184,7 @@ class HouseTests(unittest.TestCase):
         self.assertIn(("house", "house_state", "read", "allowed"), seen)
 
     def test_an_unreachable_home_assistant_is_an_error_not_a_crash(self):
-        def boom(*a):
-            raise OSError("down")
-        self.ha.call = boom
+        self.ha.down = True
         text, err = self.call("house_state")
         self.assertTrue(err)
         self.assertIn("could not reach", text)
@@ -219,10 +217,9 @@ class DirectRouteTests(unittest.TestCase):
     def make(self, env, house=None):
         self.dir = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: __import__("shutil").rmtree(self.dir, ignore_errors=True))
-        (self.dir / "mcp-servers.yaml").write_text(yaml.safe_dump({"servers": [
-            {"name": "ha-mcp", "kind": "external", "url": "http://ha/mcp", "enabled": True}]}))
+        (self.dir / "mcp-servers.yaml").write_text(yaml.safe_dump({"servers": []}))
         (self.dir / "people.yaml").write_text(yaml.safe_dump({
-            "people": {"tmeuze": {"names": ["tmeuze"], "entries": ["ha-mcp"]},
+            "people": {"tmeuze": {"names": ["tmeuze"], "entries": []},
                        "ushy": {"names": ["ushy"], "entries": []}},
             "household": {"entries": []}}))
         (self.dir / "gateway.yaml").write_text(yaml.safe_dump({"gateway": {"house": house or {"ha": 1, "people": ["tmeuze"]}}}))
@@ -232,13 +229,12 @@ class DirectRouteTests(unittest.TestCase):
             self.made.append(c)
             return c
         gw = Gateway(self.dir, Audit(str(self.dir / "a.db")), Approvals(str(self.dir / "p.db")), "http://gw", env,
-                     notifier=lambda *a: "x", ha_factory=factory,
-                     upstream_factory=lambda url, token: self.fail("the ha-mcp route must not be used"))
+                     notifier=lambda *a: "x", ha_factory=factory)
         return gw, Identity("person", "tmeuze", "key", gw.dir.find_person("tmeuze")), Identity("person", "ushy", "key", gw.dir.find_person("ushy"))
 
     ENV = {"HA_1_URL": "http://xenia", "HA_1_ADMIN_API_TOKEN": "tok"}
 
-    def test_it_uses_the_instance_url_and_service_token_and_never_the_mcp_entry(self):
+    def test_it_uses_the_instance_url_and_the_service_token(self):
         gw, me, _ = self.make(self.ENV)
         r = gw.call_tool(me, "house__lights_set", {"where": "L2 Kitchen", "brightness_pct": 30})
         self.assertFalse(r.get("isError"))
@@ -253,7 +249,7 @@ class DirectRouteTests(unittest.TestCase):
         self.assertTrue(gw.call_tool(ushy, "house__house_state", {}).get("isError"))
 
     def test_without_the_token_the_tools_are_not_offered(self):
-        gw, me, _ = self.make({"HA_1_URL": "http://xenia"})
+        gw, me, _ = self.make({"HA_1_URL": "http://xenia"})                # no token, nothing offered
         self.assertNotIn("house__house_state", [t["name"] for t in gw.list_tools(me)])
 
     def test_a_failure_from_home_assistant_is_reported_not_raised(self):

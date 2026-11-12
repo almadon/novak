@@ -156,3 +156,16 @@ Also: `GET /v1/recordings`, `GET /v1/recordings/<id>`,
 | `ingest/Dockerfile` | Python and ffmpeg, pinned by digest |
 | `registry/ingest.yaml` | Behaviour: idle window, chunking, summary role, sinks |
 | `ingest/tests/` | `python -m unittest discover -s tests` from `ingest/` |
+
+## Notice tags and the email fallback
+
+Plain notices go through Apprise (decision #70), one tag per call. The agreed tags (with Consigliere, who
+runs the Apprise server): `novak-tmeuze` and `novak-ushy` push to that person's own phone through a Home
+Assistant webhook; `novak-admin` pushes to the admin's phone and emails them, for Novak's own failures;
+`novak-<name>-mail` emails that person only. If a person's push call does not return 2xx, Novak retries
+once on `<tag>-mail`, because the push route runs through Home Assistant and a notice about Home
+Assistant being down would otherwise be lost. The admin tag and the `-mail` tags are not retried. An email
+tag takes a body up to 8,000 characters (a weekly review); a push is cut at 1,800. Approvals that need a
+button never use this route. `INGEST_APPRISE_URL` is `https://notify.a64.one`; the key is
+`INGEST_APPRISE_KEY`, set by hand with `novak secret set`.
+

@@ -20,10 +20,11 @@ def apprise_notify(url: str, key: str, tag: str, title: str, body: str, kind: st
     """A plain notice through Apprise (decision #70): POST <url>/notify/<key> with a tag, which
     Apprise maps to whatever channels that tag has. Fire-and-forget: no buttons, no callback
     (approvals stay on Home Assistant). `kind` is info, success, warning or failure. Raises on
-    anything but a 2xx; the key is never in the message."""
+    anything but a 2xx; the key is never in the message. A `-mail` tag is an email, which can hold a long
+    body (a weekly review); a push cannot."""
     if kind not in ("info", "success", "warning", "failure"):
         raise ValueError(f"unknown notice type {kind!r}")
-    form = urllib.parse.urlencode({"tag": tag, "title": title[:250], "body": body[:1800], "type": kind}).encode()
+    form = urllib.parse.urlencode({"tag": tag, "title": title[:250], "body": body[:8000 if tag.endswith("-mail") else 1800], "type": kind}).encode()
     req = urllib.request.Request(f"{url.rstrip('/')}/notify/{urllib.parse.quote(key, safe='')}", data=form, method="POST",
                                  headers={"Content-Type": "application/x-www-form-urlencoded"})
     try:

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from . import directory, notify as notify_mod
 from .house import ALIAS as HOUSE_ALIAS, House
+from .profile import Profile, SEP as PROFILE_SEP, TOOL as PROFILE_TOOL
 from .tasks import ALIAS as TASKS_ALIAS, Tasks
 from .homeassistant import HAClient
 from .mcp import MCPError, Upstream
@@ -39,6 +40,7 @@ class Gateway:
         self.ha_factory = ha_factory
         self.house = House(self)
         self.tasks = Tasks(self)
+        self.profile = Profile(self)
 
     # configuration ------------------------------------------------------------
     @property
@@ -102,6 +104,8 @@ class Gateway:
             out += self.house.tools()
         if self._tasks_entry(identity):
             out += self.tasks.tools()
+        if self._profile_alias(identity):
+            out += self.profile.tools(identity)
         if identity.tools:
             out = [t for t in out if self._tool_wanted(identity, t["name"])]
         return out
@@ -124,6 +128,13 @@ class Gateway:
         if entry and identity.scope and not any(fnmatch.fnmatchcase(g, TASKS_ALIAS) or fnmatch.fnmatchcase(entry.name, g) for g in identity.scope):
             return None
         return entry
+
+    def _profile_alias(self, identity):
+        """The person's own profile tool alias, unless the connection's scope has narrowed it away."""
+        alias = self.profile.alias(identity)
+        if alias and identity.scope and not any(fnmatch.fnmatchcase(g, "profile") or fnmatch.fnmatchcase(alias, g) for g in identity.scope):
+            return None
+        return alias
 
     def _entries(self, identity):
         """What this caller may use, narrowed to the connection's scope when it names one."""
@@ -169,8 +180,24 @@ class Gateway:
         self.audit.record(identity, TASKS_ALIAS, tool, kind, "allowed", outcome, (self.clock() - t0) * 1000, args)
         return result
 
+    def _call_profile(self, identity, namespaced: str) -> dict:
+        t0 = self.clock()
+        alias = self._profile_alias(identity)
+        if not alias or namespaced != f"{alias}{PROFILE_SEP}{PROFILE_TOOL}" or not self._tool_wanted(identity, namespaced):
+            self.audit.record(identity, None, namespaced, None, "denied", "not one of this caller's tools")
+            return text_result(f"Unknown tool '{namespaced}'.", True)
+        try:
+            result, outcome = self.profile.call(identity), "ok"
+        except OSError as exc:
+            result, outcome = text_result(f"Could not read the profile: {exc}", True), f"error: {exc}"
+        self.audit.record(identity, alias, PROFILE_TOOL, "read", "allowed", outcome, (self.clock() - t0) * 1000)
+        return result
+
     def call_tool(self, identity, namespaced: str, args: dict) -> dict:
         t0 = self.clock()
+        if identity.kind == "person" and identity.name and namespaced.startswith(identity.name + PROFILE_SEP) \
+                and namespaced.endswith(PROFILE_SEP + PROFILE_TOOL):
+            return self._call_profile(identity, namespaced)
         if namespaced.startswith(TASKS_ALIAS + SEP):
             return self._call_tasks(identity, namespaced, args)
         if namespaced.startswith(HOUSE_ALIAS + SEP):

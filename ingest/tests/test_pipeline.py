@@ -445,6 +445,7 @@ class FakeApprise(BaseHTTPRequestHandler):
     """Records what Novak posts; `code` lets a test make Apprise refuse."""
     seen = []
     code = 200
+    refuse = ()                        # tags Apprise refuses even when `code` is 200
 
     def log_message(self, *a):
         pass
@@ -452,8 +453,9 @@ class FakeApprise(BaseHTTPRequestHandler):
     def do_POST(self):
         from urllib.parse import parse_qs
         body = parse_qs(self.rfile.read(int(self.headers["Content-Length"])).decode())
-        type(self).seen.append((self.path, self.headers.get("Content-Type"), {k: v[0] for k, v in body.items()}))
-        self.send_response(type(self).code)
+        form = {k: v[0] for k, v in body.items()}
+        type(self).seen.append((self.path, self.headers.get("Content-Type"), form))
+        self.send_response(424 if form.get("tag") in type(self).refuse else type(self).code)
         self.send_header("Content-Length", "0")
         self.end_headers()
 
@@ -462,7 +464,7 @@ class AppriseNoticeTests(unittest.TestCase):
     TASK = {"name": "t", "kind": "task", "enabled": True, "service": "tududi", "tool": "create_task", "args": {"name": "{title}"}}
 
     def env(self, **kw):
-        FakeApprise.seen, FakeApprise.code = [], kw.pop("code", 200)
+        FakeApprise.seen, FakeApprise.code, FakeApprise.refuse = [], kw.pop("code", 200), kw.pop("refuse", ())
         srv = HTTPServer(("127.0.0.1", 0), FakeApprise)
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         self.addCleanup(srv.shutdown)
@@ -503,13 +505,38 @@ class AppriseNoticeTests(unittest.TestCase):
         e = self.env(code=403)
         e.upload()
         e.worker.run_once()
-        self.assertEqual(len(FakeApprise.seen), 1)
+        self.assertEqual([f["tag"] for _, _, f in FakeApprise.seen], ["novak-tmeuze", "novak-tmeuze-mail"])
         self.assertEqual(len(e.calls["notify"]), 1)                                   # the notice is not lost
         e2 = self.env()
         e2.settings.apprise_url = "http://127.0.0.1:1"
         e2.upload()
         e2.worker.run_once()
         self.assertEqual(len(e2.calls["notify"]), 1)
+
+    def test_a_failed_push_is_retried_once_on_the_persons_email_tag(self):
+        e = self.env(refuse=("novak-tmeuze",))
+        e.upload()
+        e.worker.run_once()
+        self.assertEqual([f["tag"] for _, _, f in FakeApprise.seen], ["novak-tmeuze", "novak-tmeuze-mail"])
+        self.assertEqual(e.calls["notify"], [])                                       # delivered, so no Home Assistant fallback
+
+    def test_the_admin_tag_and_email_tags_are_not_retried(self):
+        e = self.env(refuse=("novak-admin",))
+        e.fail_chunk = 1
+        e.settings.cfg["max_attempts"] = 1
+        e.upload()
+        e.worker.run_once()
+        self.assertEqual([f["tag"] for _, _, f in FakeApprise.seen], ["novak-admin"])
+        FakeApprise.refuse = ("novak-tmeuze-mail",)
+        self.assertFalse(e.worker._notice("novak-tmeuze-mail", "info", "t", "b"))
+        self.assertEqual([f["tag"] for _, _, f in FakeApprise.seen], ["novak-admin", "novak-tmeuze-mail"])   # once each
+
+    def test_an_email_tag_carries_a_long_body_and_a_push_does_not(self):
+        e = self.env()
+        e.worker._notice("novak-tmeuze-mail", "info", "Weekly review", "x" * 9000)
+        e.worker._notice("novak-ushy", "info", "Hi", "y" * 9000)
+        sizes = {f["tag"]: len(f["body"]) for _, _, f in FakeApprise.seen}
+        self.assertEqual(sizes, {"novak-tmeuze-mail": 8000, "novak-ushy": 1800})
 
     def test_a_person_with_no_tag_or_no_apprise_uses_home_assistant_as_before(self):
         e = self.env()

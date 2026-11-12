@@ -53,15 +53,22 @@ class Worker:
 
     def _notice(self, tag, kind, title, body) -> bool:
         """A plain notice through Apprise. False (and a log line, never an exception) when Apprise
-        is not configured, the tag is not set, or the send failed, so the caller can fall back."""
+        is not configured, the tag is not set, or every send failed, so the caller can fall back.
+        A person's push tag that fails is retried once on their email tag (`<tag>-mail`): push goes
+        through Home Assistant, so a notice about Home Assistant being down would otherwise be lost.
+        The admin tag already reaches email, and a `-mail` tag has nothing left to fall back to."""
         if not (self.s.apprise_url and self.s.apprise_key and tag):
             return False
-        try:
-            notify.apprise_notify(self.s.apprise_url, self.s.apprise_key, tag, title, body, kind)
-            return True
-        except Exception as exc:
-            self.log(f"apprise notice failed ({tag}): {exc}")
-            return False
+        tags = [tag]
+        if tag != self.s.cfg["notices"].get("admin_tag") and not tag.endswith("-mail"):
+            tags.append(f"{tag}-mail")
+        for t in tags:
+            try:
+                notify.apprise_notify(self.s.apprise_url, self.s.apprise_key, t, title, body, kind)
+                return True
+            except Exception as exc:
+                self.log(f"apprise notice failed ({t}): {exc}")
+        return False
 
     def _wait(self):
         if not self.gate.wait(self.stop):

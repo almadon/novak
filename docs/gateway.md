@@ -243,6 +243,13 @@ its instructions and invents arguments.
   lights themselves, and an unknown name returns an error that lists the real ones. They touch only lights,
   so nothing needs a confirmation. A change shows in Home Assistant's state a few seconds later, so the
   prompt tells the model to trust the result of `lights_set` instead of re-reading straight away.
+- **Profiles** (`<username>__profile`, for example `tmeuze__profile`, about 60 tokens) serve a person's
+  standing instructions: how to talk to them, how to plan with them, what to hold them to. The text is one
+  file per person, `profiles/<username>.md` in the registry directory on the host (private, never in the
+  repo; `registry/profiles/example.md` is a model). It is read each time, so an edit takes effect at once.
+  Only that person gets the tool, and only when their file exists; the household never does. The tool's
+  description tells the model to call it once at the start of every conversation, which is why no shared
+  prompt has to name a per-person tool. Keep it to about 250 tokens; it is cut at 4,000 characters.
 - **The tasks snapshot** (`tasks__tasks_state`, about 100 tokens) is built in the same way on the person's
   own Tududi entry (the first entry whose name starts with `tududi`). It reads `list_tasks` for today and
   upcoming, drops the seventy-odd fields Tududi returns per task, and answers with a few lines: overdue,

@@ -3433,3 +3433,32 @@ used by the voice agents. Until a deployment has the token the older `entry: ha-
 
 HA offering floor and area lookups to a non-admin token, which would let a limited token replace the admin one.
 
+
+## 78. A person's standing instructions live in the gateway, as a tool named after them
+
+Date: 2026-11-12
+
+### What was decided
+
+How someone wants the assistant to work with them (their role text) is held once per person, in
+`profiles/<username>.md` in the registry directory, and served by the gateway as `<username>__profile`.
+Every client that reaches the gateway gets the same instructions, and the gateway already knows who is
+asking. Per-client behavior (voice is short, Code stores nothing personal) stays in the prompt files in the
+repo, and what Novak learns about someone stays in memory. The tool is named after the person because the
+person asked for that; its description says to call it once at the start of a conversation, so the shared
+prompt only says to call any tool ending in `__profile`. Open WebUI's allowlist has the glob `*__profile`.
+
+### What it costs
+
+- A call at the start of each chat, and the model has to choose to make it. A small model will sometimes
+  skip it.
+- The text must stay short (about 250 tokens) because the local models have an 8,192-token window; the
+  longer role lives in memory, not here.
+- Editing is a file on the host until Konzol has an editor. The file is private to the host and is not
+  backed up by the repo.
+- The Home Assistant voice agents do not reach the gateway today, so voice does not read it.
+
+### What would make it worth revisiting
+
+A client that can inject a system prompt per person without a tool call, or a larger context window.
+

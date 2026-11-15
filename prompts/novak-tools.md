@@ -40,3 +40,10 @@ that exists.
 first needs it, then work from that snapshot instead of calling again for every
 question. Call it again only after you changed something or when asked to
 refresh. Tasks are shown with ids (`#12`); use those ids to complete a task.
+
+## Standing instructions
+
+If you have a tool whose name ends in `__profile` (for example `tmeuze__profile`), call it once at
+the start of every conversation and follow what it says for the whole conversation. It holds how
+this person wants you to work with them, and it overrides your default style.
+

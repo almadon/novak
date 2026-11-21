@@ -182,14 +182,14 @@ services:
     # skips the console instead of refusing to start the whole stack. up.sh
     # sets COMPOSE_PROFILES=console once its config is complete.
     #
-    # The default falls back to the digest :latest resolved to on
-    # 2026-09-22 (decision #45), not the moving tag — this is this
+    # The default falls back to the digest the console workflow printed on
+    # 2026-11-21 (Next 16.4.6, the Profiles page, Node 26; decision #45), not the moving tag — this is this
     # project's own actively-developed image, so this pin goes stale
     # faster than the third-party ones below and needs bumping as part of
     # any console/ change meant to actually ship (the workflow prints the digest). CONSOLE_IMAGE still
     # overrides it for local development or a deliberate rollback.
     profiles: ["console"]
-    image: "${CONSOLE_IMAGE:-ghcr.io/almadon/novak-konzol@sha256:d3305bee81f734cde12d39604380638e0d7d4c5366d7d7c01f4a8d09cc1adc2d}"
+    image: "${CONSOLE_IMAGE:-ghcr.io/almadon/novak-konzol@sha256:fa8998d2a54ea7a9d25e437cf08250237a45354a5c8e5ad38a463cd1b6e2d996}"
     restart: unless-stopped
     ports:
       - "${CONSOLE_PORT:-13401}:3002"

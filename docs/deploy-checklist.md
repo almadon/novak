@@ -264,7 +264,7 @@ device control confirmed.
 
 ## Phase 9 — The console *(optional; genuinely skippable)*
 
-Lives in [novak-konzol](https://github.com/almadon/novak-konzol). Everything
+Lives in `console/` in this repository. Everything
 it does can be done by editing the registry by hand, so skip it unless you
 want it. Same on both platforms — the published image is `linux/amd64`,
 native on Unraid, emulated (but fast) on Apple Silicon.

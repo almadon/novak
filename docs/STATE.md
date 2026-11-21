@@ -154,8 +154,9 @@ created yet); a house request in Home Assistant voice through the new pipelines.
 
 ## Not started
 
-- Konzol has three placeholder pages and a design token layer, no components. Approvals and the
-  audit log are the likely first uses now that the data exists.
+- Konzol (`console/`, merged into this repository, decision #79) has placeholder pages and a design token layer,
+  no components. Planned order: Today, Approvals, Memory, Profiles, Extensions (Toolchest), People, Health,
+  Logs and audit. Needs a gateway admin API and a write path with phone confirmation first.
 - `CHANGELOG.md`: conformIT's own justification is about changes a user would notice, and there
   has been no tagged release yet; worth starting at the first one.
 - The old claims about an interactive wizard, `docs/security.md`, `LICENSE`, `CLAUDE.md` and

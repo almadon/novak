@@ -1,0 +1,14 @@
+# Keep the pieces that have their own dependencies current. The console is Node, where advisories
+# are frequent; its CI also fails on a high or critical one (console.yml).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /console
+    schedule: {interval: weekly}
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: {interval: monthly}
+  - package-ecosystem: docker
+    directory: /console
+    schedule: {interval: monthly}

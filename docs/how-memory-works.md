@@ -12,7 +12,7 @@ Almost nothing. One thing in this repo is code we wrote:
 |---|---|---|
 | `reconciler/reconcile.py` | ~200 lines | Applies the MCP registry |
 
-(The web console in `novak-konzol` is optional and has never been run.)
+(The web console in `console/` is optional and has not been used for memory yet.)
 
 Everything else — oMLX, Open WebUI, Hindsight, Outline, Vikunja, Whisper,
 Piper — is upstream software we configure but don't maintain.

@@ -1,0 +1,81 @@
+# Konzol, the console (console/): typecheck, build, audit, and publish its image.
+# It used to be its own repository (novak-konzol); it moved here so a change that spans the
+# gateway and the console is one pull request. Unlike the Python services, whose code is
+# mounted from the checkout, the console is built into its image, so any change under
+# console/ means a new image, and the digest to pin in docker-compose.yml (decision #45).
+#
+# The audit step fails the build on a high or critical advisory in a production dependency:
+# a critical Next.js advisory sat unnoticed in the old repo because nothing checked.
+#
+# The first publish creates the package private; make it public once (package settings,
+# Change visibility) or the host needs registry credentials to pull it.
+
+name: console
+
+on:
+  push:
+    branches: [main]
+    paths: ["console/**", ".github/workflows/console.yml"]
+  pull_request:
+    paths: ["console/**", ".github/workflows/console.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Console typecheck, audit and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: console
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: console/package-lock.json
+      # npm ci builds exactly what is committed, never silently newer versions.
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run typecheck
+      - run: npm run build
+        env:
+          # Placeholders so the build does not fail on missing env; the real values are
+          # read at runtime from the host's secrets.
+          OIDC_ISSUER: https://example.invalid
+          OIDC_CLIENT_ID: ci
+          OIDC_CLIENT_SECRET: ci
+          AUTH_SECRET: ci-placeholder-not-a-real-secret
+
+  image:
+    name: Publish console image
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: console
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/novak-konzol:main
+            ghcr.io/${{ github.repository_owner }}/novak-konzol:sha-${{ github.sha }}
+          cache-from: type=gha,scope=console
+          cache-to: type=gha,mode=max,scope=console
+      - name: Print the digest to pin
+        run: echo "ghcr.io/${{ github.repository_owner }}/novak-konzol@${{ steps.build.outputs.digest }}" | tee -a "$GITHUB_STEP_SUMMARY"

@@ -3462,3 +3462,53 @@ prompt only says to call any tool ending in `__profile`. Open WebUI's allowlist 
 
 A client that can inject a system prompt per person without a tool call, or a larger context window.
 
+
+## 79. Konzol lives in this repository and becomes the configuration plane
+
+Date: 2026-11-21
+
+### What was decided
+
+Konzol moves into the main repository as `console/` (history kept), and `novak-konzol` is archived. The
+integration store, `novak-integracije`, stays a separate repository: it has its own contributors and its own
+bar for adding an integration. Konzol stops being a viewer and becomes the primary place to configure
+Novak, read and write, in this order: Today, Approvals; Management (Memory, Profiles, an extensions page,
+working name Toolchest, fed by the extension repositories); Administration (People, Health, Logs and audit).
+A critical Next.js advisory (16.0.0 to 16.4.4) sat in the old repository because nothing checked, so the
+console's workflow now fails the build on a high or critical production advisory and Dependabot watches it.
+
+Because it now holds the power to change the stack, its security is the first design constraint, not a later
+pass. The rules for every page:
+- **Writes are commits.** A change lands as a git commit in the registry's repository with the signed-in
+  person as author, so the history is the audit trail, and it can be reverted.
+- **The server validates, always.** Every write is checked against the same schemas the reconciler and
+  gateway enforce; the UI never trusts itself, and the host-side reconciler never trusts the UI.
+- **No Docker socket, no shell.** The console writes files; the host-side reconciler (no network exposure)
+  acts on them. That separation stays.
+- **Secrets are never shown.** The console lists which secrets are set or missing, by name. Entering a value
+  stays a person at a terminal (`novak secret set`) until a safer path is designed and decided separately.
+- **Sensitive changes need a second factor.** Enabling an elevated or dangerous entry, changing who has
+  which entry, or changing tool filters asks for confirmation on the person's phone, the same Supernotify
+  approval the gateway already uses, in addition to the sign-in.
+- **Identity.** Pocket ID with passkeys; admin group membership re-checked on every write, not only at
+  sign-in; short sessions; same-origin and CSRF protection on every mutation.
+- **The gateway grant is narrow.** Reading audit, approvals and health uses a gateway admin key reachable
+  only from the console, with endpoints for exactly those things. The console never proxies tool calls.
+- **Reach.** LAN and tailnet only, behind Liaison; never on the public internet.
+- **Supply chain.** Exact pinned versions, `npm ci`, the audit gate, the image optimizer and `use cache`
+  (both behind the advisories) not used.
+
+### What it costs
+
+- A write path with phone confirmation is more work than a form that saves a file, and slower to use.
+- The console holds a credential for the stack after all (the gateway admin key), which the old README
+  promised it would not. The grant is narrow and read-only first.
+- One repository means a console change and a gateway change can ship together, but also that a Node
+  dependency alert now shows up against the main repository.
+
+### What would make it worth revisiting
+
+If the second factor makes routine edits tedious, scope it to a smaller set of changes; if the console
+turns out to need real-time features, reconsider the stack (Next.js with Auth.js is kept for now because the
+sign-in and design tokens already work).
+

@@ -41,6 +41,7 @@ jobs:
       - run: npm ci
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
+      - run: npm test
       - run: npm run build
         env:
           # Placeholders so the build does not fail on missing env; the real values are

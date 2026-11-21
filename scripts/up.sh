@@ -34,6 +34,10 @@ fi
 # Seed on first run. Existing files are never overwritten: your config and your
 # registry belong to you once created.
 mkdir -p "$NOVAK_HOME/registry" "$NOVAK_HOME/wakeword/models"
+# The console may write exactly one place in the registry: profiles/ (decision #79). It runs as uid 1001,
+# so that folder is handed to it where we are allowed to (Linux, as root); the rest stays read-only.
+mkdir -p "$NOVAK_HOME/registry/profiles"
+[ "$(id -u)" = "0" ] && chown 1001 "$NOVAK_HOME/registry/profiles" 2>/dev/null || true
 if [ ! -f "$NOVAK_HOME/.env" ]; then
   cp "$REPO_DIR/.env.example" "$NOVAK_HOME/.env"
   ui_seeded "$NOVAK_HOME/.env" "(from .env.example: fill it in before this will start)"

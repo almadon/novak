@@ -7,13 +7,15 @@
     "build": "next build",
     "start": "next start -p 3002",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --no-warnings --test \"src/lib/*.test.ts\""
   },
   "dependencies": {
     "next": "16.4.6",
     "next-auth": "5.0.0-beta.32",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "yaml": "2.9.1"
   },
   "devDependencies": {
     "@types/node": "26.6.5",

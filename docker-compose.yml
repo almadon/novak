@@ -166,16 +166,16 @@ services:
   # comment (decision #22) — it does not change what's said here.
 
   # ── Console (profiles, memory views, MCP catalog) ─────────────────────
-  # Lives in its own repository: novak-konzol. It is an OPTIONAL client of
+  # Lives in this repository, under console/. It is an OPTIONAL client of
   # this stack — the registry below can be edited by hand and applied with
   # reconciler/reconcile.py without the console existing at all.
   #
   # Deliberately has NO docker socket. It writes registry/*.yaml over the bind
   # mount; reconciler/reconcile.py (run on the host) is what touches
-  # containers. See that repo's README for why.
+  # containers. See console/README.md for why.
   #
-  # Published by the novak-konzol repo's CI. The package must be public, or
-  # this host needs ghcr credentials to pull it.
+  # Built and published by .github/workflows/console.yml on every change under console/.
+  # The package must be public, or this host needs ghcr credentials to pull it.
   # For local development: CONSOLE_IMAGE=novak-konzol:dev
   console:
     # Optional, and gated behind a compose profile so a missing OIDC secret
@@ -186,7 +186,7 @@ services:
     # 2026-09-22 (decision #45), not the moving tag — this is this
     # project's own actively-developed image, so this pin goes stale
     # faster than the third-party ones below and needs bumping as part of
-    # any novak-konzol change meant to actually ship. CONSOLE_IMAGE still
+    # any console/ change meant to actually ship (the workflow prints the digest). CONSOLE_IMAGE still
     # overrides it for local development or a deliberate rollback.
     profiles: ["console"]
     image: "${CONSOLE_IMAGE:-ghcr.io/almadon/novak-konzol@sha256:d3305bee81f734cde12d39604380638e0d7d4c5366d7d7c01f4a8d09cc1adc2d}"

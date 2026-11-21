@@ -142,9 +142,8 @@ output shape, on either platform (see [docs/cli.md](docs/cli.md)).
 1. **Build the integration images.** The tools live in a separate repo,
    [novak-integracije](https://github.com/almadon/novak-integracije), and are used here as
    prebuilt images. They need building once.
-2. **Optional: the web console.** [novak-konzol](https://github.com/almadon/novak-konzol) is a
-   separate, optional piece for managing people and memories. Skip it to start —
-   everything it does can be done by editing a file.
+2. **Optional: the web console.** Konzol (`console/` in this repository) is an optional piece for
+   managing the stack. Skip it to start — everything it does can be done by editing a file.
 
 **On macOS:**
 
@@ -239,7 +238,6 @@ All of it lives in [docs/](docs/README.md) — that index is the fullest map.
 |---|---|
 | **novak** (this one) | The stack: what runs, how it's configured, and why |
 | [novak-integracije](https://github.com/almadon/novak-integracije) | Tools and integrations — the part that grows |
-| [novak-konzol](https://github.com/almadon/novak-konzol) | Optional web interface for managing it |
 
 ## A note on adding things
 

@@ -1,0 +1,152 @@
+/* Novak design tokens.
+ *
+ * Warm and domestic: this thing lives in a house, not a datacentre. Neutrals
+ * carry a red/yellow cast rather than the blue-grey most UI defaults to, so
+ * surfaces read like paper and clay instead of aluminium.
+ *
+ * Both themes are authored, not derived. A dark theme computed from a light
+ * one lands cold and muddy, and this palette's warmth is the whole point.
+ *
+ * No web fonts. Nothing here loads from a third party — consistent with a
+ * system whose reason for existing is that your data stays put.
+ */
+
+:root {
+  /* ── Warm neutrals ─────────────────────────────────────────────────
+     Named by role, not by shade. `--surface-sunken` keeps meaning if the
+     value changes; `--warm-100` does not.                              */
+  --bg:              #FBF8F4; /* the page — warm paper, never pure white */
+  --surface:         #FFFFFF; /* cards lifting off the page             */
+  --surface-sunken:  #F2ECE4; /* wells, inputs, code blocks             */
+  --border:          #E4DACF;
+  --border-strong:   #CFC0B1;
+
+  --text:            #2A2422; /* warm near-black, never #000            */
+  --text-muted:      #665C55;
+  --text-faint:      #8C8078;
+
+  /* ── Accent: clay ──────────────────────────────────────────────────
+     One accent, used sparingly. If everything is accented nothing is.  */
+  --accent:          #A8482A;
+  --accent-hover:    #8E3C22;
+  --accent-quiet:    #F6E7DF; /* tinted backgrounds, selected rows      */
+  --on-accent:       #FFFFFF;
+
+  /* ── Status ────────────────────────────────────────────────────────
+     Warm-shifted so they sit in the same world as the neutrals.        */
+  --ok:              #3F6B3C;
+  --ok-quiet:        #E6EFE4;
+  --warn:            #8A5A00;
+  --warn-quiet:      #F7EBD3;
+  --danger:          #9B3226;
+  --danger-quiet:    #F7E2DE;
+
+  /* ── Risk levels ───────────────────────────────────────────────────
+     Bound to the registry's vocabulary (standard/elevated/dangerous) so
+     the UI cannot drift from the words the config actually uses.       */
+  --risk-standard:   var(--ok);
+  --risk-elevated:   var(--warn);
+  --risk-dangerous:  var(--danger);
+
+  /* ── Type ──────────────────────────────────────────────────────────
+     Humanist system stack. Domestic, and nothing to download.          */
+  --font-sans: ui-rounded, "SF Pro Rounded", -apple-system, "Segoe UI",
+               "Inter", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.375rem;
+  --text-2xl:  1.75rem;
+
+  --leading-tight: 1.25;
+  --leading-body:  1.6;   /* generous — this is a reading interface */
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-bold:   650;
+
+  /* ── Space — 4px base ──────────────────────────────────────────── */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+
+  /* ── Shape ─────────────────────────────────────────────────────────
+     Softer than typical dashboard UI. Rounded reads domestic; square
+     reads industrial.                                                  */
+  --radius-sm: 0.375rem;
+  --radius:    0.625rem;
+  --radius-lg: 1rem;
+  --radius-full: 9999px;
+
+  /* Shadows are warm and shallow — light through a window, not a spotlight. */
+  --shadow-sm: 0 1px 2px rgba(64, 44, 32, 0.06);
+  --shadow:    0 2px 8px rgba(64, 44, 32, 0.08);
+  --shadow-lg: 0 8px 24px rgba(64, 44, 32, 0.10);
+
+  --focus-ring: 2px solid var(--accent);
+  --focus-offset: 2px;
+}
+
+[data-theme="dark"] {
+  /* Authored independently. Warm charcoal — brown-black, not blue-black. */
+  --bg:              #191614;
+  --surface:         #232019;
+  --surface-sunken:  #121010;
+  --border:          #363029;
+  --border-strong:   #4E4539;
+
+  --text:            #F0E9E1;
+  --text-muted:      #ABA096;
+  --text-faint:      #7E746B;
+
+  /* Lifted and desaturated: the light theme's clay goes muddy on dark. */
+  --accent:          #E28E63;
+  --accent-hover:    #EFA47C;
+  --accent-quiet:    #33251D;
+  --on-accent:       #191614;
+
+  --ok:              #86B87F;
+  --ok-quiet:        #1E2A1D;
+  --warn:            #DDA83F;
+  --warn-quiet:      #302614;
+  --danger:          #E5806D;
+  --danger-quiet:    #331D19;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow:    0 2px 8px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* Follow the OS unless the user has chosen explicitly. The [data-theme]
+   rules above still win, so a toggle overrides this in both directions. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #191614;             --surface: #232019;
+    --surface-sunken: #121010; --border: #363029;
+    --border-strong: #4E4539;
+    --text: #F0E9E1;           --text-muted: #ABA096;
+    --text-faint: #7E746B;
+    --accent: #E28E63;         --accent-hover: #EFA47C;
+    --accent-quiet: #33251D;   --on-accent: #191614;
+    --ok: #86B87F;             --ok-quiet: #1E2A1D;
+    --warn: #DDA83F;           --warn-quiet: #302614;
+    --danger: #E5806D;         --danger-quiet: #331D19;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow:    0 2px 8px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

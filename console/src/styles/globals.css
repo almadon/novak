@@ -1,0 +1,68 @@
+@import "./tokens.css";
+
+/* Base element styling. Deliberately small: it sets the room, and components
+ * bring their own furniture. Everything here reads from tokens — a literal
+ * colour or size below is a bug. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { color-scheme: light dark; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  line-height: var(--leading-tight);
+  font-weight: var(--weight-bold);
+  margin: 0 0 var(--space-3);
+  letter-spacing: -0.01em; /* rounded faces run wide; pull headings in a little */
+}
+h1 { font-size: var(--text-2xl); }
+h2 { font-size: var(--text-xl); }
+h3 { font-size: var(--text-lg); }
+
+p { margin: 0 0 var(--space-4); max-width: 68ch; } /* readable measure */
+
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:hover { color: var(--accent-hover); }
+
+code, pre, kbd { font-family: var(--font-mono); font-size: 0.9em; }
+code {
+  background: var(--surface-sunken);
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-sm);
+}
+pre {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  overflow-x: auto; /* code scrolls itself; the page never scrolls sideways */
+}
+pre code { background: none; padding: 0; }
+
+/* Visible focus, always. An admin surface is exactly where keyboard users
+   must be able to see where they are. */
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  border-radius: var(--radius-sm);
+}
+
+main { padding: var(--space-8) var(--space-6); max-width: 72rem; margin: 0 auto; }
+
+ul, ol { padding-left: var(--space-6); }
+li { margin-bottom: var(--space-2); }
+
+hr { border: 0; border-top: 1px solid var(--border); margin: var(--space-8) 0; }
+
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border); }
+th { font-weight: var(--weight-medium); color: var(--text-muted); font-size: var(--text-sm); }

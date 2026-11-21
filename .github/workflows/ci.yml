@@ -1,5 +1,5 @@
-# This repo holds no application code — MCP servers live in
-# novak-integracije and the console in novak-konzol, each with its own CI.
+# MCP servers live in novak-integracije (a separate repository: the extension store). The console
+# is console/ here and has its own workflow (console.yml).
 # What is validated here is the registry, which is also the risk-acceptance
 # gate: a server enabled at elevated or dangerous without a recorded
 # acceptance fails the build, the same way it fails a deploy.

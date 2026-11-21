@@ -66,3 +66,37 @@ hr { border: 0; border-top: 1px solid var(--border); margin: var(--space-8) 0; }
 table { border-collapse: collapse; width: 100%; }
 th, td { text-align: left; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border); }
 th { font-weight: var(--weight-medium); color: var(--text-muted); font-size: var(--text-sm); }
+
+/* Page furniture shared by the console's pages. Tokens only. */
+.page { max-width: 52rem; margin: 0 auto; padding: var(--space-8) var(--space-4) var(--space-12); }
+.lede { color: var(--text-muted); }
+.stack { display: grid; gap: var(--space-3); margin-bottom: var(--space-8); }
+.row { display: flex; gap: var(--space-4); align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.meta { color: var(--text-muted); font-size: var(--text-sm); margin: 0; }
+.label { font-weight: var(--weight-medium); }
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.list li { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-2) var(--space-4); }
+
+textarea {
+  width: 100%; resize: vertical; font: inherit; line-height: var(--leading-body); color: var(--text);
+  background: var(--surface-sunken); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: var(--space-3);
+}
+textarea:focus-visible, .button:focus-visible, a:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+
+.button {
+  font: inherit; font-weight: var(--weight-medium); cursor: pointer; border: 0; border-radius: var(--radius);
+  background: var(--accent); color: var(--on-accent); padding: var(--space-2) var(--space-6);
+}
+.button:hover { background: var(--accent-hover); }
+.button:disabled { opacity: 0.5; cursor: not-allowed; }
+.button.quiet { background: var(--accent-quiet); color: var(--accent); padding: var(--space-1) var(--space-4); }
+
+.tabs { display: flex; gap: var(--space-2); margin-bottom: var(--space-6); }
+.tabs a { padding: var(--space-1) var(--space-4); border-radius: var(--radius-full); text-decoration: none; color: var(--text-muted); border: 1px solid var(--border); }
+.tabs a[aria-current="page"] { background: var(--accent-quiet); color: var(--accent); border-color: var(--accent); }
+
+.notice { padding: var(--space-3) var(--space-4); border-radius: var(--radius); max-width: none; }
+.notice.ok { background: var(--ok-quiet); color: var(--ok); }
+.notice.warn { background: var(--warn-quiet); color: var(--warn); }
+.notice.danger { background: var(--danger-quiet); color: var(--danger); }
+.danger { color: var(--danger); }

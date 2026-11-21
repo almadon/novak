@@ -16,7 +16,7 @@ export default async function Home() {
         {isAdmin ? " (admin)" : ""}
       </p>
       <ul>
-        <li>Persona — not yet built</li>
+        <li><a href="/profiles">Profiles</a>: how Novak works with you</li>
         <li>Memories — not yet built (Mem0 REST, scoped to this sub)</li>
         <li>Attached tools — not yet built</li>
         {isAdmin && <li><a href="/admin">Admin: MCP catalog</a></li>}

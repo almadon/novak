@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# Enforces Conventional Commits. See ../srz/docs/commit-style.md.
+#
+# Enabled per clone with:
+#   git config core.hooksPath .githooks
+# (Hooks live in .git/hooks by default, which isn't tracked — pointing
+# core.hooksPath at a tracked directory is what makes this shareable.)
+set -euo pipefail
+
+MSG_FILE="$1"
+SUBJECT="$(head -n1 "$MSG_FILE")"
+
+TYPES="feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert"
+
+# Let git's own machinery through untouched.
+case "$SUBJECT" in
+  "Merge "*|"Revert \""*|"fixup!"*|"squash!"*) exit 0 ;;
+esac
+
+# Empty or comment-only: git aborts on its own, don't add noise.
+if [ -z "${SUBJECT//[[:space:]]/}" ] || [ "${SUBJECT:0:1}" = "#" ]; then
+  exit 0
+fi
+
+fail() {
+  cat >&2 <<EOF
+
+✋ Commit subject doesn't match Conventional Commits.
+
+   Got:      $SUBJECT
+   Expected: type(scope): description
+             type!: description        ← breaking change
+
+   Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+
+   Examples:
+     feat(integrations): add Tududi
+     fix(konzol): mobile UI overflow
+     fix(security): re-check admin group on every mutating request
+     feat(memory)!: identity now comes from the connection, not a tool argument
+
+   $1
+
+   See ../srz/docs/commit-style.md. To bypass once: git commit --no-verify
+
+EOF
+  exit 1
+}
+
+if ! printf '%s' "$SUBJECT" | grep -qE "^($TYPES)(\([a-z0-9._-]+\))?!?: .+"; then
+  if printf '%s' "$SUBJECT" | grep -qE "^($TYPES)"; then
+    fail "Close — check the punctuation. Scope goes in (parens), then a colon and a space."
+  fi
+  fail "Start with a type from the list above, lowercase, then ': '."
+fi
+
+if [ ${#SUBJECT} -gt 72 ]; then
+  fail "Subject is ${#SUBJECT} characters; keep it to 72 so git log stays readable."
+fi
+
+DESC="${SUBJECT#*: }"
+
+if printf '%s' "$DESC" | grep -qE '\.$'; then
+  fail "Don't end the subject with a full stop."
+fi
+
+# Conventional Commits wants the imperative: "add", not "added" or "adds".
+if printf '%s' "$DESC" | grep -qiE '^(added|adds|fixed|fixes|updated|updates|removed|removes|changed|changes|created|creates) '; then
+  fail "Use the imperative mood: 'add', not 'added'/'adds'."
+fi
+
+# A breaking change should say why somewhere, not just carry a '!'.
+if printf '%s' "$SUBJECT" | grep -qE '^[a-z]+(\([a-z0-9._-]+\))?!:'; then
+  if ! grep -qE '^BREAKING[ -]CHANGE:' "$MSG_FILE"; then
+    cat >&2 <<'EOF'
+
+ℹ️  Subject is marked breaking with '!' but there's no BREAKING CHANGE:
+   footer. The '!' tells tooling; the footer tells the person who has to
+   deal with it. Consider adding:
+
+     BREAKING CHANGE: <what breaks, and what to do about it>
+
+EOF
+  fi
+fi
+
+# The body is where the reasoning goes, and it is the part worth having in a
+# year. Nudge, don't block — some changes genuinely are one-liners.
+if [ "$(grep -cve '^\s*#' -e '^\s*$' "$MSG_FILE")" -eq 1 ]; then
+  case "$DESC" in
+    *typo*|*whitespace*|*lint*|*formatting*) : ;;
+    *)
+      cat >&2 <<'EOF'
+
+ℹ️  No body. Fine for a trivial change — but if there was a reason, a
+   trade-off, or something you'd want to remember, the body is the only
+   place it survives.
+
+EOF
+      ;;
+  esac
+fi
+
+exit 0

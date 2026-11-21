@@ -8,7 +8,7 @@
     "start": "next start -p 3002",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "node --no-warnings --test src/lib/"
+    "test": "node --no-warnings --test \"src/lib/*.test.ts\""
   },
   "dependencies": {
     "next": "16.4.6",

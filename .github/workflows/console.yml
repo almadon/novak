@@ -51,10 +51,11 @@ jobs:
           OIDC_CLIENT_SECRET: ci
           AUTH_SECRET: ci-placeholder-not-a-real-secret
 
+  # On a pull request the image is built but not pushed: the app builds on Node 22 above, but the
+  # image runs on its own base (the Dockerfile's), so a base-image bump is only tested by building it.
   image:
-    name: Publish console image
+    name: Build console image (publish on main)
     needs: build
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -62,7 +63,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      - if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -71,7 +73,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: console
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           platforms: linux/amd64
           tags: |
             ghcr.io/${{ github.repository_owner }}/novak-konzol:main
@@ -79,4 +81,5 @@ jobs:
           cache-from: type=gha,scope=console
           cache-to: type=gha,mode=max,scope=console
       - name: Print the digest to pin
+        if: github.event_name != 'pull_request'
         run: echo "ghcr.io/${{ github.repository_owner }}/novak-konzol@${{ steps.build.outputs.digest }}" | tee -a "$GITHUB_STEP_SUMMARY"

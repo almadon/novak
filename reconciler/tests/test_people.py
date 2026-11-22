@@ -116,6 +116,20 @@ class PersonTests(unittest.TestCase):
         h.run("household-key")
         self.assertTrue(h.load()["household"]["key_sha256"])
 
+    def test_admin_key_is_stored_as_a_hash_and_rotates(self):
+        h = Home(self)
+        r = h.run("admin-key")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        first = yaml.safe_load(h.gateway.read_text())["gateway"]["admin"]["key_sha256"]
+        self.assertEqual(len(first), 64)
+        key = [l.strip() for l in r.stderr.splitlines() if len(l.strip()) > 30 and " " not in l.strip()][0]
+        self.assertNotIn(key, h.gateway.read_text())
+        self.assertIn("# Gateway behaviour", h.gateway.read_text())
+        h.run("admin-key")
+        g = yaml.safe_load(h.gateway.read_text())["gateway"]
+        self.assertNotEqual(g["admin"]["key_sha256"], first)
+        self.assertEqual(g["confirm"], ["destructive"])
+
     def test_the_gateway_reads_what_the_cli_wrote(self):
         from novak_gateway import directory
         from novak_gateway.auth import authenticate

@@ -52,3 +52,22 @@ class Audit:
         with self.lock:
             rows = self.db.execute(sql + " ORDER BY id DESC LIMIT ?", (*args, limit)).fetchall()
         return [dict(r) for r in rows]
+
+    def summary(self, since: int, person=None, recent=25):
+        """What a status page needs, and nothing a person said: counts since a moment, and the latest rows."""
+        where, args = "ts>=?", [since]
+        if person:
+            where, args = where + " AND person=?", [*args, person]
+        with self.lock:
+            by_decision = {r["decision"]: r["n"] for r in self.db.execute(
+                f"SELECT decision, COUNT(*) n FROM audit WHERE {where} GROUP BY decision", args)}
+            errors = self.db.execute(
+                f"SELECT COUNT(*) n FROM audit WHERE {where} AND outcome LIKE 'error%'", args).fetchone()["n"]
+            by_person = {r["person"]: r["n"] for r in self.db.execute(
+                f"SELECT person, COUNT(*) n FROM audit WHERE {where} GROUP BY person ORDER BY n DESC", args)}
+            rows = self.db.execute(
+                "SELECT ts,person,via,entry,tool,kind,decision,outcome,ms FROM audit"
+                + (" WHERE person=?" if person else "") + " ORDER BY id DESC LIMIT ?",
+                ([person] if person else []) + [recent]).fetchall()
+        return {"since": since, "calls": sum(by_decision.values()), "by_decision": by_decision,
+                "errors": errors, "by_person": by_person, "recent": [dict(r) for r in rows]}

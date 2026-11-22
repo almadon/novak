@@ -207,6 +207,10 @@ services:
       # each to their own bank.
       HINDSIGHT_URL: "http://hindsight:8888"
       HINDSIGHT_API_KEY: "${HINDSIGHT_API_KEY}"
+      # The Today page reads the gateway's read-only status endpoint. The key opens that and nothing
+      # else (novak gateway admin-key); left unset, the page says so instead of failing.
+      GATEWAY_URL: "${CONSOLE_GATEWAY_URL:-http://gateway:8000}"
+      GATEWAY_ADMIN_KEY: "${CONSOLE_GATEWAY_KEY:-}"
     volumes:
       # The registry is the entire interface between the console and this stack, and it is
       # read-only here. The one writable place is profiles/ (people's standing instructions,

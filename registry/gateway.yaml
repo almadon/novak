@@ -50,6 +50,9 @@ gateway:
   # `novak gateway client open-webui` adds one and shows its key once.
   clients: []
 
+  # The console's read-only status key (novak gateway admin-key): opens GET /admin/today, nothing else.
+  admin: {}
+
   # Which tools each kind of entry offers. A model given 36 tools for one memory
   # bank explores them (a read-only question once reached for a delete); given
   # the dozen people use, it behaves (Tududi has 65 tools; this offers 27). First filter whose `entries` glob matches

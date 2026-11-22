@@ -130,6 +130,7 @@ DEFAULT_SETTINGS = {
     "approval_page": "",
     "tool_filters": [],
     "clients": [],
+    "admin": {},
     "oidc": {},
     "notify_default": {},
 }

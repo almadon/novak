@@ -257,3 +257,14 @@ its instructions and invents arguments.
   "Today" follows the gateway's `TZ` (set from `INGEST_TZ`). Completing or adding goes through the ordinary
   Tududi tools, which take the ids shown. It reads only, and people without a Tududi entry do not get it.
 
+## Status for the console: `GET /admin/today`
+
+The console's Today page reads one read-only endpoint. It has its own key (`novak gateway admin-key`, stored as
+the hash `admin.key_sha256` in `gateway.yaml`, and as `CONSOLE_GATEWAY_KEY` for the console), and that key opens
+this path and nothing else: it cannot list or call a tool, and it cannot decide an approval. With no key configured
+the path answers 401 to everyone.
+
+It returns counts since local midnight, the latest audit rows (who, which tool, what was decided; never arguments,
+results or what a person said), and pending and recent approvals without their tokens (the token is the capability to
+decide, so it never leaves the gateway except in the phone notification). `?person=<name>` narrows everything to one
+person; the console applies it for anyone who is not an admin.

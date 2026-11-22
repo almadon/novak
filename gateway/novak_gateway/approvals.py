@@ -85,3 +85,15 @@ class Approvals:
                 return "expired"
         self.events.pop(aid, None)
         return row["status"]
+
+    def listing(self, person=None, recent=10):
+        """Pending and recently decided, for display. The token is a capability to decide, so it is never listed."""
+        cols = "id,person,entry,tool,status,created_at,decided_at"
+        who, args = (" AND person=?", [person]) if person else ("", [])
+        with self.lock:
+            pending = self.db.execute(
+                f"SELECT {cols} FROM approvals WHERE status='pending'{who} ORDER BY id", args).fetchall()
+            done = self.db.execute(
+                f"SELECT {cols} FROM approvals WHERE status!='pending'{who} ORDER BY id DESC LIMIT ?",
+                [*args, recent]).fetchall()
+        return {"pending": [dict(r) for r in pending], "recent": [dict(r) for r in done]}

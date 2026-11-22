@@ -16,6 +16,7 @@
                                   registry, each person's list, gateway overrides
   people.py client NAME           trusted client (Open WebUI): new key, shown once
   people.py household-key         new household key, shown once
+  people.py admin-key             the console's read-only status key, shown once
 
 Edits registry/people.yaml and registry/gateway.yaml as text, so the comments
 above each section survive; a person's own block is rewritten whole. Keys are
@@ -469,6 +470,18 @@ def cmd_client(a):
     return 0
 
 
+def cmd_admin_key(a):
+    """The console's key. It opens GET /admin/today on the gateway and nothing else."""
+    if not GATEWAY.exists():
+        raise SystemExit(f"No {GATEWAY}: run 'novak up' once to seed it.")
+    key, h = new_key()
+    backup(GATEWAY)
+    write_block(GATEWAY, "admin", 2, {"key_sha256": h})
+    say(f"Console status key (shown once; it can read the status page and do nothing else):\n  {key}")
+    say("Store it for the console:  novak secret set CONSOLE_GATEWAY_KEY   then  novak up")
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -490,6 +503,7 @@ def main():
         x = sub.add_parser(c); x.add_argument("entries", nargs="+")
     c = sub.add_parser("client"); c.add_argument("name")
     sub.add_parser("household-key")
+    sub.add_parser("admin-key")
     sub.add_parser("banks")
     r = sub.add_parser("rename")
     r.add_argument("old"); r.add_argument("new")
@@ -498,7 +512,7 @@ def main():
     return {"add": cmd_add, "list": cmd_list, "set": cmd_set, "key": cmd_key, "attach": lambda a: cmd_attach(a),
             "detach": lambda a: cmd_attach(a, True), "share": lambda a: cmd_share(a),
             "unshare": lambda a: cmd_share(a, True), "client": cmd_client,
-            "household-key": cmd_household_key, "banks": cmd_banks, "rename": cmd_rename}[a.cmd](a)
+            "household-key": cmd_household_key, "admin-key": cmd_admin_key, "banks": cmd_banks, "rename": cmd_rename}[a.cmd](a)
 
 
 if __name__ == "__main__":

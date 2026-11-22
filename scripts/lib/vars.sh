@@ -15,6 +15,7 @@
 SECRET_VARS=(
   BRAVE_API_KEY
   CONSOLE_AUTH_SECRET
+  CONSOLE_GATEWAY_KEY
   GATEWAY_HA_TOKEN
   HA_1_ADMIN_API_TOKEN
   HA_DRIFT_TOKEN
@@ -101,6 +102,7 @@ CORE_SECRETS=(HINDSIGHT_API_KEY)
 # up`/`novak restart open-webui`.
 EXTERNAL_SECRETS=(
   BRAVE_API_KEY
+  CONSOLE_GATEWAY_KEY
   GATEWAY_HA_TOKEN
   HA_1_ADMIN_API_TOKEN
   HA_DRIFT_TOKEN
@@ -150,6 +152,7 @@ secret_desc() {
     HINDSIGHT_API_KEY)          echo "Hindsight: the one tenant key every bank, the console, Open WebUI and HA use" ;;
     BRAVE_API_KEY)              echo "Brave Search: key for the web-search tool" ;;
     OPEN_TERMINAL_API_KEY)      echo "Open Terminal (code sandbox): also pasted into Open WebUI" ;;
+    CONSOLE_GATEWAY_KEY)        echo "Konzol (console): read-only status key for the gateway (novak gateway admin-key)" ;;
     CONSOLE_AUTH_SECRET)        echo "Konzol (console): signs its login session cookies. Internal, never typed anywhere" ;;
     OIDC_CLIENT_SECRET)         echo "Konzol (console): its client secret in Pocket ID. Copy from Pocket ID" ;;
     OWUI_OIDC_CLIENT_SECRET)    echo "Open WebUI: its client secret in Pocket ID. Copy from Pocket ID" ;;

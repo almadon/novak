@@ -2,12 +2,15 @@
 import html
 import json
 import re
+import time
+from urllib.parse import parse_qs, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .auth import AuthError, authenticate
+from .directory import key_matches, validate
 
 
-def make_server(gw, oidc, host="0.0.0.0", port=8000, admin_key_hash=None):
+def make_server(gw, oidc, host="0.0.0.0", port=8000):
     public = gw.public_url
 
     class Handler(BaseHTTPRequestHandler):
@@ -42,11 +45,34 @@ def make_server(gw, oidc, host="0.0.0.0", port=8000, admin_key_hash=None):
                 return self._send(200, {"resource": f"{public}/mcp",
                                         "authorization_servers": [oidc.issuer],
                                         "bearer_methods_supported": ["header"]})
+            if path == "/admin/today":
+                return self._admin_today()
             if m := re.fullmatch(r"/approve/([\w-]+)", path):
                 return self._approval_page(m.group(1))
             if path.startswith("/mcp"):
                 return self._send(405, {"error": "this endpoint takes POST"}, headers={"Allow": "POST"})
             self._send(404, {"error": "not found"})
+
+        def _admin_today(self):
+            """Read-only status for the console. Its own key (gateway.yaml admin.key_sha256), which opens
+            this one path and nothing else: it cannot call a tool, read an argument or decide an approval."""
+            auth = self.headers.get("Authorization", "")
+            token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+            if not key_matches(token, (gw.dir.settings.get("admin") or {}).get("key_sha256")):
+                return self._send(401, {"error": "admin key required"})
+            q = parse_qs(urlsplit(self.path).query)
+            person = (q.get("person") or [None])[0]
+            if person is not None and person not in gw.dir.people:
+                return self._send(404, {"error": "no such person"})
+            lt = time.localtime()
+            since = int(time.mktime(lt[:3] + (0, 0, 0) + lt[6:]))
+            summary = gw.audit.summary(since, person)
+            self._send(200, {
+                "now": int(time.time()), "person": person,
+                "gateway": {"people": len(gw.dir.people), "entries": len(gw.dir.entries),
+                            "problems": [] if person else validate(gw.dir)},
+                "approvals": gw.approvals.listing(person), "activity": summary},
+                headers={"Cache-Control": "no-store"})
 
         def _approval_page(self, token, note=""):
             a = gw.approvals.by_token(token)

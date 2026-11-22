@@ -47,7 +47,7 @@
 #                             person has a sign-in name, their own entries (their
 #                             memory bank, their Outline and Tududi keys) and a
 #                             place to be asked to confirm removals.
-#   novak gateway client NAME trusted client key (Open WebUI) | household-key |
+#   novak gateway client NAME trusted client key (Open WebUI) | household-key | admin-key |
 #                             banks (create missing Hindsight banks) |
 #                             status | check | audit [person]
 #   novak instances           which instance of each service is which, and whose
@@ -874,7 +874,7 @@ cmd_gateway() {
   need_env
   local py="$NOVAK_HOME/.venv/bin/python"; [ -x "$py" ] || py="$(command -v python3)"
   case "${1:-status}" in
-    client|household-key)
+    client|household-key|admin-key)
       NOVAK_HOME="$NOVAK_HOME" "$py" "$REPO_DIR/reconciler/people.py" "$@" ;;
     banks)
       HINDSIGHT_API_KEY="$(secret_get HINDSIGHT_API_KEY)" NOVAK_HOME="$NOVAK_HOME" "$py" "$REPO_DIR/reconciler/people.py" banks ;;
@@ -887,7 +887,7 @@ cmd_gateway() {
       compose exec -T gateway python -m novak_gateway check 2>&1 | sed 's/^/  /' || true ;;
     check)  compose exec -T gateway python -m novak_gateway check ;;
     audit)  shift; compose exec -T gateway python -m novak_gateway audit "$@" ;;
-    *) red "unknown: novak gateway $1"; dim "  novak gateway status | check | audit [person] | client NAME | household-key | banks"; exit 1 ;;
+    *) red "unknown: novak gateway $1"; dim "  novak gateway status | check | audit [person] | client NAME | household-key | admin-key | banks"; exit 1 ;;
   esac
 }
 

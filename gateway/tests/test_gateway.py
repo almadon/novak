@@ -656,7 +656,7 @@ class SupernotifyTests(unittest.TestCase):
         self.assertEqual(body["target"], ["person.tyler_meuse"])
         self.assertEqual((body["title"], body["message"], body["priority"]), ("Confirm: x", "m", "high"))
         self.assertEqual([a["action"] for a in body["actions"]], ["NOVAK_APPROVE_TOK123", "NOVAK_DENY_TOK123"])
-        self.assertEqual(body["delivery"], {"mobile_push": {"data": {"tag": "novak-TOK123", "clickAction": "/novak-approvals/approvals"}}})
+        self.assertEqual(body["delivery"], {"mobile_push": {"data": {"tag": "novak-TOK123", "clickAction": "/novak-approvals/approvals", "url": "/novak-approvals/approvals"}}})
         self.assertTrue(body["force_resend"])                                   # the same request twice is two requests
         self.assertEqual(body["delivery_selection"], "explicit")                # one notification, not a plain copy as well
         self.assertEqual(list(body["delivery"]), ["mobile_push"])               # and only through the one named delivery

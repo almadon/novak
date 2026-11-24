@@ -118,7 +118,9 @@ def send(person_notify: dict, default: dict, ha_url: str, ha_token: str,
             raise RuntimeError("supernotify channel needs a target (a person entity such as person.tyler_meuse)")
         mobile = {"tag": f"novak-{token[:16]}"}
         if cfg.get("page"):
-            mobile["clickAction"] = cfg["page"]
+            # Android reads clickAction, iOS reads url: a tap on the notification body opens this page
+            # instead of whatever the app was last showing (found on a live iPhone).
+            mobile["clickAction"] = mobile["url"] = cfg["page"]
         post(ha_url, ha_token, "/api/services/supernotify/notify",
              {"title": title, "message": message, "target": target, "priority": cfg.get("priority", "high"),
               "force_resend": True,              # a repeated request is a new request, not a duplicate

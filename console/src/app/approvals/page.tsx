@@ -14,7 +14,7 @@ export default async function Approvals() {
   const admin = user.groups.includes(ADMIN_GROUP);
   const me = personFor(await loadPeople(), user.email);
   if (!admin && !me) {
-    return <main className="page"><h1>Approvals</h1><p>Your sign-in email is not listed for anyone in <code>people.yaml</code>.</p></main>;
+    return <main className="page"><h1>Approvals</h1><p>You are signed in, but Novak does not know who you are yet. Ask whoever runs Novak to add your email address (<code>people.yaml</code>).</p></main>;
   }
   const r = await fetchToday(admin ? undefined : me?.name);
 

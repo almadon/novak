@@ -25,7 +25,7 @@ export default async function ProfilesPage({ searchParams }: { searchParams: Sea
     return (
       <main className="page">
         <h1>Profiles</h1>
-        <p>Your sign-in email is not listed for anyone in <code>people.yaml</code>, so there is no profile for you to edit.</p>
+        <p>You are signed in, but Novak does not know who you are yet. Ask whoever runs Novak to add your email address (<code>people.yaml</code>).</p>
       </main>
     );
   }
@@ -58,7 +58,7 @@ export default async function ProfilesPage({ searchParams }: { searchParams: Sea
       {q.saved && <p className="notice ok" role="status">Saved. It takes effect in your next conversation.</p>}
       {q.error && <p className="notice danger" role="alert">{q.error}</p>}
       {live === null && !preview && (
-        <p className="notice warn">There is no profile for {person} yet, so Novak offers no <code>{person}__profile</code> tool. Saving one creates it.</p>
+        <p className="notice warn">{person} has no profile yet, so Novak has nothing to tell it about them. Saving one creates it.</p>
       )}
       {preview && <p className="notice warn">Showing an older version. Save to make it the current one.</p>}
 

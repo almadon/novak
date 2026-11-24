@@ -235,12 +235,13 @@ explains each piece. `novak checklist` checks the first three of these directly.
 
 - [ ] The array starts by itself (Settings, Disk Settings).
 - [ ] Docker starts by itself, and the Novak services use `restart: unless-stopped`.
-- [ ] The Compose Manager `autostart` flag is `true` (`cat $NOVAK_HOME/autostart`) if you use the plugin.
+- [ ] If you use the Compose Manager plugin, its `autostart` flag is `true` (`cat $NOVAK_HOME/autostart`).
+      The reference host doesn't use it and still starts cold with no help.
 - [ ] The `novak` command comes back after a reboot, because `/boot/config/go` has its line.
 - [ ] Tailscale is the Unraid plugin, the node is tagged, and `tailscale status --json` shows no key expiry.
       A key tied to a person expires and the host drops off the tailnet with nobody there to sign in again.
-- [ ] If the board has IPMI or you have a network KVM, you can reach the machine when the operating system
-      is down. Whether yours does is **VERIFY**.
+- [ ] You can reach the machine when the operating system is down, through IPMI or a network KVM (the
+      reference host has a KVM).
 - [ ] A UPS with its data cable connected to Unraid (Settings, UPS Settings), so an outage ends in a clean
       shutdown and not a parity check.
 
@@ -248,9 +249,9 @@ explains each piece. `novak checklist` checks the first three of these directly.
 
 ## Phase 11: The test that counts
 
-Do this on purpose, while you have time to fix what it finds. The reference host passed it once (decision
-#37): a clean reboot brought every container back with no manual step. The stack has grown since then, so
-run it again on yours.
+Do this on purpose, while you have time to fix what it finds. The reference host starts everything on a
+cold boot with no manual step (decision #37, and confirmed again on the stack as it runs today), so you
+are checking that yours does the same.
 
 - [ ] Reach the Unraid web UI from a phone on cellular with home wifi off. That proves remote access isn't
       secretly depending on the LAN.
@@ -283,8 +284,9 @@ run it again on yours.
       the system prompt field, because the router never overrides a client that already sends its own
       system message, which quietly defeats the point. After switching either client, ask it "who are you?"
       to confirm the persona showed up. See [architecture.md](architecture.md).
-- [ ] Backups. Confirm the CA Appdata Backup plugin, or whatever you use, covers `$NOVAK_HOME` and wherever
-      `*_DATA_DIR` and `OLLAMA_DATA_DIR` point. This isn't confirmed on the reference host yet (**VERIFY**).
+- [ ] Backups. They run for the whole host outside Novak and need to cover `$NOVAK_HOME` and the gateway
+      volume. [headless-operation.md](headless-operation.md#what-to-back-up) lists what matters and what to
+      leave out.
 - [ ] Check the licences marked VERIFY in [credits.md](credits.md). Outline is BSL 1.1, which matters if
       anything commercial touches it.
 

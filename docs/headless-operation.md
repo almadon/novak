@@ -13,11 +13,11 @@ Four things have to be true after a power cut, and each one is a separate settin
    to confirm it.
 2. **The Docker service starts by itself.** Settings, Docker, "Enable Docker" and its autostart both on.
 3. **The containers restart themselves.** Every service in `docker-compose.yml` has
-   `restart: unless-stopped`, so the Docker daemon brings the whole stack back once it is running. The
-   Compose Manager plugin also keeps a per-project `autostart` flag, and `novak checklist` reads that file
-   (`$NOVAK_HOME/autostart`) too. On the reference deployment the stack no longer shows up in the Compose
-   Manager list, so the restart policy is what does the work there. Whether a cold boot with the plugin
-   flag set alone is enough is **VERIFY**.
+   `restart: unless-stopped`, so the Docker daemon brings the whole stack back once it is running. On the
+   reference host that is all it takes: a cold boot starts everything with no help from the Compose Manager
+   plugin, which no longer lists the stack. The plugin keeps a per-project `autostart` flag, and
+   `novak checklist` still reads it (`$NOVAK_HOME/autostart`), but you don't need it if you don't use the
+   plugin.
 4. **The `novak` command comes back.** Unraid's `/` and `/usr` are rebuilt in memory from the flash drive
    at every boot, so a symlink in `/usr/local/bin` disappears at the next reboot. `bootstrap-unraid.sh`
    adds a line to `/boot/config/go` that recreates it. Without that line the stack still runs but you
@@ -41,10 +41,10 @@ it.
 
 - **A UPS with its data cable connected to Unraid.** Set it up under Settings, UPS Settings, so the array
   is stopped cleanly. An unclean shutdown forces a parity check, which slows everything for hours.
-- **Out-of-band access.** If the board has IPMI, or you have a network KVM, you can reach the machine when
-  the operating system is down. Whether your board has this is **VERIFY**. Put the KVM and the network gear
-  on the UPS before the host, because a host that lost power is recoverable remotely and one you cannot
-  reach is not.
+- **Out-of-band access.** The reference host has a network KVM, so you can reach it when the operating
+  system is down. If your board has IPMI, that does the same job. Put the KVM and the network gear on the
+  UPS before the host, because a host that lost power is recoverable remotely and one you cannot reach is
+  not.
 - **No disk encryption trade-off.** Unraid doesn't encrypt the array by default, so nothing waits for a
   password at boot. If you add encryption, you give that up and need a plan for typing the key.
 
@@ -61,11 +61,30 @@ it.
 600. That is a lower bar than a macOS Keychain, because there is no logged-in session to unlock anything,
 and it is the reason file permissions are checked by `novak secret verify`.
 
+## What to back up
+
+Backups for the whole host run outside Novak, and they need to include these. Everything is under
+`$NOVAK_HOME` except the gateway's volume.
+
+| What | Where | Notes |
+|---|---|---|
+| Settings and secrets | `.env`, `secrets.env` | `secrets.env` holds every key in plain text, so the backup target has to be encrypted. |
+| The registry | `registry/` (including `registry/profiles/`) | People, who can use which service, prompts for each person. Small, and the hardest thing to rebuild from memory. |
+| Memory | `data/hindsight/` | An embedded Postgres database, so copy it from a snapshot or with the stack stopped, not while it writes. |
+| Chats and settings in Open WebUI | `data/open-webui/` | A SQLite database plus uploads, with the same warning about copying it while it runs. |
+| Ingest | `data/ingest/` | Recordings and the work queue, also SQLite. |
+| Gateway audit and approvals | Docker volume `novak_gateway-data` | Small. Without it you lose the record of who did what. |
+
+Leave out `models/` (Ollama and speech models, tens of gigabytes, downloaded again on demand), `repo/` (it
+is git), and the dated `.bak` copies. Keeping one old copy of `.env` and the registry is worth it. The
+Docker volume `novak_open-webui` looks like a leftover from before Open WebUI moved to a bind mount, so
+confirm it is unused (**VERIFY**) before deciding whether it matters.
+
 ## The test that counts
 
-Do this on purpose, while you have time to fix what it finds. A clean reboot of the reference host brought
-all eight containers it had then back with no manual step (decision #37). The stack has moved since then, with a folder
-migration on 2026-10-06 and several new services, so a fresh run is **VERIFY**.
+Do this on purpose, while you have time to fix what it finds. On the reference host, a cold boot with no
+Compose Manager involvement brings everything up without a manual step. That is the owner's observation on
+the stack as it runs today, so use these steps to check your own host:
 
 1. Run `novak status` and note what is running.
 2. Reboot from the Unraid web UI (`Main`, then `Reboot`), or pull the plug if you want the real thing.

@@ -310,6 +310,9 @@ if [ "$(envval GATEWAY_ENABLED)" = "true" ]; then
   profiles+=(gateway)
   NOVAK_HOME="$NOVAK_HOME" "$PY" "$REPO_DIR/reconciler/gateway_env.py" || ui_warn "could not write gateway.env: the gateway will start without credentials"
 fi
+# The models the boot-time warm-up container loads (decision #81). Always written, so the file mount is a file.
+_warm_env=(); [ -n "$(envval OLLAMA_WARM_MODELS)" ] && _warm_env=("OLLAMA_WARM_MODELS=$(envval OLLAMA_WARM_MODELS)")
+env NOVAK_HOME="$NOVAK_HOME" ${_warm_env[@]+"${_warm_env[@]}"} "$PY" "$REPO_DIR/reconciler/warm.py" --write 2>/dev/null || : > "$NOVAK_HOME/warm-models.txt"
 if [ ${#profiles[@]} -gt 0 ]; then
   export COMPOSE_PROFILES
   COMPOSE_PROFILES="$(IFS=,; echo "${profiles[*]}")"
@@ -389,6 +392,18 @@ if [ -f "$NOVAK_HOME/registry/openwebui.yaml" ] && [ -n "${OWUI_ADMIN_API_KEY:-}
   else
     ui_warn "could not apply registry/openwebui.yaml: run 'novak owui drift' to see why"
     printf '%s\n' "$_owui_out" | tail -3 | while read -r _l; do ui_dim "$_l"; done
+  fi
+fi
+
+# Warm the resident models now: recreating Ollama (a new image, a changed setting) empties it.
+if printf '%s' "${COMPOSE_PROFILES:-}" | grep -q 'ollama'; then
+  ui_section "🔥" "Warm-up"
+  if _warm_out="$(env NOVAK_HOME="$NOVAK_HOME" OLLAMA_BIND="$(envval OLLAMA_BIND)" OLLAMA_PORT="$(envval OLLAMA_PORT)" \
+      ${_warm_env[@]+"${_warm_env[@]}"} "$PY" "$REPO_DIR/reconciler/warm.py" 2>&1)"; then
+    printf '%s\n' "$_warm_out" | while read -r _l; do ui_dim "$_l"; done
+  else
+    ui_warn "could not warm the models: run 'novak warm' to see why"
+    printf '%s\n' "$_warm_out" | tail -3 | while read -r _l; do ui_dim "$_l"; done
   fi
 fi
 

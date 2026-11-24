@@ -59,6 +59,8 @@
 #   novak router apply        apply registry/engines.yaml -> router/config.yaml
 #   novak owui [drift|apply]  check, or make, Open WebUI match registry/openwebui.yaml
 #   novak pi [config|hint]    models.json for the Pi coding agent, and its editing rules
+#   novak warm                load the voice and chat models into the GPU now, so the first request does not wait
+#   novak bench [options]     time to first token and speed through the router, per role and prompt size
 #   novak backup [--dest DIR] one consistent copy of settings, secrets, registry and databases, for a backup tool
 #                              (decision #28; run 'novak restart router' after)
 #   novak checklist           phase-by-phase deploy-checklist.md walk-through
@@ -433,6 +435,25 @@ cmd_pi() {
 cmd_backup() {
   NOVAK_HOME="$NOVAK_HOME" \
     "$NOVAK_HOME/.venv/bin/python" "$REPO_DIR/reconciler/backup.py" "$@"
+}
+
+# Load the models people use before anyone asks (decision #81).
+cmd_warm() {
+  need_env
+  local py="$NOVAK_HOME/.venv/bin/python"; [ -x "$py" ] || py="$(command -v python3)"
+  local extra=(); [ -n "$(envval OLLAMA_WARM_MODELS)" ] && extra=("OLLAMA_WARM_MODELS=$(envval OLLAMA_WARM_MODELS)")
+  env NOVAK_HOME="$NOVAK_HOME" OLLAMA_BIND="$(envval OLLAMA_BIND)" OLLAMA_PORT="$(envval OLLAMA_PORT)" \
+    ${extra[@]+"${extra[@]}"} "$py" "$REPO_DIR/reconciler/warm.py" "$@"
+}
+
+# What a person feels in Open WebUI: time to first token and speed, through the router (decision #81).
+cmd_bench() {
+  need_env
+  local py="$NOVAK_HOME/.venv/bin/python"; [ -x "$py" ] || py="$(command -v python3)"
+  NOVAK_HOME="$NOVAK_HOME" ROUTER_API_KEY="$(secret_get ROUTER_API_KEY)" \
+    ROUTER_BIND="$(envval ROUTER_BIND)" ROUTER_PORT="$(envval ROUTER_PORT)" HOST_NAME="$(envval HOST_NAME)" \
+    OLLAMA_BIND="$(envval OLLAMA_BIND)" OLLAMA_PORT="$(envval OLLAMA_PORT)" \
+    "$py" "$REPO_DIR/reconciler/bench.py" "$@"
 }
 
 cmd_router() {
@@ -1572,6 +1593,8 @@ case "${1:-menu}" in
   owui)     shift; cmd_owui "$@" ;;
   pi)       shift; cmd_pi "$@" ;;
   backup)   shift; cmd_backup "$@" ;;
+  warm)     shift; cmd_warm "$@" ;;
+  bench)    shift; cmd_bench "$@" ;;
   doctor)   cmd_status ;;   # same checks up.sh runs, without starting anything
   checklist) cmd_checklist ;;
   guided-setup) cmd_guided_setup ;;

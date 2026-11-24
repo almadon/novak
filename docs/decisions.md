@@ -3544,3 +3544,39 @@ then backs up that one directory on its own schedule and keeps the history. Mode
 Hindsight offering its own export, or the backup tool gaining application-aware hooks that make the staging
 step unnecessary.
 
+
+## 81. The resident models are loaded at start, and performance is measured, not guessed
+
+Date: 2026-11-24
+
+### What was decided
+
+Two things the benchmark on the reference host (2026-11-24) showed were worth having.
+
+First, nothing is loaded after a restart, so the first request waited 7 seconds (the 4B) to 32 to 37 seconds
+(a 14B). A `warmup` container in the Ollama profile now loads the models in `warm-models.txt` after every
+start of the host, using the Ollama image that is already pinned, and `novak up` loads them again at the end
+because recreating Ollama empties it. The list is the `ha-voice` and `chat` roles from `registry/engines.yaml`,
+or `OLLAMA_WARM_MODELS` if set. `novak warm` does it by hand.
+
+Second, `novak bench` makes the measurement repeatable: time to first token, speed, and GPU, CPU and video
+memory use, per role and prompt size, through the router. Changes to Ollama's settings or models should be
+compared with it before and after.
+
+The same run found no case for CPU pinning or container limits. A warm 14B model generates at about 31 tokens a
+second, which is the card's memory bandwidth, with the GPU at 80 to 100% busy and the CPU averaging 12 to 37% of
+twelve threads. Nothing was queueing for CPU.
+
+### What it costs
+
+- The warm-up holds about 14 GB of video memory for the voice and chat models, which is the same as before,
+  since they were already kept loaded for 24 hours once used. It does not help the `code` role, which swaps with
+  `chat`.
+- A boot-time container to run one command is a little more machinery than a script, chosen because Docker
+  restarts containers on its own after a reboot without running `novak up`.
+- `bench` sends real requests, and `--cold` unloads models other people may be using.
+
+### What would make it worth revisiting
+
+A larger GPU, where `code` could stay resident too, or Ollama growing a native preload setting.
+

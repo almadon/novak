@@ -20,7 +20,7 @@ precise about what was and wasn't already covered:
 | Path | Before | Why |
 |---|---|---|
 | Between Tailscale devices | **already encrypted** | Tailscale is WireGuard underneath |
-| Across the LAN | **plaintext** | HA → memory, browser → console, anything hitting a published port by IP |
+| Across the LAN | **plaintext** | HA → the gateway, browser → console, anything hitting a published port by IP |
 
 So the tailnet was never the exposure. The LAN was.
 
@@ -43,7 +43,7 @@ it is.
 | Service | Public? | What actually happens |
 |---|---|---|
 | **oMLX** (8000) | **No** | An inference API with no rate limiting and no quotas. A stranger with the key gets your GPU; a stranger without one still costs you every connection's worth of work. Worse, it is one endpoint away from your models and your machine's memory ceiling — the way to take this house down is to ask it to think. |
-| **Hindsight** (13403, 13404) | **No** | Holds every person's memories. Auth is one shared bearer token: no per-user identity, no rate limit, no lockout. Leak it once and there is no revoking it for one caller. Deletes are permanent, so the damage is not only disclosure. |
+| **Hindsight** (13403, 13404) | **No**, and loopback-only on the host (decision #62) | Holds every person's memories. Auth is one shared bearer token: no per-user identity, no rate limit, no lockout. Leak it once and there is no revoking it for one caller. Deletes are permanent, so the damage is not only disclosure. |
 | **Konzol** (13401) | **No** | Reconfigures the stack. It writes the registry, and the registry decides what runs. Treat public access to it as equivalent to a shell. |
 | **Wyoming wake word** (13407) | **No** | No authentication of any kind, by protocol design. Anything that reaches the port can speak to your microphones' pipeline. STT/TTS (whisper/piper) moved to Home Assistant's own native add-ons, decision #39 — not part of this stack's exposure surface anymore. |
 | **Open WebUI** (13400) | Yes — **via its own public-facing proxy, on a separate host** | The only one built for it: accounts, sessions, its own rate limiting, and it expects strangers to knock. It is public because it earned it, not because it was convenient. |
@@ -160,7 +160,7 @@ runs, except for the portal's narrower one):
 # the proxy and the services are the same host (Spire) — see "The shape".
 memory.nov.a64.one {
 	import novak-internal
-	reverse_proxy localhost:13403          # HINDSIGHT_PORT: API + MCP at /mcp/<bank>/
+	reverse_proxy localhost:13403          # HINDSIGHT_PORT: API + MCP at /mcp/<bank>/. Loopback, so only a proxy on this host reaches it (decision #62)
 }
 
 memory-ui.nov.a64.one {
@@ -216,119 +216,44 @@ For the planned migration. Same idea, file-provider form:
 ```yaml
 http:
   routers:
-    novak-memory:
-      rule: "Host(`memory.novak.example.tld`)"
-      service: novak-memory
+    novak-konzol:
+      rule: "Host(`konzol.novak.example.tld`)"
+      service: novak-konzol
       tls:
         certResolver: dns-01          # VERIFY resolver name in your static config
   services:
-    novak-memory:
+    novak-konzol:
       loadBalancer:
         servers:
-          - url: "http://<core-host-ts-ip>:13403"
+          - url: "http://<core-host-ts-ip>:13401"        # CONSOLE_PORT. Hindsight is loopback-only, so a proxy on another host cannot reach it
 ```
 
 Repeat per service. Novak publishes no Docker labels, because the containers
 run on a different host from Traefik — label-based discovery won't see them.
 The file provider is the right mechanism here.
 
-## Giving Home Assistant access to Hindsight
+## Giving Home Assistant access to memory
 
-A special case, and the one concrete reason to want a proxy on this network
-rather than only for TLS.
-
-**Home Assistant's MCP client authenticates by OAuth only** — the config flow
-asks for a Client ID and Secret from Application Credentials, and offers no
-field for a bearer token or custom header. **Hindsight authenticates by static
-API key** in an `Authorization` header; its shipped tenant extensions are
-`Default`, `ApiKey` and `Supabase`, none of them OAuth. Verified: the token is
-accepted in a header and nowhere else — as a query parameter it is a 401.
-
-So HA cannot authenticate to Hindsight directly, and the failure is exactly
-this:
+Home Assistant's MCP client authenticates by OAuth only. Its config flow asks
+for a Client ID and Secret and offers no field for a bearer token or custom
+header. Hindsight authenticates by a static API key in an `Authorization`
+header, and none of its tenant extensions (`Default`, `ApiKey`, `Supabase`) are
+OAuth. So HA cannot authenticate to Hindsight directly, and the failure looks
+like this:
 
 ```
 httpx.HTTPStatusError: Client error '401 Unauthorized'
   for url 'http://<core-host-ts-ip>:13403/mcp/household/'
 ```
 
-The way through is to let a small proxy hold the credential and add it per
-request. HA then talks to an endpoint that needs no auth from its side, while
-Hindsight still refuses anything that reaches it without the key.
-
-This does not need a public hostname or TLS. HA and the Novak host are on the
-same tailnet, so the proxy listens on the host's Tailscale IP, in plain HTTP,
-on a port of its own. Nothing about it is reachable from outside the tailnet.
-
-```caddy
-{
-	auto_https off
-}
-
-# Listens on the tailnet only. Only Home Assistant, and only the household
-# bank's path, gets through; the route carries a credential of its own.
-http://<novak-host-tailscale-ip>:13409 {
-	@ha_household {
-		remote_ip <ha-tailscale-ip>
-		path /mcp/household /mcp/household/*
-	}
-	handle @ha_household {
-		reverse_proxy <novak-host-tailscale-ip>:13403 {
-			header_up Authorization "Bearer {env.HINDSIGHT_API_KEY}"
-			flush_interval -1
-		}
-	}
-	respond 403
-}
-```
-
-Then point HA's Model Context Protocol integration at
-`http://<novak-host-tailscale-ip>:13409/mcp/household/`. Notes:
-
-- `flush_interval -1` stops Caddy buffering the streamed MCP responses.
-- `HINDSIGHT_API_KEY` must be in Caddy's own environment. If Caddy runs as a
-  container, pass it with `environment:` or an `env_file:` (a second copy of
-  the key, see the cost below).
-- `remote_ip` only sees HA's real address if the connection reaches Caddy
-  directly. Run Caddy with `network_mode: host`, or confirm the published port
-  preserves the source address, before relying on it.
-- If Hindsight's own port is bound to the Tailscale IP, Caddy must reach it on
-  that address (as above), not on `localhost`.
-
-Traefik, file provider:
-
-```yaml
-http:
-  middlewares:
-    hindsight-auth:
-      headers:
-        customRequestHeaders:
-          Authorization: "Bearer <key>"     # from the proxy host's secret store
-    ha-only:
-      ipAllowList:
-        sourceRange: ["<ha-tailscale-ip>/32"]
-  routers:
-    novak-memory-ha:
-      rule: "PathPrefix(`/mcp/household`)"
-      middlewares: [ha-only, hindsight-auth]
-      service: novak-memory
-```
-
-**The source restriction is not optional.** This route converts "holds the key"
-into "can reach this hostname", so without it anything on the network gets the
-household bank uncredentialed. Point Home Assistant at the household bank only
-— never a personal one, for the reason in the deploy checklist: a microphone
-cannot tell who is speaking.
-
-Note the credential now lives on the proxy host as well as in the service host's
-Keychain. That is a second copy to rotate, and it is the cost of the approach.
-
-**Alternatives considered.** Turning Hindsight's tenant auth off would let HA
-connect, and would leave the MCP endpoint open to everything that can reach the
-port — every bank, read and write. Writing an OAuth tenant extension for
-Hindsight is the clean fix and is real work in someone else's codebase. Waiting
-for HA's MCP client to accept a token is the other real fix and is not in your
-hands.
+This page used to describe a small header-adding proxy on the tailnet that held
+the key for Home Assistant. **That is no longer how it works.** Hindsight is now
+published on the host's loopback only (decision #62), and Home Assistant reaches
+memory through the gateway, which accepts the key in the URL path for clients
+that cannot send headers. No proxy is needed for this, and no second copy of the
+Hindsight key has to be kept and rotated. The setup is in
+[home-assistant.md](home-assistant.md) and the key types are in
+[gateway.md](gateway.md). The old proxy recipe is in git history if you need it.
 
 ## What stays plaintext, and why
 

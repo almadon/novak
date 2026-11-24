@@ -5,7 +5,7 @@
 # connections the moment the app icon appears — running `docker compose` too
 # early fails against a socket that is not listening yet. This waits.
 #
-# Invoked by the LaunchAgent (see docs/headless-operation.md). Safe to run by
+# Invoked by the LaunchAgent (see docs/macos.md). Safe to run by
 # hand.
 set -euo pipefail
 

@@ -290,3 +290,13 @@ a phone buzz three times and nothing more.
 Today's one action is `forget_memory` (`{bank, memory_id}`): it calls `invalidate_memory` on the person's own
 `hindsight-<name>` or `code-memory-<name>` entry, which retires the memory without erasing it and can be
 reversed with `restore`. The household bank is not on the list.
+
+## See also
+
+| Read | For |
+|---|---|
+| [identity.md](identity.md) | Why the gateway exists, and the reasoning behind who can see what |
+| [cli.md](cli.md) | The `novak gateway` and `novak person` commands in full |
+| [home-assistant.md](home-assistant.md) | Connecting Home Assistant agents and the approvals dashboard |
+| [ingest.md](ingest.md) | The service that adds notes and tasks through the gateway as a person |
+| [decisions.md](decisions.md) | Why each piece is the way it is, one entry per choice |

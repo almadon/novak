@@ -31,7 +31,7 @@ novak secret set OUTLINE_EVERYTHING_API_KEY
 ```
 
 `novak secret verify` confirms it reads back unattended, without a prompt
-hanging boot — see [headless-operation.md](headless-operation.md) for why
+hanging boot — see [macos.md](macos.md) for why
 that check exists.
 
 ## Rule 2 — least privilege per integration

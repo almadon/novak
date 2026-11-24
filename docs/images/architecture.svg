@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" role="img" aria-labelledby="t d">
+<title id="t">Novak architecture</title><desc id="d">Clients on top talk to a services layer made of a model router with an inference engine, and a gateway that knows who is asking. The gateway reaches memory, notes, tasks, the house and search over MCP, and asks the person's phone to confirm removals. The console reads status from the gateway and sends it change requests.</desc>
+<style>
+:root{--bg:#ffffff;--ink:#16202b;--mute:#566474;--card:#ffffff;--line:#8795a5;
+--b:#e8f0fd;--bs:#2f6fdb;--g:#e6f5ec;--gs:#1f8a4c;--p:#f1eafb;--ps:#7a45c9;--a:#fdf1e0;--as:#c27410;--t:#e3f4f6;--ts:#16808f}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1620;--ink:#e6edf5;--mute:#98a6b6;--card:#18222e;--line:#6b7b8d;
+--b:#15233b;--bs:#6aa2ff;--g:#12291d;--gs:#4cc27f;--p:#231a37;--ps:#b18cf0;--a:#33250f;--as:#f0a947;--t:#10292e;--ts:#4dc1d1}}
+text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;fill:var(--ink)}
+.h{font-size:15px;font-weight:700}.s{font-size:11.5px;fill:var(--mute)}.c{font-size:12.5px;font-weight:600}.cs{font-size:10.5px;fill:var(--mute)}.l{font-size:10.5px;fill:var(--mute);font-style:italic}
+.ar{stroke:var(--line);stroke-width:1.5;fill:none;marker-end:url(#a)}
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--line)"/></marker></defs>
+<rect width="960" height="560" rx="14" fill="var(--bg)"/>
+
+<text class="h" x="24" y="34">Clients</text>
+<rect x="24" y="44" width="200" height="56" rx="10" fill="var(--b)" stroke="var(--bs)" stroke-width="1.5"/>
+<text class="c" x="40" y="68">Open WebUI</text><text class="cs" x="40" y="86">chat in a browser</text>
+<rect x="244" y="44" width="200" height="56" rx="10" fill="var(--b)" stroke="var(--bs)" stroke-width="1.5"/>
+<text class="c" x="260" y="68">Home Assistant</text><text class="cs" x="260" y="86">voice, one agent per person</text>
+<rect x="464" y="44" width="200" height="56" rx="10" fill="var(--b)" stroke="var(--bs)" stroke-width="1.5"/>
+<text class="c" x="480" y="68">Coding agents</text><text class="cs" x="480" y="86">Pi, Claude Code</text>
+<rect x="736" y="44" width="200" height="56" rx="10" fill="var(--p)" stroke="var(--ps)" stroke-width="1.5"/>
+<text class="c" x="752" y="68">Konzol (the console)</text><text class="cs" x="752" y="86">status, memory, approvals</text>
+
+<text class="h" x="24" y="152">Services layer</text>
+<rect x="24" y="162" width="420" height="150" rx="12" fill="var(--g)" stroke="var(--gs)" stroke-width="1.5"/>
+<text class="s" x="40" y="184">The model path</text>
+<rect x="40" y="196" width="180" height="96" rx="8" fill="var(--card)" stroke="var(--gs)" stroke-opacity=".55"/>
+<text class="c" x="54" y="220">Router</text><text class="cs" x="54" y="238">LiteLLM</text><text class="cs" x="54" y="254">adds the persona,</text><text class="cs" x="54" y="268">names the model roles</text>
+<rect x="244" y="196" width="184" height="96" rx="8" fill="var(--card)" stroke="var(--gs)" stroke-opacity=".55"/>
+<text class="c" x="258" y="220">Inference engine</text><text class="cs" x="258" y="238">Ollama on Linux + GPU</text><text class="cs" x="258" y="254">oMLX on Apple Silicon</text><text class="cs" x="258" y="268">your choice per host</text>
+<path class="ar" d="M220 244H242"/>
+
+<rect x="464" y="162" width="472" height="150" rx="12" fill="var(--a)" stroke="var(--as)" stroke-width="1.5"/>
+<text class="s" x="480" y="184">The tool path</text>
+<rect x="480" y="196" width="440" height="96" rx="8" fill="var(--card)" stroke="var(--as)" stroke-opacity=".55"/>
+<text class="c" x="496" y="220">Gateway</text>
+<text class="cs" x="496" y="240">One MCP endpoint that knows who is asking.</text>
+<text class="cs" x="496" y="256">Each person gets only their own tools and credentials.</text>
+<text class="cs" x="496" y="272">Removals wait for a yes. Every call is logged by name, never by value.</text>
+
+<path class="ar" d="M124 100V162"/>
+<path class="ar" d="M344 100V162"/>
+<path class="ar" d="M564 100V162"/>
+<path class="ar" d="M836 100V196"/>
+<text class="l" x="846" y="140">reads status,</text><text class="l" x="846" y="154">asks for changes</text>
+
+<text class="l" x="712" y="336">over MCP, as the person asking</text>
+<rect x="24" y="376" width="170" height="64" rx="10" fill="var(--t)" stroke="var(--ts)" stroke-width="1.5"/>
+<text class="c" x="40" y="400">Hindsight</text><text class="cs" x="40" y="418">memory, one bank each</text>
+<rect x="206" y="376" width="170" height="64" rx="10" fill="var(--t)" stroke="var(--ts)" stroke-width="1.5"/>
+<text class="c" x="222" y="400">Outline</text><text class="cs" x="222" y="418">your wiki and notes</text>
+<rect x="388" y="376" width="170" height="64" rx="10" fill="var(--t)" stroke="var(--ts)" stroke-width="1.5"/>
+<text class="c" x="404" y="400">Tududi</text><text class="cs" x="404" y="418">tasks</text>
+<rect x="570" y="376" width="170" height="64" rx="10" fill="var(--t)" stroke="var(--ts)" stroke-width="1.5"/>
+<text class="c" x="586" y="400">Home Assistant</text><text class="cs" x="586" y="418">the house</text>
+<rect x="752" y="376" width="184" height="64" rx="10" fill="var(--t)" stroke="var(--ts)" stroke-width="1.5"/>
+<text class="c" x="768" y="400">Search and more</text><text class="cs" x="768" y="418">anything else you add</text>
+<path class="ar" d="M700 312V348H109V376"/><path class="ar" d="M700 348H291V376"/><path class="ar" d="M700 348H473V376"/><path class="ar" d="M700 348H655V376"/><path class="ar" d="M700 348H844V376"/>
+
+<rect x="24" y="480" width="912" height="62" rx="10" fill="var(--card)" stroke="var(--line)" stroke-dasharray="4 4"/>
+<text class="c" x="40" y="504">Confirming on your phone</text>
+<text class="cs" x="40" y="522">When the gateway holds a removal, it sends Approve and Deny to the person's phone through Supernotify.</text>
+<text class="cs" x="40" y="536">The console never decides an approval and never calls a tool for you. It shows them and asks.</text>
+</svg>

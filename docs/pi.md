@@ -10,7 +10,7 @@ Open WebUI (the `Code` preset there is for snippets and review).
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent     # installs `pi`
 novak pi config > ~/.pi/agent/models.json                           # the Novak router as a provider
 export ROUTER_API_KEY=...                                            # `novak secret show ROUTER_API_KEY`
-pi --append-system-prompt "$(novak pi hint)" --model novak/chat
+pi --append-system-prompt "$(novak pi hint)" --model novak/code
 ```
 
 `models.json` holds no key: it says `$ROUTER_API_KEY` and Pi reads the environment. On a machine
@@ -20,7 +20,10 @@ use the local models; that is a decision about where your code goes, not a Novak
 
 ## What to expect from the local models
 
-Checked on 2026-10-23 against the 14B `chat` model at an 8,192-token window:
+The first measurements below were taken on 2026-10-23 against the 14B `chat` model at an 8,192-token window.
+The default is now `code`, a local Qwen2.5-Coder 14B (decision #76). It has only been checked against a single
+coding prompt, at 13 tokens a second cold and 32 warm, so how it behaves in a long Pi session is **VERIFY**.
+
 - A small task (create a file and run it) took 4 seconds.
 - A rename across a 150-line file looped for minutes with no help: Pi's `edit` tool needs the old
   text to match in exactly one place, the model kept sending text that matched twenty, and it never
@@ -32,3 +35,12 @@ Checked on 2026-10-23 against the 14B `chat` model at an 8,192-token window:
   spoken request waits for it to load again.
 
 Decision #73 has the reasoning.
+
+## See also
+
+| Read | For |
+|---|---|
+| [engines.md](engines.md) | How a router role such as `code` maps to a model |
+| [ollama-settings.md](ollama-settings.md) | Context size, keep-alive and what fits in the GPU |
+| [cli.md](cli.md) | `novak pi config` and `novak pi hint` |
+| [decisions.md](decisions.md) | Why Pi runs in the terminal and why Code is offline by default |

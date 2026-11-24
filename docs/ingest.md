@@ -169,3 +169,11 @@ tag takes a body up to 8,000 characters (a weekly review); a push is cut at 1,80
 button never use this route. `INGEST_APPRISE_URL` is `https://notify.a64.one`; the key is
 `INGEST_APPRISE_KEY`, set by hand with `novak secret set`.
 
+## See also
+
+| Read | For |
+|---|---|
+| [gateway.md](gateway.md) | How ingest writes tasks and notes as a person, and how approvals work |
+| [how-memory-works.md](how-memory-works.md) | What happens to what ingest saves in memory |
+| [home-assistant.md](home-assistant.md) | The phone notifications for approvals |
+| [cli.md](cli.md) | `novak secret set` and the other commands used in setup |

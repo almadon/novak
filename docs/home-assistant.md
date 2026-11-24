@@ -110,16 +110,23 @@ Protocol integration pointing at `tcp://<core-host>:${OPENWAKEWORD_PORT}`
 Settings → Devices & Services → Add Integration → **Model Context
 Protocol** (official, HA 2025.2+), once per server:
 
-- Hindsight: `http://<novak-host-tailscale-ip>:13409/mcp/household/`, through the
-  header-adding proxy in docs/proxy.md (HA cannot send the API key itself).
+- The gateway's household connection: `http://<novak-host-tailscale-ip>:13410/mcp/household/k/<household key>`.
+  Create the key with `novak gateway household-key`. The gateway fronts memory,
+  notes and the rest of the household's tools, so this one entry replaces a
+  separate Hindsight entry. HA's MCP client cannot send a custom header, so the
+  key goes in the URL path, which the gateway accepts for exactly this case
+  ([gateway.md](gateway.md)). Treat HA's stored URL as a secret, because it
+  contains the key.
 
-  **The bank is in the URL**, which is why this works at all: HA's MCP client
-  cannot send custom headers per-server for scoping, so a backend that
-  identified users by header could not be scoped for HA. The path solves it.
+  **Register the household connection only.** Never a person's own key on a
+  shared satellite: anyone who talks to it would reach that person's memory, and
+  a voice satellite cannot tell who is speaking. A pipeline that belongs to one
+  person uses that person's key, `/mcp/k/<their key>`, as described in
+  [gateway.md](gateway.md).
 
-  **Register the `household` bank only.** Never a personal one — anyone who
-  talks to a satellite would reach it, and a voice satellite cannot tell who is
-  speaking. See docs/memory-setup.md.
+  Hindsight itself is not reachable from Home Assistant, by design. Its port is
+  published on the host's loopback only (decision #62), and the gateway is the
+  way in. See [memory-setup.md](memory-setup.md).
 
 Their tools become available to the conversation agent. **Keep the voice
 agent's toolset small** — each tool call is a model round-trip and voice

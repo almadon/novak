@@ -211,6 +211,9 @@ services:
       # else (novak gateway admin-key); left unset, the page says so instead of failing.
       GATEWAY_URL: "${CONSOLE_GATEWAY_URL:-http://gateway:8000}"
       GATEWAY_ADMIN_KEY: "${CONSOLE_GATEWAY_KEY:-}"
+      # Asks for changes (forget a memory). Each one is held for the person's yes on their phone;
+      # the key can do nothing else (novak gateway change-key).
+      GATEWAY_CHANGE_KEY: "${CONSOLE_GATEWAY_CHANGE_KEY:-}"
     volumes:
       # The registry is the entire interface between the console and this stack, and it is
       # read-only here. The one writable place is profiles/ (people's standing instructions,

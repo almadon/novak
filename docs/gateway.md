@@ -268,3 +268,19 @@ It returns counts since local midnight, the latest audit rows (who, which tool, 
 results or what a person said), and pending and recent approvals without their tokens (the token is the capability to
 decide, so it never leaves the gateway except in the phone notification). `?person=<name>` narrows everything to one
 person; the console applies it for anyone who is not an admin.
+
+## Changes the console asks for: `POST /admin/changes`
+
+The console is the configuration plane but never the decider. To change something it posts
+`{person, action, ...}` here with its **change key** (`novak gateway change-key`, kept as the hash
+`admin.change_key_sha256`; a different key from the read-only status key, which cannot ask and cannot
+be used to ask). The gateway checks the action against a short fixed list, checks the parameters and that
+the entry is one of that person's own, then holds the request exactly like a removal asked for through
+Open WebUI: a notification with Approve and Deny, a wait, and only on Approve does it call the entry's
+tool as that person with that person's own credential. Denied or unanswered, nothing happens. The audit
+records it with `via: console`. At most three requests per person may wait at once, so a stolen key can make
+a phone buzz three times and nothing more.
+
+Today's one action is `forget_memory` (`{bank, memory_id}`): it calls `invalidate_memory` on the person's own
+`hindsight-<name>` or `code-memory-<name>` entry, which retires the memory without erasing it and can be
+reversed with `restore`. The household bank is not on the list.

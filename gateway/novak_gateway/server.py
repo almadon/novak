@@ -7,6 +7,7 @@ from urllib.parse import parse_qs, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .auth import AuthError, authenticate
+from .changes import ChangeError
 from .directory import key_matches, validate
 
 
@@ -74,6 +75,28 @@ def make_server(gw, oidc, host="0.0.0.0", port=8000):
                 "approvals": gw.approvals.listing(person), "activity": summary},
                 headers={"Cache-Control": "no-store"})
 
+        def _admin_change(self):
+            """The console asking for a change on a person's behalf. Held for that person's yes on their phone."""
+            auth = self.headers.get("Authorization", "")
+            token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+            if not key_matches(token, (gw.dir.settings.get("admin") or {}).get("change_key_sha256")):
+                return self._send(401, {"error": "change key required"})
+            length = int(self.headers.get("Content-Length") or 0)
+            if length <= 0 or length > 8192:
+                return self._send(400, {"error": "bad body"})
+            try:
+                body = json.loads(self.rfile.read(length))
+                if not isinstance(body, dict):
+                    raise ValueError
+            except ValueError:
+                return self._send(400, {"error": "not JSON"})
+            try:
+                gw.changes.request(str(body.get("person", "")), str(body.get("action", "")),
+                                   {k: v for k, v in body.items() if k not in ("person", "action")})
+            except ChangeError as exc:
+                return self._send(exc.status, {"error": exc.message})
+            self._send(202, {"status": "asked"})
+
         def _approval_page(self, token, note=""):
             a = gw.approvals.by_token(token)
             if not a:
@@ -106,6 +129,8 @@ def make_server(gw, oidc, host="0.0.0.0", port=8000):
                     return self._send(404, "Not found", "text/plain")
                 done = gw.approvals.decide(a["id"], m.group(2) == "approve")
                 return self._approval_page(m.group(1), "Recorded." if done else f"Already {a['status']}.")
+            if path == "/admin/changes":
+                return self._admin_change()
             length = int(self.headers.get("Content-Length") or 0)
             if length <= 0 or length > 4 * 1024 * 1024:
                 return self._send(400, {"error": "bad body"})

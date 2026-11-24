@@ -50,7 +50,8 @@ gateway:
   # `novak gateway client open-webui` adds one and shows its key once.
   clients: []
 
-  # The console's read-only status key (novak gateway admin-key): opens GET /admin/today, nothing else.
+  # The console's keys. key_sha256 (novak gateway admin-key) reads GET /admin/today and nothing else;
+  # change_key_sha256 (novak gateway change-key) asks for a change that the person confirms on their phone.
   admin: {}
 
   # Which tools each kind of entry offers. A model given 36 tools for one memory

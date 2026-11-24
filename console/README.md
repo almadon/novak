@@ -4,7 +4,7 @@ A web view over the [Novak](https://github.com/almadon/novak) services layer: pe
 profiles (persona, memories, attached tools) and an admin surface for the MCP
 plugin catalog.
 
-**Status: Today and Profiles are real pages; the rest are still to come.** `.github/workflows/console.yml` typechecks, audits, builds and
+**Status: Today, Approvals, Memory and Profiles are real pages; the rest are still to come.** `.github/workflows/console.yml` typechecks, audits, builds and
 publishes the image to `ghcr.io/almadon/novak-konzol` on every change under `console/`. Today it has a
 design token layer, the Today page (read-only status from the gateway, see `docs/gateway.md`), the Profiles page and a
 placeholder admin page; the plan for what it becomes is the decision at the end of

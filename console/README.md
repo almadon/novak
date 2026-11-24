@@ -1,43 +1,72 @@
-# Novak Console
+# Konzol, the Novak console
 
-A web view over the [Novak](https://github.com/almadon/novak) services layer: per-user
-profiles (persona, memories, attached tools) and an admin surface for the MCP
-plugin catalog.
+**A web console for Novak: see what the assistant did today, browse your own memories, and confirm changes from your phone.**
 
-**Status: Today, Approvals, Memory and Profiles are real pages; the rest are still to come.** `.github/workflows/console.yml` typechecks, audits, builds and
-publishes the image to `ghcr.io/almadon/novak-konzol` on every change under `console/`. Today it has a
-design token layer, the Today page (read-only status from the gateway, see `docs/gateway.md`), the Profiles page and a
-placeholder admin page; the plan for what it becomes is the decision at the end of
-`docs/decisions.md` ("Konzol is the configuration plane"). The Auth.js v5 (pre-1.0) API surface is still
-worth treating as unproven until a real login has been exercised through it.
+> **Status: in testing.** Today, Approvals, Memory and Profiles are real pages in daily use on one deployment. People, Health and Logs are still to come. The Auth.js v5 API is pre-1.0, so treat it as unproven beyond the sign-in this deployment actually exercises.
+> This project comes with no warranty or guarantee of fitness for any purpose. Use it at your own risk.
+>
+> **LLM use.** Built with substantial AI assistance (Claude Code). Design and review are by a human. See [AGENTS.md](../AGENTS.md).
 
-This code used to be its own repository (`novak-konzol`, now archived); it moved into the main repository
-so a change that spans the gateway and the console is one pull request. Its git history came with it.
+## What this does
 
-## Relationship to the rest of the repository
+Konzol is a Next.js app that signs people in through Pocket ID and shows each of them their own slice of Novak. It reads from two places on the server: the gateway (for what happened today and what is waiting for approval) and Hindsight (for memories).
 
-This is an **optional client** of the Novak stack, not a component of it. The
-stack runs without it: `registry/mcp-servers.yaml` over there can be edited by
-hand and applied with `reconciler/reconcile.py`, and nothing here is required.
+It does not hold power of its own. When a person asks it to do something, such as forgetting a memory, it sends the gateway a request, the gateway sends Approve and Deny to that person's phone, and nothing happens until they press Approve. The console never talks to Docker, never decides an approval and never calls a tool on someone's behalf. Secrets appear by name only.
 
-The entire interface between the two repos is **one bind-mounted directory**:
+| Page | Shows |
+|---|---|
+| Today | Calls, approvals and failures for today, in plain words |
+| Approvals | What is waiting, and what was decided recently, with a way to ask for a test notification |
+| Memory | Your own memories (and the household's, if you are an admin), with a request to forget one |
+| Profiles | Persona and attached tools per person |
+| Admin | The tool catalog, over the registry files. A placeholder for now |
+
+## Use cases
+
+- Checking on your phone, over breakfast, what the assistant did yesterday and whether anything needs your yes.
+- Reading what Novak remembers about you and asking it to drop one thing, without editing a database.
+
+## Getting started
+
+The console is a service in the Novak stack, so you rarely run it alone. To work on it:
+
+```bash
+cd console
+npm ci
+npm run typecheck && npm test
+npm run dev                      # http://localhost:3002
+```
+
+Sign-in needs `OIDC_ISSUER`, `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET` (any OpenID Connect provider works, Novak uses Pocket ID). The status pages need the gateway keys and `GATEWAY_URL`. In a deployment, `novak gateway admin-key` and `novak gateway change-key` create those keys, show each one once and store only a hash. See [docs/gateway.md](../docs/gateway.md) for the two keys and what each is allowed to do.
+
+## How it relates to the rest of Novak
+
+The console is an optional client. The stack runs without it, and everything it does can be done by editing a file under `registry/`.
 
 ```
-novak/registry/   ──bind mount──▶   /app/registry   (this app writes it)
-       │
-       ▼
-novak/reconciler/reconcile.py  ──▶  docker compose up -d
+ browser ──▶ Konzol ──▶ gateway   status in (read key), change requests out (change key)
+                │          │
+                │          └──▶ Supernotify ──▶ your phone ──▶ Approve / Deny
+                │
+                └──▶ Hindsight   memories, read on the server
 ```
 
-That's deliberate. The console never talks to Docker, never calls the
-reconciler, and never holds a credential for the stack — it writes a file, and
-something else with no network exposure acts on it.
+- **The registry belongs to the stack.** The console edits it over a bind-mounted directory (`REGISTRY_DIR`) and keeps no copy. Catalog changes are commits, so git history is the audit trail.
+- **The image is built from this folder.** `.github/workflows/console.yml` typechecks, audits, builds and publishes it to `ghcr.io/almadon/novak-konzol` on every change here. The compose file pins that image by digest (decision #45), so a change under `console/` needs a new image and a pin pull request.
+- **Who sees what is decided in one place**, `src/lib/memory.ts`. An admin sees the household's memories and never another person's.
 
-Consequences worth remembering:
+## Documentation
 
-- **The registry is the stack's**, because it describes what the stack runs. The console edits it over
-  the bind mount and never keeps a copy.
-- **Catalog changes are commits** in this repository, so the audit trail is git history.
-- **The image is built from `console/`** by `console.yml`, and compose references it by digest
-  (decision #45). Unlike the Python services, whose code is mounted from the checkout, the console is
-  built into its image, so any change under `console/` needs a new image and a new pinned digest.
+| Read | For |
+|---|---|
+| [DESIGN.md](DESIGN.md) | Colours, type and layout, and why |
+| [docs/gateway.md](../docs/gateway.md) | The status endpoint, the change endpoint and the keys |
+| [docs/decisions.md](../docs/decisions.md) | "Konzol is the configuration plane" and the decisions around it |
+| [docs/security.md](../docs/security.md) | Trust boundaries |
+| [docs/STATE.md](../docs/STATE.md) | What is true right now |
+
+This code used to be its own repository, `novak-konzol`, and its history came with it.
+
+## Licence
+
+[MIT](../LICENSE).

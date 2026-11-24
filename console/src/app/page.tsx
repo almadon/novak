@@ -19,7 +19,7 @@ export default async function Today() {
     return (
       <main className="page">
         <h1>Today</h1>
-        <p>Your sign-in email is not listed for anyone in <code>people.yaml</code>, so there is nothing to show for you yet.</p>
+        <p>You are signed in, but Novak does not know who you are yet. Ask whoever runs Novak to add your email address (<code>people.yaml</code>).</p>
       </main>
     );
   }
@@ -121,7 +121,7 @@ export default async function Today() {
       })()}
 
       <p className="meta">
-        <Link href="/approvals">Approvals</Link> · <Link href="/memory">Memory</Link> · <Link href="/profiles">Profiles</Link>{admin && <> · <Link href="/admin">Admin: MCP catalog</Link></>}
+        <Link href="/approvals">Approvals</Link> · <Link href="/memory">Memory</Link> · <Link href="/profiles">Profiles</Link>{admin && <> · <Link href="/admin">Admin: tool catalog</Link></>}
       </p>
     </main>
   );

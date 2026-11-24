@@ -1,6 +1,6 @@
 # Novak documentation
 
-Everything explanatory lives here. Two kinds of file sit outside this
+Everything explanatory lives here, and the project's front door is the [README](../README.md). Two kinds of file sit outside this
 directory on purpose:
 
 - [`prompts/`](../prompts/novak-chat.md) — the assistant's personas. Those are

@@ -24,7 +24,7 @@ export default async function MemoryPage({ searchParams }: { searchParams: Searc
     return (
       <main className="page">
         <h1>Memory</h1>
-        <p>Your sign-in email is not listed for anyone in <code>people.yaml</code>, so there is no memory to show.</p>
+        <p>You are signed in, but Novak does not know who you are yet. Ask whoever runs Novak to add your email address (<code>people.yaml</code>).</p>
       </main>
     );
   }
@@ -35,7 +35,7 @@ export default async function MemoryPage({ searchParams }: { searchParams: Searc
       <main className="page">
         <h1>Memory</h1>
         {banks.state === "unconfigured"
-          ? <p className="notice warn">The console is not set up to reach memory (HINDSIGHT_URL and HINDSIGHT_API_KEY).</p>
+          ? <p className="notice warn">The console cannot reach Novak's memory yet. Whoever runs Novak needs to set HINDSIGHT_URL and HINDSIGHT_API_KEY.</p>
           : <p className="notice danger" role="alert">{banks.reason}</p>}
       </main>
     );
@@ -46,7 +46,7 @@ export default async function MemoryPage({ searchParams }: { searchParams: Searc
     return (
       <main className="page">
         <h1>Memory</h1>
-        <p>Nothing is remembered for you yet. A bank appears with its first memory.</p>
+        <p>Nothing is remembered for you yet. Memories show up here after Novak keeps something from a conversation.</p>
       </main>
     );
   }

@@ -11,8 +11,8 @@ export default async function AdminPage() {
     if (err instanceof AuthzError) {
       return (
         <main>
-          <h1>Not authorized</h1>
-          <p>This area requires the <code>admins.novak</code> group.</p>
+          <h1>Admins only</h1>
+          <p>This page is for Novak admins. Ask whoever runs Novak if you need access.</p>
         </main>
       );
     }
@@ -21,12 +21,12 @@ export default async function AdminPage() {
 
   return (
     <main>
-      <h1>MCP catalog</h1>
+      <h1>Tool catalog</h1>
       <p>
-        Edits here write <code>registry/mcp-servers.yaml</code>. The host-side
-        reconciler applies it — this console has no Docker access by design.
+        Changes here are saved to <code>registry/mcp-servers.yaml</code> and applied on the
+        server by a separate step, because the console is not allowed to touch Docker.
       </p>
-      <p>Catalog table and edit form — not yet built.</p>
+      <p>The catalog table and edit form are not built yet. For now, edit that file by hand.</p>
     </main>
   );
 }

@@ -28,7 +28,8 @@ directory on purpose:
 | [Decisions](decisions.md) | Every significant choice, with reasoning and cost |
 | [Agent capability decision tree](agent-capability-decision-tree.md) | Evaluating Claude Code, OpenCode, and similar: risk, RBAC, where each one runs |
 | [Security](security.md) | Secrets, permissions, and what the risks actually are |
-| [Running headless](headless-operation.md) | Unattended restarts, and the FileVault trade-off |
+| [Running without a keyboard](headless-operation.md) | How the host comes back after a reboot or a power cut, and what to back up |
+| [Novak on macOS](macos.md) | What differs on Apple Silicon, including the FileVault trade-off |
 
 ## Setting up the parts
 

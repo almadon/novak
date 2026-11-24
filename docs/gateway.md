@@ -269,6 +269,12 @@ results or what a person said), and pending and recent approvals without their t
 decide, so it never leaves the gateway except in the phone notification). `?person=<name>` narrows everything to one
 person; the console applies it for anyone who is not an admin.
 
+Set `approval_page` in `gateway.yaml` to where a tap on the notification body should go: a path inside Home
+Assistant, or the console's Approvals page (`https://<console>/approvals`). It is sent as both `clickAction`
+(Android) and `url` (iOS); without it the app opens on whatever page it last showed. On iOS the Approve and
+Deny buttons appear only when the notification is long-pressed or expanded, which is how iOS shows any
+notification actions. VERIFY: that `url` makes an iOS tap open the page, which was not yet tested.
+
 ## Changes the console asks for: `POST /admin/changes`
 
 The console is the configuration plane but never the decider. To change something it posts

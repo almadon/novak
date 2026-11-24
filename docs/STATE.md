@@ -9,6 +9,8 @@ exit condition" below for why it has not been yet.
 session with live access to Spire and Home Assistant, so most items say what was checked
 directly and what was not.
 
+**Edited 2026-11-24:** the console status below is current (Today, Approvals, Memory and Profiles are built), and the em dashes are gone. Nothing else was re-checked in that pass.
+
 **On this file's own exit condition:** Spire has run daily for weeks and survived a real
 reboot test (decision #37), but the identity, approvals and Open WebUI work below is days
 old and has had one or two real runs each, not the daily use that turns "verified once"
@@ -98,6 +100,11 @@ created yet); a house request in Home Assistant voice through the new pipelines.
 
 ## Open VERIFY items
 
+- **A tap on an approval notification opening the approvals page on iOS.** The gateway now sends
+  the page address as both `clickAction` and `url`, because iOS ignores `clickAction` and was
+  opening the app's last page. It needs `approval_page` set in `gateway.yaml` and a real tap on an
+  iPhone to confirm. The phone must also reach the console's address, so a roaming phone needs
+  Tailscale connected.
 - **Supernotify's behaviour across a release.** The gateway's call shape was checked against v2.16.0
   (top-level `actions`, `delivery` and `dry_run`; list-shaped delivery targets; one delivery named
   explicitly). A release could change it; the tests pin what the gateway sends, not what
@@ -107,11 +114,11 @@ created yet); a house request in Home Assistant voice through the new pipelines.
 
 - Whether Hindsight has a trash, before trusting `delete` to be
   recoverable.
-- ~~Licences marked VERIFY in credits.md~~ — done (decision #47). All
+- ~~Licences marked VERIFY in credits.md~~ Done (decision #47). All
   eight checked directly; none remain. Worth noting: Open WebUI's actual
   licence has a branding-retention clause (exempt under 50 users/30
   days, which this deployment is), and the microWakeWord trainer
-  (decision #43) has no LICENSE file at all — fine for the local,
+  (decision #43) has no LICENSE file at all. That is fine for the local,
   never-redistributed use it gets here, not fine to build on for
   anything redistributed later.
 - **The portal's OAuth-group restriction against a live Pocket ID
@@ -123,8 +130,8 @@ created yet); a house request in Home Assistant voice through the new pipelines.
   `OWUI_OIDC_GROUP_CLAIM`. Decode a real ID token after first login.
 - **The `PERSONA_DRIFT` log line (decision #44) has not been run against
   a live router.** Its logic was checked offline with `litellm` stubbed
-  out — confirmed it fires for `chat`/`deep` and stays silent for
-  `ha-voice` — but `novak drift --live`'s actual `docker compose logs`
+  out. It fires for `chat`/`deep` and stays silent for
+  `ha-voice`, but `novak drift --live`'s actual `docker compose logs`
   grep has never been run against a real deployment. Run it on Spire, and
   ideally confirm the warning genuinely appears if Builtin Tools/Memory
   get flipped back on for a model preset.
@@ -140,10 +147,10 @@ created yet); a house request in Home Assistant voice through the new pipelines.
   device-specific: flashing it onto an actual Voice PE or streaming
   satellite, which `wakeword.md` already flags as costing more than a
   file copy. `openwakeword`'s own server-side model (a different format,
-  for Wyoming satellites — see wakeword.md) is a separate, still-untouched
+  for Wyoming satellites, see wakeword.md) is a separate, still-untouched
   question.
-- **HA's native `litellm` conversation agent is new tonight** — working
-  and verified in this session's testing, but hasn't had the kind of
+- **HA's native `litellm` conversation agent is recent.** It worked
+  and was verified in testing, but hasn't had the kind of
   real-world daily use that would turn "verified once" into "trusted."
   Worth revisiting after it's actually been lived with for a while.
 - **HA persona pull (decision #53) needs confirming on a live HA.** The
@@ -154,9 +161,10 @@ created yet); a house request in Home Assistant voice through the new pipelines.
 
 ## Not started
 
-- Konzol (`console/`, merged into this repository, decision #79) has placeholder pages and a design token layer,
-  no components. Planned order: Today, Approvals, Memory, Profiles, Extensions (Toolchest), People, Health,
-  Logs and audit. Needs a gateway admin API and a write path with phone confirmation first.
+- The rest of Konzol (`console/`, merged into this repository, decision #79). Today, Approvals,
+  Memory and Profiles are built, with a gateway status endpoint and a write path that asks for a
+  phone confirmation (the first change it can ask for is forgetting a memory). Still to build, in
+  this order: Extensions (Toolchest), People, Health, Logs and audit.
 - `CHANGELOG.md`: conformIT's own justification is about changes a user would notice, and there
   has been no tagged release yet; worth starting at the first one.
 - The old claims about an interactive wizard, `docs/security.md`, `LICENSE`, `CLAUDE.md` and
@@ -192,14 +200,14 @@ created yet); a house request in Home Assistant voice through the new pipelines.
   `${REPO_DIR}/...` instead.
 - **`reconciler/router_apply.py` silently falls back to the repo's own
   checked-in template `registry/engines.yaml`** if `$NOVAK_HOME` isn't
-  set in the shell running it — e.g. an ad-hoc `root` SSH session,
+  set in the shell running it, for example an ad-hoc `root` SSH session,
   rather than however the `novak` CLI normally runs. No error, just the
   wrong file, visible only in the dry-run output naming the wrong
   engine. Pass `NOVAK_HOME=...` explicitly outside the CLI's own
   invocation context (decision #42).
 - **Docker container env vars are fixed at container creation.**
   `novak restart <service>` alone does not re-read a changed `env_file`
-  — a genuinely new variable needs the container recreated
+  A genuinely new variable needs the container recreated
   (`docker compose up -d <service>`, not just a restart), same lesson as
   the `reconciler` one above, hit while debugging tonight (decision #42).
 - **A simulation is only a simulation if the flag is where the service looks for it.** A Supernotify

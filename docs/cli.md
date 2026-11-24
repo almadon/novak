@@ -1,4 +1,4 @@
-# `novak` — CLI reference
+# `novak` CLI reference
 
 One command for everything you touch after setup. It lives at
 [`scripts/novak`](../scripts/novak). `bootstrap.sh` symlinks it onto PATH at
@@ -17,38 +17,38 @@ ln -sf "$PWD/scripts/novak" ~/.local/bin/novak
 ```
 
 Run with no arguments and it opens an interactive menu instead of printing
-`status` — see [The menu](#the-menu) below. Every command in this reference
+`status`, as described in [The menu](#the-menu) below. Every command in this reference
 still works exactly as shown when typed directly; the menu is a second way
 in, not a replacement for scripting against these.
 
 ## Unraid (decision #35)
 
-Every command in this reference works the same way on Unraid — same
-`novak adopt`, same `novak drift`, same `novak status`. Two things differ,
+Every command in this reference works the same way on Unraid, including
+`novak adopt`, `novak drift` and `novak status`. Two things differ,
 both because the platform genuinely has no equivalent, not by choice:
 
 - **Where it's linked from.** `scripts/bootstrap-unraid.sh` (run once, as
   root, after cloning the repo) symlinks it at `/usr/local/bin/novak` and
-  adds a line to `/boot/config/go` to re-create that symlink on every boot
-  — required on Unraid specifically, since `/usr/local/bin` sits on a
+  adds a line to `/boot/config/go` to re-create that symlink on every boot.
+  That is required on Unraid because `/usr/local/bin` sits on a
   RAM-based overlay rebuilt from the flash image at each boot, unlike a
   normal Linux root filesystem. It also writes `NOVAK_HOME` to
   `/boot/config/novak/novak_home`, since `$HOME` (`/root`) is not a safe
-  default the way it is on macOS — Unraid's Compose Manager plugin always
+  default the way it is on macOS. Unraid's Compose Manager plugin always
   derives its own project directory from wherever `docker-compose.yml`
   lives, so `NOVAK_HOME` has to be that exact path.
 - **Where secrets live.** No OS keychain exists to use headlessly on
-  Unraid — there's no logged-in desktop session to unlock one. `novak
+  Unraid, because there's no logged-in desktop session to unlock one. `novak
   secret set` writes the real value directly into `.env` instead (protected
   by file permissions, 600, checked by `novak secret verify`) rather than
   the macOS Keychain. This is a genuinely lower security bar, not a
-  disguised equivalent — see [`scripts/lib/secrets.sh`](../scripts/lib/secrets.sh)
+  disguised equivalent. See [`scripts/lib/secrets.sh`](../scripts/lib/secrets.sh)
   for the reasoning. Every other command that touches a secret (`config`,
   `status`, `omlx apply`'s `OMLX_API_KEY` read, the checklist's live probes)
   goes through the same abstraction and needs no per-platform handling.
 
 `novak omlx apply` refuses outright on Linux (oMLX is Apple Silicon only);
-everything else — including `novak router apply` for Ollama/engines.yaml —
+everything else, including `novak router apply` for Ollama/engines.yaml,
 works identically on both platforms.
 
 ---
@@ -57,14 +57,14 @@ works identically on both platforms.
 
 | Command | What it does |
 |---|---|
-| `novak` | interactive menu — everything below, no arguments needed (aliases: `menu`, `tui`) |
+| `novak` | interactive menu with everything below, no arguments needed (aliases: `menu`, `tui`) |
 | `novak status` | what's configured, what's running |
 | `novak doctor` | the same checks, explicitly starting nothing |
 | `novak ports` | what's listening, and whether it's reachable |
 | `novak config` | every setting, and where its value came from |
 | `novak config get KEY` | one setting |
 | `novak config set KEY VAL` | edit `.env` in place, preserving comments |
-| `novak secret list` | which secrets exist — never their values |
+| `novak secret list` | which secrets exist, never their values |
 | `novak secret set KEY` | store one, prompting without echo |
 | `novak secret set KEY --generate` | generate and store one, never displaying it |
 | `novak secret migrate` | Linux: move any secret still in `.env` into `secrets.env` (names only are printed). `novak up` does this by itself, so it rarely needs running by hand |
@@ -81,7 +81,7 @@ works identically on both platforms.
 | `novak rename OLD NEW` | rename a registry entry everywhere it is named and move its credential |
 | `novak drift` | where this deployment differs from the repo (aliases: `verify`, `check`) |
 | `novak drift --live` | also greps router logs for persona injection silently skipped (decision #38) |
-| `novak omlx apply` | apply `registry/omlx.yaml` — models, profiles, TTLs |
+| `novak omlx apply` | apply `registry/omlx.yaml` (models, profiles, TTLs) |
 | `novak owui drift` / `apply` | check, or make, Open WebUI's tool connections and model presets match `registry/openwebui.yaml` (decision #66); needs `OWUI_ADMIN_API_KEY` |
 | `novak backup [--dest DIR]` | write one consistent copy of settings, secrets, the registry and every database into a single directory (default `$NOVAK_HOME/backup/staging`) for a backup tool to pick up (decision #80) |
 | `novak router apply` | apply `registry/engines.yaml` -> `router/config.yaml` (decision #28); needs `novak restart router` after |
@@ -192,18 +192,18 @@ you get this instead of a `status` printout:
  1) Status
  2) Ports
  3) Drift / verify
- 4) Guided setup — configure what's missing
- 5) Deployment checklist — phase by phase, with live checks
- 6) Config — view or change a setting
- 7) Secrets — view, set, or verify one
- 8) Registry — MCP servers the reconciler sees
- 9) oMLX — apply models and profiles
-10) Stack — up / update / down / restart / logs
+ 4) Guided setup: configure what's missing
+ 5) Deployment checklist: phase by phase, with live checks
+ 6) Config: view or change a setting
+ 7) Secrets: view, set, or verify one
+ 8) Registry: MCP servers the reconciler sees
+ 9) oMLX: apply models and profiles
+10) Stack: up / update / down / restart / logs
 11) Quit
 ```
 
 No new dependency for this. [gum](https://github.com/charmbracelet/gum) was
-tried first, since it already solves "menu in a shell script" well —
+tried first, since it already solves "menu in a shell script" well, but
 installing it failed here, because this account has no write access to
 `/opt/homebrew`, the same class of problem `bootstrap.sh`'s CLI-symlink and
 LaunchAgent fixes exist to avoid. A brew-installed binary as a hard
@@ -211,7 +211,7 @@ dependency of the CLI's *default* invocation would reintroduce that for
 every fresh deployment, so the menu is plain `read` and `case`: nothing to
 install, works the moment `bootstrap.sh` has run.
 
-Every entry runs the same command you'd type directly — the menu is a
+Every entry runs the same command you'd type directly. The menu is a
 second way in, not a separate implementation. Numbers 1, 2, 3, 8 just call
 `status`/`ports`/`drift`/`registry`; the rest ask a short follow-up question
 (which key, generate or paste, which service) and then call `config`,
@@ -222,27 +222,27 @@ second way in, not a separate implementation. Numbers 1, 2, 3, 8 just call
 Walks through whatever `novak status` would otherwise just list as missing,
 asking for each value instead of making you go run the command yourself. If
 the repo has added settings this deployment's `.env` doesn't have yet (check
-`novak drift` reports this too), it offers to adopt them first — refuse and
+`novak drift` reports this too), it offers to adopt them first. If you refuse,
 anything needing one of those lines reports "Unknown setting" instead of
 prompting, same as running `config set` on an unrecognized key directly
 would.
 
 Required settings and secrets first, then the console and the portal as
-separate opt-in passes — each one is a real yes/no question, not assumed
+separate opt-in passes. Each one is a real yes/no question, not assumed
 from being present in the menu.
 
 ### Deployment checklist (5)
 
 A phase-by-phase read-through of
 [deploy-checklist.md](deploy-checklist.md), pausing between phases. Where a
-step is something this CLI can actually check — a file present, a port
-answering, a process running — it runs that check and reports pass or fail,
+step is something this CLI can actually check (a file present, a port
+answering, a process running), it runs that check and reports pass or fail,
 rather than just repeating the markdown. Where the step is inherently
 manual (clicking through Pocket ID's own admin UI, downloading a model
 file), it prints the instruction and asks you to confirm you did it.
 
 Nothing here is saved between runs. It's a guided walk with real checks
-where checks are possible, not a persisted checklist — rerun it any time to
+where checks are possible, not a persisted checklist. Rerun it any time to
 recheck everything from the top.
 
 Two of its checks are worth knowing about because they were wrong on the
@@ -250,8 +250,8 @@ first pass and are recorded here rather than quietly fixed: the oMLX check
 originally sent no API key and didn't handle a non-2xx response, so an
 `API key required` error looked identical to "reachable, no models loaded."
 The Hindsight check originally sent a bare `GET`, which Hindsight answers
-with `200 {}` regardless of authentication — a handshake response, not a
-tool call — so it read as "wide open" when a real unauthenticated tool call
+with `200 {}` regardless of authentication (a handshake response, not a
+tool call), so it read as "wide open" when a real unauthenticated tool call
 correctly gets refused with 401. Both were reproduced directly against the
 running stack before being fixed, which is the reason to trust the numbers
 this reports over a first instinct about what a health check like this
@@ -282,8 +282,8 @@ novak config get HOST_NAME
 novak config set OMLX_PORT 8000
 ```
 
-`config` never prints a secret's value, and `config set` refuses to write one —
-it redirects you to `novak secret set`, so a real secret cannot end up in
+`config` never prints a secret's value, and `config set` refuses to write one.
+It redirects you to `novak secret set`, so a real secret cannot end up in
 `.env` by accident.
 
 Changes are not live. `novak up` applies them, and recreates only the
@@ -311,18 +311,18 @@ tududi` writes the entry and asks for the token, which it stores as
 `TUDUDI_<INSTANCE>_<USER>_API_TOKEN`.
 
 A `container` entry is the other case: Novak runs it, so it needs both halves
-as variables — `VIKUNJA_URL` and `VIKUNJA_API_TOKEN`. The reconciler skips a
+as variables: `VIKUNJA_URL` and `VIKUNJA_API_TOKEN`. The reconciler skips a
 container entry whose variables are unset and says which ones, so an
 unconfigured integration never blocks the rest.
 
-`auth:` in an external entry is **informational**. Nothing injects it — the
+`auth:` in an external entry is **informational**. Nothing injects it. The
 token goes into the *client's* registration, as an Authorization header. It is
 recorded so the registry can answer "what do I need to wire this up".
 
 ### When a reverse proxy is in front
 
 `HOST_NAME` is how machines in this stack reach each other. It is **not** how a
-person reaches a service through a proxy — that name lives on another host and
+person reaches a service through a proxy. That name lives on another host and
 nothing here can discover it. Set it explicitly:
 
 ```bash
@@ -335,7 +335,7 @@ Blank means "no proxy, use `HOST_NAME`", which is right for direct access.
 This is worth getting right because it fails *softly*. Open WebUI derives its
 OIDC callback from the incoming request's Host header when nothing pins it, so
 a login started at one hostname returns you to whichever name you happened to
-type — and every such name is a separate redirect URI the IdP must have
+type, and every such name is a separate redirect URI the IdP must have
 registered. The symptom is being bounced to a URL you never asked for rather
 than an error. Setting `OWUI_PUBLIC_URL` pins both the site URL and the
 callback, leaving one URI to register.
@@ -348,7 +348,7 @@ docker compose config | grep -E 'WEBUI_URL|OPENID_REDIRECT_URI'
 
 ### Signing in to Open WebUI with Pocket ID
 
-Configured through `.env`, not in Open WebUI's admin panel — it reads these at
+Configured through `.env`, not in Open WebUI's admin panel. It reads these at
 startup and has no UI for them:
 
 ```
@@ -368,7 +368,7 @@ and provider URL are all present.
 
 Three kinds, because who else knows the value decides how you may set it.
 
-**Externally owned** — `OMLX_API_KEY`, `OIDC_CLIENT_SECRET`,
+**Externally owned**: `OMLX_API_KEY`, `OIDC_CLIENT_SECRET`,
 `OUTLINE_<INSTANCE>_<USER>_API_KEY`, `VIKUNJA_API_TOKEN`, and the per-account
 Tududi tokens.
 
@@ -380,7 +380,7 @@ outage that looks like a permissions problem.
 novak secret set OMLX_API_KEY      # paste the value from oMLX's own settings
 ```
 
-**Shared** — `HINDSIGHT_API_KEY`.
+**Shared**: `HINDSIGHT_API_KEY`.
 
 We generate it, but Open WebUI and Home Assistant each register the MCP endpoint
 using it as a bearer token. Generating is fine; rotating it means re-registering
@@ -391,7 +391,7 @@ novak secret set HINDSIGHT_API_KEY --generate
 novak secret show HINDSIGHT_API_KEY     # then paste into each client
 ```
 
-**Internal** — `CONSOLE_AUTH_SECRET`, `WEBUI_SECRET_KEY`, and anything else in
+**Internal**: `CONSOLE_AUTH_SECRET`, `WEBUI_SECRET_KEY`, and anything else in
 neither list.
 
 One container reads it and nobody else ever needs it. Generate it and never look
@@ -415,7 +415,7 @@ novak restart hindsight  # one service
 novak logs open-webui    # follow
 ```
 
-`up` is the only thing that applies configuration. It is safe to re-run — that
+`up` is the only thing that applies configuration. It is safe to re-run, and that
 is the intended way to pick up any change, and it recreates only what changed.
 
 It refuses to start if a required setting or secret is missing, rather than
@@ -424,13 +424,13 @@ refuse.** Anything that only it needs is skipped, with a line saying which
 values were missing, and everything else starts:
 
 ```
-skipped:  vikunja — not configured: VIKUNJA_URL, VIKUNJA_API_TOKEN
-skipped:  console — not configured: OIDC_ISSUER, OIDC_CLIENT_SECRET
+skipped:  vikunja, not configured: VIKUNJA_URL, VIKUNJA_API_TOKEN
+skipped:  console, not configured: OIDC_ISSUER, OIDC_CLIENT_SECRET
 ```
 
 That covers MCP servers (skipped by the reconciler) and the console (gated
 behind a compose profile). Set the values and re-run `novak up` to add one
-later — nothing else is disturbed.
+later, and nothing else is disturbed.
 
 Only genuinely shared values refuse: `HOST_NAME`, which every service builds
 its URLs from, and `HINDSIGHT_API_KEY`, without which the memory endpoint would
@@ -465,16 +465,15 @@ Being unpinned cuts both ways. It also means an upstream breaking change
 reaches you the next time you happen to run this, with no version to roll
 back to. If that becomes a real problem, the fix is pinning digests in
 `docker-compose.yml`, which turns an update from an automatic pull into a
-deliberate, reviewable edit — worth a decision entry if you go that route,
+deliberate, reviewable edit. It is worth a decision entry if you go that route,
 not a CLI flag.
 
 ---
 
 ## Checking
 
-`novak status` — what is configured and what is running.
-`novak doctor` — identical checks, named for when you want to be sure nothing
-starts.
+`novak status` shows what is configured and what is running. `novak doctor`
+runs identical checks and is named for when you want to be sure nothing starts.
 
 `novak ports` probes each port by connecting, rather than reading sockets:
 `lsof` without `sudo` only sees your own processes, so a service run by another
@@ -488,11 +487,11 @@ Console          3002   yes         yes
 
 Reading that table:
 
-- **both yes** — reachable from other machines.
-- **localhost yes, tailscale no** — bound to `127.0.0.1` only. For oMLX that is
+- **both yes**: reachable from other machines.
+- **localhost yes, tailscale no**: bound to `127.0.0.1` only. For oMLX that is
   its own `server.host` setting, not anything Novak controls. `HOST_NAME`
   affects no binding anywhere; it only builds URLs.
-- **both no** — not running. Try `novak status`, then `novak logs <service>`.
+- **both no**: not running. Try `novak status`, then `novak logs <service>`.
 
 The Tailscale column asks the system daemon by its socket. On macOS a bare
 `tailscale` command may answer from a per-user GUI app instead, which can report
@@ -512,7 +511,7 @@ novak omlx apply --dry-run  # show what would change
 ```bash
 novak router apply            # apply registry/engines.yaml -> router/config.yaml
 novak router apply --dry-run  # show what would change
-novak restart router          # required after — LiteLLM reads config.yaml
+novak restart router          # required after, because LiteLLM reads config.yaml
                                # at container start, not on a hot reload
 ```
 
@@ -521,7 +520,7 @@ See [engines.md](engines.md) for what qualifies as an engine and
 for the two documented today.
 
 Writes oMLX's own JSON files rather than calling its admin API, which would need
-a second credential — decision 17. Because oMLX keeps this state in memory and
+a second credential (decision 17). Because oMLX keeps this state in memory and
 rewrites it on its own saves, applying **stops oMLX, writes, and starts it
 again**, dropping loaded models.
 
@@ -530,7 +529,7 @@ every run for that reason, and non-fatally: oMLX is a host app the stack does
 not manage, and at boot it may not be up yet. A missing inference server should
 no more stop the stack than a missing task tracker.
 
-Unknown field names are **refused**, never dropped — a profile that quietly did
+Unknown field names are **refused**, never dropped. A profile that quietly did
 not take is the failure this exists to prevent. The accepted list is read from
 the installed oMLX itself, so it tracks the version actually running.
 
@@ -551,7 +550,7 @@ reaches an existing install, and nothing says so.
 That failure is silent by construction: the stack stays healthy, every file
 stays valid, and the deployment simply describes an older system. This one ran
 for a while on a registry that still listed a memory backend replaced two
-migrations earlier — and carried no Hindsight endpoints at all, so nothing
+migrations earlier, and carried no Hindsight endpoints at all, so nothing
 advertised memory to any client. Nothing looked wrong.
 
 ```bash
@@ -569,21 +568,21 @@ Copies settings the repo has added into your `.env`, with the comments that
 explain them, and **never touches a value already set** (it backs the file up
 first regardless). This matters more than it sounds: `novak config set` only
 accepts keys already present in `.env`, so a setting the repo added is
-unreachable —
+unreachable until the file gains the line:
 
 ```
 $ novak config set OWUI_OIDC_ISSUER https://...
 Unknown setting 'OWUI_OIDC_ISSUER'. 'novak config' lists them.
 ```
 
-— until the file gains the line. Without `--adopt` the only way through is
+Without `--adopt` the only way through is
 hand-editing `.env`, which is the interface this CLI exists to replace.
 
 Adopting only adds the lines. Values stay at the repo's defaults until you set
 them, and any secrets among them still need `novak secret set`. `novak status` shows a one-line pointer when
 the registry differs, since nobody thinks to look for a silent problem.
 
-It is **read-only and credential-free** — it opens two files and prints the
+It is **read-only and credential-free**. It opens two files and prints the
 difference, so it is safe to run anywhere and cannot cause the drift it
 reports. Adopting the repo's registry is left to you, with the commands
 printed, because your local choices get overwritten.
@@ -593,25 +592,24 @@ novak drift --live
 ```
 
 Everything above compares files. This instead greps the router's own logs
-(`docker compose logs router`, last 24h) for `PERSONA_DRIFT` — a warning
+(`docker compose logs router`, last 24h) for `PERSONA_DRIFT`, a warning that
 `router/persona_hook.py` logs whenever a request for `chat` or `deep` arrives
 with its own `system` message already attached, which makes the router skip
 injecting `prompts/*.md` for that call (decision #38's actual failure mode:
 Open WebUI's own Builtin Tools/Memory capabilities silently sending one).
-Needs docker reachability to wherever the stack runs, not "anywhere" — that's
+Needs docker reachability to wherever the stack runs, not "anywhere", which is
 why it's opt-in rather than part of the default check. `ha-voice` is excluded
 on purpose: HA's native `litellm` integration is expected to send its own
 system message (decision #42), so a hit there would be noise, not signal.
 
-The same `--live` run also checks the *other* half of this: whether the
-*text* HA's Instructions field holds still matches
-`prompts/novak-voice.md` — a second, independently-maintained copy
-(decision #42). Unlike the router-log check above, this needs its own
-credential (`HA_URL`/`HA_DRIFT_TOKEN`, deliberately not `HA_MCP_TOKEN` —
-see decision #44/#52) and skips silently, with a pointer to
-`docs/home-assistant.md`, when that isn't configured. This half was built
-without a live HA instance to check it against — see STATE.md's Open
-VERIFY list before trusting its output.
+The same `--live` run also checks the pull that feeds Home Assistant's voice persona (decision #53).
+Home Assistant reads `prompts/novak-voice.md` through a small persona server, so there is no pasted
+copy to drift. What can still go wrong is the pull itself, so this confirms that
+`sensor.novak_voice_persona` exists, is available, and holds the same text as the file. It reads one
+entity's state with its own credential (`HA_URL` and `HA_DRIFT_TOKEN`, a non-admin user's token and
+never an admin one) and skips quietly, with a pointer to `docs/home-assistant.md`, when that isn't
+configured. It cannot prove the agent's Instructions field contains the template, because Home Assistant
+gives no read access to that, so ask `ha-voice` who it is once to confirm.
 
 ## When something breaks
 

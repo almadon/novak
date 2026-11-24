@@ -121,7 +121,7 @@ export default async function Today() {
       })()}
 
       <p className="meta">
-        <Link href="/profiles">Profiles</Link>{admin && <> · <Link href="/admin">Admin: MCP catalog</Link></>}
+        <Link href="/memory">Memory</Link> · <Link href="/profiles">Profiles</Link>{admin && <> · <Link href="/admin">Admin: MCP catalog</Link></>}
       </p>
     </main>
   );

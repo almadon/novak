@@ -106,3 +106,11 @@ textarea:focus-visible, .button:focus-visible, a:focus-visible { outline: var(--
 .stats div { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-3) var(--space-4); min-width: 6rem; }
 .stats dt { color: var(--text-muted); font-size: var(--text-sm); }
 .stats dd { margin: 0; font-size: var(--text-xl); font-weight: var(--weight-medium); }
+
+/* Memory */
+.memory p { margin: 0 0 var(--space-1); max-width: none; }
+input[type="search"], select {
+  font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: var(--space-2) var(--space-3);
+}
+input[type="search"] { flex: 1 1 14rem; }

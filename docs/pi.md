@@ -16,7 +16,7 @@ pi --append-system-prompt "$(novak pi hint)" --model novak/code
 `models.json` holds no key: it says `$ROUTER_API_KEY` and Pi reads the environment. On a machine
 that is not Spire, run `novak pi config` on Spire and copy the output, or pass `--url`. Hosted
 providers (Anthropic, OpenAI and others) can be added to the same file for work that should not
-use the local models; that is a decision about where your code goes, not a Novak setting.
+use the local models. That is a decision about where your code goes, not a Novak setting.
 
 ## What to expect from the local models
 

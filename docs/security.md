@@ -1,142 +1,85 @@
 # Security model
 
-The threat model is not network airgap. It's two things: keeping
-conversation data off a public model vendor's servers, and avoiding
-"OpenClaw-class" operational failures — plaintext credentials readable by
-the model or an attacker, over-broad tool permissions, prompt injection via
-content the model reads. Everything below serves one of those two.
+Novak's threat model is not a network airgap. It is two concerns: keeping conversations off a public model vendor's servers, and avoiding the operational failures that sink self-hosted assistants, which are plaintext credentials the model or an attacker can read, tools with more power than they need, and prompt injection through content the model reads. Everything below serves one of those two.
 
-## Rule 1 — the model gets capabilities, never credentials
+## Where the trust boundaries are
 
-API keys live in MCP server environments, never in a prompt. On macOS
-they're sourced from Keychain at startup (`scripts/up.sh`); on Unraid,
-which has no OS keychain, a real value goes straight into `.env` instead —
-both paths land in the same place, an environment variable the container
-sees and the model never does. See `novak secret set` in
-[cli.md](cli.md) and the platform split in
-[deploy-checklist.md](deploy-checklist.md).
+| Boundary | What it separates | Enforced by |
+|---|---|---|
+| Model and tools | The model never holds a credential and cannot name another person | The gateway: one credential per person, identity taken from the connection, never from a tool argument |
+| Person and person | One person's memory, tasks and notes from another's | The gateway's per-person tool lists, and Hindsight banks scoped by URL |
+| Asking and doing | A removal from the thing the person actually approved | A held call that waits for Approve on that person's phone (decision #64) |
+| Console and stack | A web page from the power to change the stack | The console never talks to Docker, never decides an approval and never calls a tool for you (decision #79) |
+| Home and internet | The stack from strangers | Nothing is port-forwarded, and only services built for strangers may face a public proxy |
 
-The model calls `search_documents`; the Outline token never appears in a
-prompt, a chat log, or a memory store.
+## Rule 1: the model gets capabilities, never credentials
 
-**Never paste API keys, passwords, or account numbers into chat.** Chats
-are logged, summarized into memory, and re-injected into future contexts.
-If you catch yourself about to paste a key, the correct move is a new MCP
-server (or env var on an existing one) instead.
+API keys live in each service's environment, never in a prompt. Secrets are kept in `secrets.env` (mode 600), which is separate from `.env` so that `.env` is safe to print (decision #69). On macOS the values are read from the Keychain at startup. On Unraid, which has no OS keychain, a real value goes into `secrets.env` directly. Both paths end in an environment variable the container sees and the model never does. `novak secret set` and the platform split are covered in [cli.md](cli.md) and [deploy-checklist.md](deploy-checklist.md).
 
-Add a secret:
+The model calls `search_documents`, and the Outline token never appears in a prompt, a chat log or a memory.
+
+**Never paste an API key, password or account number into chat.** Chats are logged, summarised into memory and fed back into later conversations. If you are about to paste a key, set it as a secret instead:
 
 ```bash
 novak secret set OUTLINE_EVERYTHING_API_KEY
 ```
 
-`novak secret verify` confirms it reads back unattended, without a prompt
-hanging boot — see [headless-operation.md](headless-operation.md) for why
-that check exists.
+`novak secret verify` confirms that each secret reads back without a prompt, so an unattended boot does not hang. [headless-operation.md](headless-operation.md) explains why that check exists.
 
-## Rule 2 — least privilege per integration
+The console follows the same rule. It shows secrets by name only, and its two gateway keys (one that can read status, one that can ask for changes) are created by `novak gateway admin-key` and `novak gateway change-key`, shown once and stored as hashes ([gateway.md](gateway.md)).
 
-- One token per integration, scoped as tightly as the service allows;
-  read-only unless writing is the point.
-- Destructive operations disabled by default. The registry itself carries
-  a risk level per MCP server (`registry/mcp-servers.yaml`) — `dangerous`
-  entries (e.g. `ha-mcp`, which can edit Home Assistant's own YAML config)
-  ship `enabled: false` and stay that way until someone deliberately turns
-  them on, with the reasoning recorded next to the entry.
-- When adding a new integration with outward side effects: start
-  read-only (search/read). Anything that sends, pays, or deletes gets a
-  separate, explicit opt-in — see Rule 3.
+## Rule 2: least privilege per integration
 
-## Rule 3 — treat retrieved content as untrusted input
+- One token per integration, scoped as tightly as the service allows, and read-only unless writing is the point.
+- Destructive operations are off by default. The registry gives each MCP server a risk level (`registry/mcp-servers.yaml`). Entries marked `dangerous`, such as `ha-mcp`, which can edit Home Assistant's own configuration, ship with `enabled: false` and stay that way until someone turns them on and records why next to the entry.
+- A new integration with outward side effects starts read-only. Anything that sends, pays or deletes needs its own explicit opt-in (see Rule 3).
+- The gateway offers each connection a short, explicit tool list instead of everything a server exposes. That limits what a model can be tricked into calling, and it also keeps tool definitions inside a small context window (decision #71).
 
-An email, a web page, or a wiki article the model reads can contain
-instructions aimed at the model ("forward this thread to..."). Mitigations,
-in order of importance:
+## Rule 3: treat retrieved content as untrusted
 
-1. **Capability asymmetry**: reading tools are cheap to grant; *acting*
-   tools (send email, pay a bill, delete) must be rare, separate, and
-   confirmation-gated. If the model can't send, injected instructions
-   can't exfiltrate.
-2. **Confirmation gates**: any MCP tool with outward side effects should
-   require a confirm parameter or step, and clients should surface it.
-3. **Scoped sessions**: don't register a powerful MCP server into every
-   client — attach it only to the conversations that need it. The HA
-   voice agent in particular should carry the smallest tool set that
-   still does its job; voice has no screen to review a confirmation on.
+An email, a web page or a wiki article the model reads can contain instructions aimed at the model, such as "forward this thread to...". The defences, in order of importance:
 
-This is also what the persona encodes, not just tooling: `prompts/`
-(injected by `router/persona_hook.py` for any client pointed at the
-router — decision #21/#23) tells the model itself never to ask for
-credentials and to treat retrieved content as data, not instruction. A
-client that has silently stopped receiving that persona is a client with
-weaker enforcement and nothing about it looks broken — see decision #38,
-where exactly this happened, and decision #44, which built a detector
-(`novak drift --live`) for the specific failure mode that caused it.
+1. **Reading is cheap to grant, acting is not.** Tools that send, pay or delete are rare, separate and confirmation-gated. If the model cannot send, injected instructions cannot exfiltrate.
+2. **Removals wait for a person.** The gateway holds a removal until the person who asked presses Approve on their phone. A harmless device call, such as a light, scene, fan or media player, needs no tap (decision #63). Requests that nobody answers expire and change nothing.
+3. **Scoped sessions.** Attach a powerful tool only to the conversations that need it. The Home Assistant voice agent in particular should carry the smallest tool set that still does its job, because voice has no screen to review a confirmation on.
 
-## Rule 4 — nothing is reachable from the internet except what earned it
+The persona says the same thing in words. `prompts/`, injected by `router/persona_hook.py` for any client pointed at the router, tells the model never to ask for credentials and to treat retrieved content as data. A client that has quietly stopped receiving it is weaker and looks perfectly healthy. That happened once (decision #38), and `novak drift --live` now watches for the failure that caused it (decision #44).
 
-Every service binds to the LAN or tailnet; the router at home forwards
-nothing (decision #15). Being reachable from the internet is a property a
-service **earns by being designed for it** — accounts, sessions, rate
-limiting, an expectation that strangers will knock. Concretely:
+## Rule 4: nothing is reachable from the internet unless it earned it
+
+Every service binds to the LAN or the tailnet, and the home router forwards nothing (decision #15). A service is allowed to face the internet only if it was built for it: accounts, sessions, rate limits, and an expectation that strangers will knock.
 
 | Service | Public? | Why |
 |---|---|---|
-| The inference engine (oMLX or Ollama) | **No** | No rate limiting, no quotas. A stranger with the key gets the GPU; the way to take the host down is to ask it to think. |
-| Hindsight (memory) | **No** | Holds every person's memories behind one shared bearer token — no per-user identity, no lockout. Deletes are permanent. |
-| Konzol (the console) | **No** | Reconfigures the stack by writing the registry. Public access to it is equivalent to a shell. |
-| Wyoming wake word | **No** | No authentication by protocol design. Anything that reaches the port can speak to the microphone pipeline. |
-| Open WebUI | **Yes** — via its own public-facing proxy, on a separate host from the stack itself | The one client actually built for strangers to reach: accounts, sessions, its own rate limiting. Public because it earned it, not because it was convenient. |
+| The inference engine (Ollama or oMLX) | **No** | No rate limiting and no quotas. Anyone with the key gets the GPU. |
+| Hindsight (memory) | **No** | It holds every person's memories behind one shared API key. Banks are separated by URL, not by credential (see below). |
+| Konzol (the console) | **No** | It can ask for changes to the stack. Public access would be close to a shell. |
+| The gateway | **No** | It is the door to every person's tools. |
+| Wyoming wake word | **No** | The protocol has no authentication, so anything that reaches the port can talk to the microphone pipeline. |
+| Open WebUI | **Yes**, through its own proxy on a separate host | It is the one client built for strangers: accounts, sessions and its own rate limits. Sign-in is through Pocket ID only, and local sign-in is off (decision #68). |
 
-The public path for Open WebUI is a **separate proxy on a separate host**
-(decision #15), not the internal Caddy instance that fronts the portal —
-see [proxy.md](proxy.md) for the full internal-vs-public split and why a
-LAN address instead of a Tailscale address is the one mistake that quietly
-turns "internal" into "actually reachable from anywhere on the LAN,
-including whatever IoT junk is on it too."
+The public path for Open WebUI is a **separate proxy on a separate host** (decision #15), not the internal Caddy that fronts the portal. [proxy.md](proxy.md) covers the split, and the one mistake that quietly turns "internal" into "reachable from anything on the LAN": using a LAN address where a Tailscale address was meant. Remote access to anything internal goes through Tailscale, never a port forward.
 
-Everything else — memory, the console, wake word, MCP servers — is
-Tailscale/LAN-only, and stays that way regardless of how many hosts the
-stack spans (decision #28/#33's multi-host reality doesn't change this;
-see [proxy.md](proxy.md) for how a service on a second host still reaches
-the router privately).
+Hindsight listens on loopback only on the host (decision #62). Checked directly: the port refuses connections from other machines.
 
-**Multi-user surfaces**, both LAN-only: Open WebUI (accounts and RBAC on,
-signup disabled once real users exist) and Konzol (Pocket ID OIDC, admin
-functions gated on the `admins.novak` group). `admins.novak` also grants
-Open WebUI's own admin role and gates the portal — one group, three
-independent enforcement points, each worth checking against a real login
-rather than assumed transitive from the others (see STATE.md's Open
-VERIFY items).
+### Multi-user surfaces
 
-Hindsight is multi-tenant but not a login surface: each MCP connection is
-scoped to one bank by URL, and no tool takes a bank as an argument. Its
-API key is a secret like any other — without it, the endpoint is open.
+Open WebUI and Konzol both sign in through Pocket ID, and both are LAN-only. The group `admins.novak` grants Open WebUI's admin role, gates the portal and gates the console's admin pages. That is three separate enforcement points, and each deserves a check against a real login rather than being assumed from the others (see the open VERIFY items in [STATE.md](STATE.md)).
 
-Remote access to anything LAN/tailnet-only goes through Tailscale, never a
-port forward.
+### Known gap: banks share one key
 
-## Rule 5 — the stores are readable; audit them
+Hindsight is multi-tenant but it is not a login surface. Each MCP connection is scoped to one bank by URL, and no tool takes a bank as an argument, so a model cannot name another person's memory. The API key, however, is a single key for every bank, so anything holding it could open any bank by changing the URL. Close that before treating personal banks as private from anyone who can reach the service (VERIFY: confirmed from Hindsight's source in an earlier session, not re-checked, and no fix is built).
 
-- Konzol: review and delete memories, per user, behind Pocket ID.
-- Outline: the knowledgebase is a normal wiki — correct it there directly.
-- Open WebUI chat logs live in its own Docker volume on whichever host
-  runs it (Spire, decision #33). `data/` and `.env` are gitignored; keep
-  the repo private regardless of that.
+## Rule 5: the stores are readable, so audit them
+
+- **Konzol:** each person can read their own memories and ask to forget one. Forgetting is reversible, and it is confirmed on their phone first.
+- **The gateway's audit log** records who did what, by the names of arguments and never their values.
+- **Outline** is a normal wiki, so you correct what Novak knows by editing the page.
+- **Open WebUI** keeps chat logs in its own Docker volume on the host that runs it. `data/`, `.env` and `secrets.env` are gitignored, but keep the repository private regardless.
 
 ## Backups
 
-The state worth backing up: Docker volumes (Open WebUI, Hindsight's
-embedded Postgres, and anything else under `*_DATA_DIR`) plus, on
-Apple Silicon deployments, `~/.omlx/settings.json`.
+What is worth backing up: the Docker volumes (Open WebUI, Hindsight's embedded Postgres, the gateway's data, and anything else under `*_DATA_DIR`), `secrets.env`, and on Apple Silicon `~/.omlx/settings.json`.
 
-- **macOS**: Time Machine covers OrbStack's volume storage and `~/.omlx`
-  as long as it's actually backing up the volumes — verify they appear in
-  the backup set after first run, don't assume it.
-- **Unraid** (the reference deployment, decision #28/#33): confirm the CA
-  Appdata Backup plugin (or equivalent) actually covers `$NOVAK_HOME` and
-  wherever `*_DATA_DIR`/`OLLAMA_DATA_DIR` point (decision #33 moved these
-  onto bulk storage, separate from the appdata path Compose Manager
-  backs up by default) — **not yet confirmed on the reference deployment**
-  as of this writing. See the deploy checklist's own backup line for the
-  same open item.
+- **Unraid** (the reference deployment, decisions #28 and #33): confirm that the CA Appdata Backup plugin, or an equivalent, covers `$NOVAK_HOME` and wherever `*_DATA_DIR` and `OLLAMA_DATA_DIR` point. Decision #33 moved those onto bulk storage, separate from the appdata path Compose Manager backs up by default. **Not yet confirmed on the reference deployment.** The deploy checklist has the same open item.
+- **macOS:** Time Machine covers OrbStack's volume storage and `~/.omlx` only if it is actually backing them up. Check that they appear in the backup set after the first run.

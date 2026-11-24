@@ -120,7 +120,9 @@ Anything marked `VERIFY` in a file is something that could not be checked withou
 | [docs/cli.md](docs/cli.md) | Every `novak` command, and how secrets are classified |
 | [docs/home-assistant.md](docs/home-assistant.md), [docs/wakeword.md](docs/wakeword.md) | Voice setup, and teaching it "Hey Novak" |
 | [docs/engines.md](docs/engines.md), [docs/ollama-settings.md](docs/ollama-settings.md), [docs/omlx-settings.md](docs/omlx-settings.md) | Choosing and tuning the inference engine |
-| [docs/proxy.md](docs/proxy.md), [docs/headless-operation.md](docs/headless-operation.md) | TLS in front of the services, and unattended restarts |
+| [docs/proxy.md](docs/proxy.md) | TLS in front of the services |
+| [docs/headless-operation.md](docs/headless-operation.md) | Running without a keyboard: how the host comes back after a reboot or power cut |
+| [docs/macos.md](docs/macos.md) | Novak on macOS: what differs on Apple Silicon, including the FileVault trade-off |
 | [docs/credits.md](docs/credits.md) | Whose software this is built from, and under which licences |
 | [docs/README.md](docs/README.md) | The full index |
 

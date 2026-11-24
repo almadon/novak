@@ -83,6 +83,7 @@ works identically on both platforms.
 | `novak drift --live` | also greps router logs for persona injection silently skipped (decision #38) |
 | `novak omlx apply` | apply `registry/omlx.yaml` — models, profiles, TTLs |
 | `novak owui drift` / `apply` | check, or make, Open WebUI's tool connections and model presets match `registry/openwebui.yaml` (decision #66); needs `OWUI_ADMIN_API_KEY` |
+| `novak backup [--dest DIR]` | write one consistent copy of settings, secrets, the registry and every database into a single directory (default `$NOVAK_HOME/backup/staging`) for a backup tool to pick up (decision #80) |
 | `novak router apply` | apply `registry/engines.yaml` -> `router/config.yaml` (decision #28); needs `novak restart router` after |
 
 ---
@@ -624,3 +625,28 @@ novak config            # every setting and where its value came from
 If a rebuild is easier than a diagnosis, [`scripts/reset.sh`](../scripts/reset.sh)
 removes containers and keeps your config, secrets and data. `--purge-data` and
 `--purge-config` exist and both ask first.
+
+## Backing up
+
+`novak backup` makes one consistent copy of everything Novak keeps and puts it in a single directory, so a
+backup tool has one plain place to read from. You can't just copy the data folders while the stack runs,
+because Hindsight is an embedded Postgres and Open WebUI, ingest and the gateway use SQLite files with
+changes that may not be in the main file yet. So the command asks each SQLite database for its own online
+backup and takes a Postgres dump of Hindsight, then copies the plain files beside them: `.env`,
+`secrets.env`, the registry (profiles included), router config, and the Open WebUI uploads and ingest
+recordings. It leaves out `models/`, the checkout, and dated `.bak` files.
+
+```bash
+novak backup                       # into $NOVAK_HOME/backup/staging
+novak backup --dest /some/dir
+```
+
+It builds the copy in a temporary directory beside the destination and renames it into place when it
+finishes, so a run that stops halfway is never what gets backed up, and the previous copy stays. It keeps
+only the latest copy (the backup tool keeps the history), the directory is mode 700 and `secrets.env`
+keeps mode 600, and it exits non-zero if anything failed. It prints names and sizes and never a value.
+`manifest.json` in the copy lists what was taken, with sizes and the time. Run it as root on the host,
+because it reads the gateway's Docker volume. Schedule it a little before your backup job, for example
+nightly. Restoring is a copy back plus `pg_restore` for `hindsight.dump`, and it's worth trying once into a
+scratch directory before you need it.
+

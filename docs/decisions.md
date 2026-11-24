@@ -3512,3 +3512,35 @@ If the second factor makes routine edits tedious, scope it to a smaller set of c
 turns out to need real-time features, reconsider the stack (Next.js with Auth.js is kept for now because the
 sign-in and design tokens already work).
 
+
+## 80. Backups take one consistent copy first, then a backup tool reads it
+
+Date: 2026-11-24
+
+### What was decided
+
+`novak backup` writes one consistent copy of everything Novak keeps into a single directory
+(`$NOVAK_HOME/backup/staging` by default). SQLite databases (Open WebUI, ingest, the gateway's audit and
+approvals) are copied with SQLite's own online backup, and Hindsight's embedded Postgres is dumped with
+`pg_dump` run inside its container, which reads the password from pg0's own instance file so it never
+appears on a command line. Settings, `secrets.env`, the registry and the uploads and recordings are copied
+alongside. The copy is built in a temporary directory and renamed into place, keeps only the latest, is mode
+700, and the command exits non-zero on any failure. The host's backup tool (the fleet's Arkeep and restic)
+then backs up that one directory on its own schedule and keeps the history. Models, the checkout and dated
+`.bak` files are left out.
+
+### What it costs
+
+- A second copy of the data sits on the host between runs: about 1.5 GB today, mostly Open WebUI.
+- `secrets.env` is copied in plain text. The staging directory is private to root, and the backup
+  repository is encrypted, but anyone who reads the staging directory reads every key.
+- The schedule lives outside Novak, so a stale copy is not noticed by Novak. The manifest carries the time,
+  so the backup tool or a check can look at its age.
+- A restore is two steps (copy files back, `pg_restore` the dump) and is only as good as the last time it was
+  practised.
+
+### What would make it worth revisiting
+
+Hindsight offering its own export, or the backup tool gaining application-aware hooks that make the staging
+step unnecessary.
+

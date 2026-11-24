@@ -59,6 +59,7 @@
 #   novak router apply        apply registry/engines.yaml -> router/config.yaml
 #   novak owui [drift|apply]  check, or make, Open WebUI match registry/openwebui.yaml
 #   novak pi [config|hint]    models.json for the Pi coding agent, and its editing rules
+#   novak backup [--dest DIR] one consistent copy of settings, secrets, registry and databases, for a backup tool
 #                              (decision #28; run 'novak restart router' after)
 #   novak checklist           phase-by-phase deploy-checklist.md walk-through
 #   novak guided-setup        prompt for whatever's still unconfigured
@@ -425,6 +426,13 @@ cmd_pi() {
       awk 'f{print} /^---$/{f=1}' "$REPO_DIR/prompts/novak-pi.md" ;;
     *) red "unknown: novak pi $1"; dim "  novak pi config | hint"; exit 1 ;;
   esac
+}
+
+# One consistent copy of everything Novak keeps, in a single directory for a backup tool to pick up
+# (decision #80). Databases are copied with their own online backup, not as plain files.
+cmd_backup() {
+  NOVAK_HOME="$NOVAK_HOME" \
+    "$NOVAK_HOME/.venv/bin/python" "$REPO_DIR/reconciler/backup.py" "$@"
 }
 
 cmd_router() {
@@ -1563,6 +1571,7 @@ case "${1:-menu}" in
   router)   shift; cmd_router "$@" ;;
   owui)     shift; cmd_owui "$@" ;;
   pi)       shift; cmd_pi "$@" ;;
+  backup)   shift; cmd_backup "$@" ;;
   doctor)   cmd_status ;;   # same checks up.sh runs, without starting anything
   checklist) cmd_checklist ;;
   guided-setup) cmd_guided_setup ;;

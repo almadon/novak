@@ -80,7 +80,7 @@ if [ -n "$SERVICE_USER" ]; then
   else
     # Without this the account cannot unlock at the pre-boot screen, and remote
     # unlock via the KVM silently isn't an option — a failure you'd discover
-    # during an outage. See docs/headless-operation.md.
+    # during an outage. See docs/macos.md.
     warn "Adding '$SERVICE_USER' to FileVault. You'll be asked for an already-enabled"
     warn "user's password, then that user's password."
     sudo fdesetup add -usertoadd "$SERVICE_USER"

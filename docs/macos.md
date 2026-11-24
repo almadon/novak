@@ -203,7 +203,7 @@ and shouldn't: `bootstrap-admin.sh` does everything needing sudo or a
 system-wide install, once; `bootstrap.sh` does the rest, as `novak`.
 
 **1. Create the account.** System Settings → Users & Groups → Add User.
-Name it `novak`. Standard is the safer default; Administrator is defensible
+Name it `novak`. Standard is the safer default, though Administrator is defensible
 here since no password is being written to disk, but the stack does not need
 it, so Standard unless something later proves otherwise.
 
@@ -283,7 +283,7 @@ and reuses it after, delete it and it rebuilds.
 **The registry lives here, not in the repo.** It records what this particular
 machine runs and at what risk level. That is a per-deployment fact, not catalogue
 content. The copy in the checkout is a starting template, copied across on
-first run and yours from then on. Edit it here; the repo's copy is not read
+first run and yours from then on. Edit it here. The repo's copy is not read
 once this exists.
 
 ### `novak` needs its own checkout
@@ -426,7 +426,7 @@ from your admin account while testing, those containers live over there and
 them, then start again as `novak`.
 
 `novak ports` detects this and says so, because "docker ps is empty but the
-service responds" is otherwise a genuinely confusing five minutes.
+service responds" is otherwise five confusing minutes.
 
 ### Starting over
 
@@ -487,6 +487,6 @@ The only test that counts is pulling the plug.
 - [ ] Voice through Home Assistant answers, with nobody having touched the Mac
 - [ ] As `novak`: `ls /Users/tmeuze` → **Permission denied** (this is correct)
 - [ ] **Pull the plug.** The Mac should power back on and stop at the FileVault
-      prompt; you unlock it through the KVM and it proceeds to a running stack.
+      prompt. You unlock it through the KVM and it proceeds to a running stack.
       Do this once deliberately, when you have time. Finding out the KVM has
       no video at the pre-boot screen during a real outage is the bad version.

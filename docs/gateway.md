@@ -14,13 +14,13 @@ and records who did what.
   person's entries, even by guessing a name.
 - **Their own credentials downstream.** The service sees `tmeuze`'s key, so
   Outline and Tududi attribute the action to the right account. The caller
-  never holds that key; the gateway does.
+  never holds that key. The gateway does.
 - **Adding is immediate, removing is confirmed.** Create, add and retain run at
   once. A delete, clear or similar is held, the person gets a notification with
   a link that shows exactly what will be removed, and the call waits for
   Approve or Deny (180 seconds by default). Approve runs it. Deny, or silence,
-  does nothing. Updates and moves are allowed and logged; add `modify` to
-  `confirm` in `gateway.yaml` to hold those too.
+  does nothing. Updates and moves are allowed and logged. To hold those
+  too, add `modify` to `confirm` in `gateway.yaml`.
 - **Accounting.** Every call is logged with person, how they were identified,
   entry, tool, kind of action, decision and outcome. Never the arguments or the
   results, only the argument names. `novak gateway audit [person]`.
@@ -146,7 +146,7 @@ accounts happens inside Tududi, so each person just has their own entry.
 - **The gateway holds every credential and sits in every request path.** It is
   the most valuable thing here to compromise and a single point of failure.
 - **A held removal blocks the calling request** while it waits. A client with a
-  short timeout may give up first; the approval then does nothing (it expires).
+  short timeout may give up first, and the approval then does nothing because it expires.
 - **Tool classification is by name.** `tool_overrides` in `gateway.yaml` fixes a
   misleading one. An unknown name counts as an update: allowed and logged.
 - **Hindsight's own port is still open** until step 5 of the plan in identity.md
@@ -247,7 +247,7 @@ its instructions and invents arguments.
   standing instructions: how to talk to them, how to plan with them, what to hold them to. The text is one
   file per person, `profiles/<username>.md` in the registry directory on the host (private, never in the
   repo; `registry/profiles/example.md` is a model). It is read each time, so an edit takes effect at once.
-  Only that person gets the tool, and only when their file exists; the household never does. The tool's
+  Only that person gets the tool, and only when their file exists. The household never does. The tool's
   description tells the model to call it once at the start of every conversation, which is why no shared
   prompt has to name a per-person tool. Keep it to about 250 tokens; it is cut at 4,000 characters.
 - **The tasks snapshot** (`tasks__tasks_state`, about 100 tokens) is built in the same way on the person's

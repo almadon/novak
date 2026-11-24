@@ -1,13 +1,13 @@
-# Identity: one person, their own credentials everywhere (proposal)
+# Identity: one person, their own credentials everywhere
 
-**Status: a proposal, not a decision.** Nothing here is built. It records the
-design question, what was checked, and the plan, so the next step is a choice
-and not a rediscovery. Items marked VERIFY were not checked.
+**Status: mostly built.** This page started as the design for the gateway, and the gateway now runs
+(decision #58). Read [gateway.md](gateway.md) for how it works today. What is left here is the reasoning:
+the problem, the options that were weighed, and the plan with what has been done. Items marked VERIFY were
+never checked.
 
-**Direction confirmed so far (2026-10-12):** a gateway is wanted; a trusted
-header from Open WebUI is acceptable as a fallback; each person supplies their
-own key for services like Tududi so they act as themselves; satellites go
-through the gateway with the household identity. See "Decisions taken" at the end.
+**Direction confirmed on 2026-10-12:** a gateway is wanted, a trusted header from Open WebUI is acceptable
+as a fallback, each person supplies their own key for services like Tududi so they act as themselves, and
+satellites go through the gateway with the household identity. See "Decisions taken" at the end.
 
 ## The goal
 
@@ -17,14 +17,14 @@ can reach the other's data. Shared things (the household bank, voice satellites)
 are shared on purpose and said so. One experience, not a different rule per
 client.
 
-## Where things stand
+## Where things stood
 
-The registry says what exists, the reconciler applies it and checks drift, and
-the router injects the persona and routes models. None of them knows who is
-asking. In particular the router does not apply memory to queries: the model
-calls Hindsight's tools when it decides to, and the persona tells it to.
+When this was written, the registry said what exists, the reconciler applied it and checked drift, and
+the router injected the persona and routed models. None of them knew who was asking. The router still
+doesn't apply memory to queries: the model calls Hindsight's tools when it decides to, and the persona
+tells it to.
 
-| Piece | Who it thinks you are today |
+| Piece | Who it thought you were then |
 |---|---|
 | Pocket ID | The identity provider (OIDC) |
 | Console | Signs in through Pocket ID and maps the person to the bank of the same name. The only place isolation is real |
@@ -34,7 +34,18 @@ calls Hindsight's tools when it decides to, and the persona tells it to.
 | Outline, Tududi | A per-account key, but whichever key a registry entry holds is used by everyone who can see the entry |
 | Router | No identity (decision #21 is half built: "a verified identity travels with the request") |
 
-A credential stands in for a person only where a client happens to enforce it.
+A credential stood in for a person only where a client happened to enforce it. Here is how each piece
+looks now.
+
+| Piece | Today |
+|---|---|
+| Pocket ID | Still the identity provider. |
+| Console | Signs in through Pocket ID and maps the person to the bank of the same name. |
+| Open WebUI | Signs in through Pocket ID only (local login is off on the reference host). It reaches each person's tools through the gateway, naming the person in a header that only that trusted client may send. |
+| Home Assistant | Has a household agent and one for each person. All three carry only Assist for now: Home Assistant can't send the header that narrows the tool list, and the full list overflows the voice model's 8,192-token window. |
+| Hindsight | Still one shared key for every bank, but its port is bound to localhost, so only the gateway and the other containers on the host reach it. |
+| Outline, Tududi | Each person's own key, held by the gateway and used on that person's behalf. |
+| Router | Still no identity (decision #21 stays half built). |
 
 ## Principles
 
@@ -48,7 +59,7 @@ A credential stands in for a person only where a client happens to enforce it.
 
 ## How each client can carry identity
 
-**Console.** Done.
+**Console.** Built. It signs people in through Pocket ID and maps each to their bank.
 
 **Open WebUI.** From its [MCP documentation](https://docs.openwebui.com/features/extensibility/mcp):
 only admins register MCP servers, and an admin can limit each one to users or
@@ -99,8 +110,7 @@ nothing but Open WebUI can reach the gateway.
 
 ## The gateway
 
-The missing piece, and the right place for this: where identity meets tools and
-models. It would:
+The gateway is where identity meets tools and models, and it was the missing piece. It does the following:
 
 - authenticate the caller (a Pocket ID token for the audience of the gateway;
   failing that, a trusted header from a known client; for the household, a
@@ -112,9 +122,9 @@ models. It would:
 - let shared entries (household memory) through for anyone, and
 - log who did what (accounting; see below).
 
-It would also close the Hindsight gap: the Hindsight port would be reachable
-only from the gateway, which holds the one shared key and decides which bank a
-caller may open.
+It also closes the Hindsight gap: the Hindsight port is reachable only from the
+gateway and the other containers on the host, and the gateway holds the one shared key and decides which
+bank a caller may open.
 
 ### Three ways to build it
 
@@ -134,12 +144,15 @@ caller may open.
 3. **Traefik forward-auth, per bank.** The route already being planned for
    Hindsight. Protects Hindsight only, not Outline or Tududi.
 
-**Recommendation:** spike option 1 first, for half a day: two people, two
+**Recommendation at the time:** spike option 1 first, for half a day: two people, two
 Hindsight banks, one test key each, and a Pocket ID token as the credential if
 it will take one. If a person's key sees only their own
 servers and the backend key never leaves the router, adopt it and have the
 reconciler render the MCP servers into the router config. If not, build option
 2. Option 3 can still sit in front of the Hindsight port as a second layer.
+
+**What happened:** a small Novak gateway (option 2) was built and is in use (decision #58). It accepts a
+Pocket ID token, a trusted client that names the user in a header (Open WebUI), or a per-person key.
 
 ## Authentication, authorization, accounting
 
@@ -169,40 +182,43 @@ assumption).
 
 ## The people directory
 
-`registry/people.yaml`, a mapping and not an auth system:
+`registry/people.yaml` is a mapping and not an auth system. A person has the names they sign in with, the
+entries they may use, and where their approvals go. Anything under `household` is shared on purpose:
 
 ```yaml
 people:
-  tmeuze:
-    pocket_id: tmeuze
-    hindsight_bank: tmeuze
-    entries: [outline-everything, tududi-tui]
-  ushy:
-    pocket_id: ushy
-    hindsight_bank: ushy
-    entries: [tududi-ushy]
-shared:
-  entries: [hindsight-household, brave-search]
+  alice:
+    names: [alice]
+    emails: [alice@example.com]
+    entries: [hindsight-alice, tududi-1-alice]
+    notify: {kind: supernotify, target: person.alice}
+household:
+  entries: [hindsight-household]
 ```
 
-`novak add` stays what it is: it adds a connection. `novak person add ushy` would
-sit above it, creating the bank, asking for that person's keys, and recording
-what belongs to them. Registry entries gain an `owner`, and an entry with no
-owner is shared on purpose.
+Keys are stored as hashes (`key_sha256`), never as the key. The real file lives on the host, because it names
+real people.
+
+`novak add` stays what it is: it adds a connection. `novak person add ushy` sits above it, creating the
+bank, asking for that person's keys, and recording what belongs to them. Each entry belongs to one person,
+and an entry listed under `household` is shared on purpose.
 
 ## Plan
 
-0. **Now, no code.** In Open WebUI, restrict `hindsight-tmeuze` to the user
-   `tmeuze` and `hindsight-ushy` to `ushy` with Access Control. The shared key
-   is still underneath, but only that person can invoke that connection.
-1. People directory and `novak person add`, plus `owner` on entries.
-2. The gateway spike, then the choice.
-3. Move Open WebUI onto the gateway (headers or token).
-4. Per-person Home Assistant pipelines.
-5. Close the Hindsight port to everything but the gateway. Satellites then reach
-   household memory through the gateway with a household key, which is what
-   makes closing the port safe for them (the earlier choice not to bind
-   Hindsight to Tailscale only was to protect them, and this keeps that).
+Where each step stands:
+
+0. **Now, no code.** In Open WebUI, restrict `hindsight-tmeuze` to the user `tmeuze` and `hindsight-ushy` to
+   `ushy` with Access Control. The shared key is still underneath, but only that person can invoke that
+   connection. *Superseded by step 3.*
+1. People directory and `novak person add`, plus `owner` on entries. *Done.*
+2. The gateway spike, then the choice. *Done: a small Novak gateway was built (decision #58).*
+3. Move Open WebUI onto the gateway (headers or token). *Done, with a trusted header.*
+4. Per-person Home Assistant pipelines. *Done for the agents and pipelines. Their tool access is limited to
+   Assist for now, for the reason in the table above.*
+5. Close the Hindsight port to everything but the gateway. *Done: it is bound to localhost.* Satellites
+   then reach household memory through the gateway with a household key, which is what makes closing the
+   port safe for them. How the voice agents use that connection today is in
+   [home-assistant.md](home-assistant.md).
 
 ## Costs and risks
 

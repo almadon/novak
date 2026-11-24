@@ -212,7 +212,7 @@ See [home-assistant.md](home-assistant.md). This is set up and verified on the r
 
 ---
 
-## Phase 9: The console *(optional; genuinely skippable)*
+## Phase 9: The console *(optional; skip it if you don't want it)*
 
 The console is in `console/` in this repository. Everything it does can be done by editing the registry by
 hand, so skip it unless you want it. It sits behind a compose profile, so leaving `OIDC_ISSUER`,

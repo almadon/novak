@@ -25,7 +25,7 @@ in, not a replacement for scripting against these.
 
 Every command in this reference works the same way on Unraid, including
 `novak adopt`, `novak drift` and `novak status`. Two things differ,
-both because the platform genuinely has no equivalent, not by choice:
+both because the platform has no equivalent, not by choice:
 
 - **Where it's linked from.** `scripts/bootstrap-unraid.sh` (run once, as
   root, after cloning the repo) symlinks it at `/usr/local/bin/novak` and
@@ -41,7 +41,7 @@ both because the platform genuinely has no equivalent, not by choice:
   Unraid, because there's no logged-in desktop session to unlock one. `novak
   secret set` writes the real value directly into `.env` instead (protected
   by file permissions, 600, checked by `novak secret verify`) rather than
-  the macOS Keychain. This is a genuinely lower security bar, not a
+  the macOS Keychain. This is a lower security bar, not a
   disguised equivalent. See [`scripts/lib/secrets.sh`](../scripts/lib/secrets.sh)
   for the reasoning. Every other command that touches a secret (`config`,
   `status`, `omlx apply`'s `OMLX_API_KEY` read, the checklist's live probes)
@@ -165,7 +165,7 @@ and a leftover placeholder reads as missing) and `novak registry --check` (a rea
 call per endpoint with its key: 200 means it authenticates, 401 means the key is
 wrong).
 
-Two things worth knowing:
+Two details about instances:
 
 - **A Hindsight bank is not a container.** All banks live in the one Hindsight
   container; the bank is a path in the URL (`/mcp/<bank>/`) and every bank
@@ -432,7 +432,7 @@ That covers MCP servers (skipped by the reconciler) and the console (gated
 behind a compose profile). Set the values and re-run `novak up` to add one
 later, and nothing else is disturbed.
 
-Only genuinely shared values refuse: `HOST_NAME`, which every service builds
+Only values that every service shares make it refuse: `HOST_NAME`, which every service builds
 its URLs from, and `HINDSIGHT_API_KEY`, without which the memory endpoint would
 be open to anything that can reach the port.
 

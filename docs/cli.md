@@ -83,6 +83,8 @@ works identically on both platforms.
 | `novak drift --live` | also greps router logs for persona injection silently skipped (decision #38) |
 | `novak omlx apply` | apply `registry/omlx.yaml` (models, profiles, TTLs) |
 | `novak owui drift` / `apply` | check, or make, Open WebUI's tool connections and model presets match `registry/openwebui.yaml` (decision #66); needs `OWUI_ADMIN_API_KEY` |
+| `novak warm` | load the voice and chat models into the GPU now, so the first request after a restart doesn't wait (decision #81) |
+| `novak bench [options]` | time to first token and speed through the router, per role and prompt size, with GPU and CPU use on the host (decision #81) |
 | `novak backup [--dest DIR]` | write one consistent copy of settings, secrets, the registry and every database into a single directory (default `$NOVAK_HOME/backup/staging`) for a backup tool to pick up (decision #80) |
 | `novak router apply` | apply `registry/engines.yaml` -> `router/config.yaml` (decision #28); needs `novak restart router` after |
 
@@ -647,4 +649,31 @@ keeps mode 600, and it exits non-zero if anything failed. It prints names and si
 because it reads the gateway's Docker volume. Schedule it a little before your backup job, for example
 nightly. Restoring is a copy back plus `pg_restore` for `hindsight.dump`, and it's worth trying once into a
 scratch directory before you need it.
+
+## Warm-up and benchmarking
+
+After a restart nothing is loaded into the GPU, so the first voice or chat request waits while a model comes
+off disk: about 7 seconds for the 4B and 30 to 40 for a 14B on the reference host. `novak up` now avoids
+that in two ways. A small `warmup` container starts with the stack, waits for Ollama, loads each model in
+`warm-models.txt` with an empty request, and then sits idle, so it runs again after every reboot of the host.
+And `novak up` itself loads them at the end (and skips any already loaded), because recreating Ollama
+empties it. The models are the `ha-voice` and `chat` roles from `registry/engines.yaml`, the pair that fits in
+video memory together. To choose others, set `OLLAMA_WARM_MODELS` in `.env` to a space-separated list of
+Ollama tags, or set it empty to turn warming off. `novak warm` runs the same step by hand.
+
+`novak bench` measures what a person feels in Open WebUI. It sends a realistic request (the persona and tool
+rules as a system prompt, then a short question) through the router and prints, for each role and prompt
+size, the time to the first word, the speed after that, and, on the host with the GPU, how busy the GPU and
+CPU were and how much video memory was used.
+
+```bash
+novak bench                              # chat, code and task, at about 2k, 3k and 5k tokens of prompt
+novak bench --roles chat --sizes 0,3     # one role, a small and a large prompt
+novak bench --cold                       # unload each role's model first, to include its load time
+```
+
+It only adds the load of its own requests, except with `--cold`, which unloads models other people may be
+using. Run it before and after changing Ollama's settings, a model or the context size, and compare the
+lines. Pass `--url` to point it at a router on another machine. On the reference host a warm 14B model
+answers a short question in about two seconds, at about 31 tokens a second, and a 4B model at 85 to 100.
 

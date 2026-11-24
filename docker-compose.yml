@@ -665,6 +665,31 @@ services:
       # volume root.
       - ${OLLAMA_DATA_DIR:-ollama}:/root/.ollama
 
+  # Loads the voice and chat models after every start of the host, because nothing stays loaded across a
+  # restart and the first request would otherwise wait 7 to 40 seconds (decision #81). It reuses the Ollama
+  # image (so there is no new image to pin), waits for the server, loads each model in warm-models.txt
+  # (written by `novak up`) with an empty prompt, then sleeps. It uses no GPU itself. `novak warm` does the
+  # same by hand.
+  warmup:
+    profiles: ["ollama"]
+    image: ollama/ollama@sha256:adca95a12c2b386a8f9a995e7fa0600e187e3323b5e5522f5a6c3b1ec73eff99
+    restart: unless-stopped
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: "http://ollama:11434"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until ollama list >/dev/null 2>&1; do sleep 3; done
+        while read -r m; do
+          [ -n "$$m" ] || continue
+          if ollama run "$$m" "" </dev/null >/dev/null 2>&1; then echo "warm: $$m"; else echo "warm failed: $$m"; fi
+        done < /warm-models.txt
+        exec sleep infinity
+    volumes:
+      - ./warm-models.txt:/warm-models.txt:ro
+
 volumes:
   open-webui:
   hindsight:

@@ -189,7 +189,7 @@ services:
     # any console/ change meant to actually ship (the workflow prints the digest). CONSOLE_IMAGE still
     # overrides it for local development or a deliberate rollback.
     profiles: ["console"]
-    image: "${CONSOLE_IMAGE:-ghcr.io/almadon/novak-konzol@sha256:89cfa6dcb30e8583899d9d6ef0be31dacb9faac9f659541448759cb06a87cb82}"
+    image: "${CONSOLE_IMAGE:-ghcr.io/almadon/novak-konzol@sha256:a5379ce96149d59921b963321457db274ead51d711c157838d74145d4e1fdf67}"
     restart: unless-stopped
     ports:
       - "${CONSOLE_PORT:-13401}:3002"

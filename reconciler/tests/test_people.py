@@ -130,6 +130,18 @@ class PersonTests(unittest.TestCase):
         self.assertNotEqual(g["admin"]["key_sha256"], first)
         self.assertEqual(g["confirm"], ["destructive"])
 
+    def test_change_key_and_status_key_are_separate_and_survive_each_others_rotation(self):
+        h = Home(self)
+        h.run("admin-key")
+        h.run("change-key")
+        g = yaml.safe_load(h.gateway.read_text())["gateway"]["admin"]
+        self.assertEqual(set(g), {"key_sha256", "change_key_sha256"})
+        self.assertNotEqual(g["key_sha256"], g["change_key_sha256"])
+        h.run("admin-key")
+        g2 = yaml.safe_load(h.gateway.read_text())["gateway"]["admin"]
+        self.assertEqual(g2["change_key_sha256"], g["change_key_sha256"])
+        self.assertNotEqual(g2["key_sha256"], g["key_sha256"])
+
     def test_the_gateway_reads_what_the_cli_wrote(self):
         from novak_gateway import directory
         from novak_gateway.auth import authenticate

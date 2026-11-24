@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from . import directory, notify as notify_mod
+from .changes import Changes
 from .house import ALIAS as HOUSE_ALIAS, House
 from .profile import Profile, SEP as PROFILE_SEP, TOOL as PROFILE_TOOL
 from .tasks import ALIAS as TASKS_ALIAS, Tasks
@@ -41,6 +42,7 @@ class Gateway:
         self.house = House(self)
         self.tasks = Tasks(self)
         self.profile = Profile(self)
+        self.changes = Changes(self)
 
     # configuration ------------------------------------------------------------
     @property
@@ -233,7 +235,7 @@ class Gateway:
                           (self.clock() - t0) * 1000, args)
         return result
 
-    def _confirm(self, identity, entry, tool, args) -> str:
+    def _confirm(self, identity, entry, tool, args, title=None, summary=None) -> str:
         pending = self.approvals.create(identity.name, entry.name, tool, args)
         url = f"{self.public_url}/approve/{pending['token']}"
         person = identity.person
@@ -252,7 +254,7 @@ class Gateway:
             sent = self.notifier(channel(person.notify if person else {}),
                                  channel(self.dir.settings.get("notify_default") or {}),
                                  self.env.get("GATEWAY_HA_URL", ""), self.env.get("GATEWAY_HA_TOKEN", ""),
-                                 f"Confirm: {tool.replace('_', ' ')}", f"{entry.name}: {tool}. Tap to review.", url)
+                                 title or f"Confirm: {tool.replace('_', ' ')}", summary or f"{entry.name}: {tool}. Tap to review.", url)
         except Exception as exc:
             sent = f"notification failed: {exc}"
         self.audit.record(identity, entry.name, tool, "destructive", "held", sent)

@@ -1,16 +1,17 @@
 /**
- * Memory: what Novak remembers, read-only for now. Which banks a person may open is decided in
+ * Memory: what Novak remembers. Forgetting one is a request the person confirms on their phone. Which banks a person may open is decided in
  * lib/memory.ts (their own and their code bank; the household one for an admin; never anyone else's).
- * Removing or correcting a memory needs the write path with phone confirmation, so it is not here yet.
+ * The household bank is read-only here.
  */
 import Link from "next/link";
 import { requireUser, ADMIN_GROUP } from "@/lib/authz";
 import { loadPeople, personFor } from "@/lib/people";
+import { forgetMemoryAction } from "./actions";
 import { PAGE, TYPES, banksFor, loadBanks, loadMemories } from "@/lib/memory";
 
 export const dynamic = "force-dynamic";
 
-type Search = Promise<{ bank?: string; q?: string; type?: string; offset?: string }>;
+type Search = Promise<{ bank?: string; q?: string; type?: string; offset?: string; asked?: string; error?: string }>;
 
 export default async function MemoryPage({ searchParams }: { searchParams: Search }) {
   const q = await searchParams;
@@ -63,7 +64,7 @@ export default async function MemoryPage({ searchParams }: { searchParams: Searc
   return (
     <main className="page">
       <h1>Memory</h1>
-      <p className="lede">What Novak remembers, from conversations, recordings and anything you asked it to keep. Read-only for now.</p>
+      <p className="lede">What Novak remembers, from conversations, recordings and anything you asked it to keep. Forgetting one asks your phone first.</p>
 
       {banks.data.length > 1 && (
         <nav className="tabs" aria-label="Memory bank">
@@ -72,6 +73,9 @@ export default async function MemoryPage({ searchParams }: { searchParams: Searc
           ))}
         </nav>
       )}
+
+      {q.asked && <p className="notice ok" role="status">Asked. Confirm on your phone and the memory is retired; nothing changes until you do.</p>}
+      {q.error && <p className="notice danger" role="alert">{q.error}</p>}
 
       <form method="get" action="/memory" className="row" role="search">
         <input type="hidden" name="bank" value={open.id} />
@@ -96,6 +100,13 @@ export default async function MemoryPage({ searchParams }: { searchParams: Searc
                   {m.state && m.state !== "valid" && ` · ${m.state}`}
                 </p>
                 {m.context && <p className="meta">{m.context}</p>}
+                {open.id !== "household" && m.type !== "observation" && (!m.state || m.state === "valid") && (
+                  <form action={forgetMemoryAction}>
+                    <input type="hidden" name="bank" value={open.id} />
+                    <input type="hidden" name="memory_id" value={m.id} />
+                    <button type="submit" className="button quiet">Forget</button>
+                  </form>
+                )}
               </li>
             ))}
           </ul>
@@ -105,7 +116,7 @@ export default async function MemoryPage({ searchParams }: { searchParams: Searc
           </p>
         </section>
       )}
-      <p className="meta">To correct or remove a memory today, ask Novak in Open WebUI. Editing here comes with confirmation on your phone.</p>
+      <p className="meta">Forgotten memories are retired, not erased, and can be restored. Observations are what Novak worked out from the others, so they are not forgotten one by one.</p>
     </main>
   );
 }

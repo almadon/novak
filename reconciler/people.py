@@ -17,6 +17,7 @@
   people.py client NAME           trusted client (Open WebUI): new key, shown once
   people.py household-key         new household key, shown once
   people.py admin-key             the console's read-only status key, shown once
+  people.py change-key            the console's key for asking for changes (each held for a phone yes), shown once
 
 Edits registry/people.yaml and registry/gateway.yaml as text, so the comments
 above each section survive; a person's own block is rewritten whole. Keys are
@@ -474,11 +475,28 @@ def cmd_admin_key(a):
     """The console's key. It opens GET /admin/today on the gateway and nothing else."""
     if not GATEWAY.exists():
         raise SystemExit(f"No {GATEWAY}: run 'novak up' once to seed it.")
+    admin = dict((load(GATEWAY).get("gateway") or {}).get("admin") or {})
     key, h = new_key()
+    admin["key_sha256"] = h
     backup(GATEWAY)
-    write_block(GATEWAY, "admin", 2, {"key_sha256": h})
+    write_block(GATEWAY, "admin", 2, admin)
     say(f"Console status key (shown once; it can read the status page and do nothing else):\n  {key}")
     say("Store it for the console:  novak secret set CONSOLE_GATEWAY_KEY   then  novak up")
+    return 0
+
+
+def cmd_change_key(a):
+    """The console's second key. It can ask for a change on a person's behalf; the person's phone decides."""
+    if not GATEWAY.exists():
+        raise SystemExit(f"No {GATEWAY}: run 'novak up' once to seed it.")
+    d = (load(GATEWAY).get("gateway")) or {}
+    admin = dict(d.get("admin") or {})
+    key, h = new_key()
+    admin["change_key_sha256"] = h
+    backup(GATEWAY)
+    write_block(GATEWAY, "admin", 2, admin)
+    say(f"Console change key (shown once; a stolen copy can make a phone buzz and nothing more):\n  {key}")
+    say("Store it for the console:  novak secret set CONSOLE_GATEWAY_CHANGE_KEY   then  novak up")
     return 0
 
 
@@ -504,6 +522,7 @@ def main():
     c = sub.add_parser("client"); c.add_argument("name")
     sub.add_parser("household-key")
     sub.add_parser("admin-key")
+    sub.add_parser("change-key")
     sub.add_parser("banks")
     r = sub.add_parser("rename")
     r.add_argument("old"); r.add_argument("new")
@@ -512,7 +531,7 @@ def main():
     return {"add": cmd_add, "list": cmd_list, "set": cmd_set, "key": cmd_key, "attach": lambda a: cmd_attach(a),
             "detach": lambda a: cmd_attach(a, True), "share": lambda a: cmd_share(a),
             "unshare": lambda a: cmd_share(a, True), "client": cmd_client,
-            "household-key": cmd_household_key, "admin-key": cmd_admin_key, "banks": cmd_banks, "rename": cmd_rename}[a.cmd](a)
+            "household-key": cmd_household_key, "admin-key": cmd_admin_key, "change-key": cmd_change_key, "banks": cmd_banks, "rename": cmd_rename}[a.cmd](a)
 
 
 if __name__ == "__main__":

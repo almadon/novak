@@ -96,7 +96,7 @@ export function ago(now: number, then: number): string {
 
 /** What an audit row means in a sentence, for a person rather than a log reader. */
 export function describe(r: ActivityRow): string {
-  const tool = (r.tool || "a tool").replace(/_/g, " ");
+  const tool = label(r.tool || "a tool");
   const where = r.entry ? ` (${r.entry})` : "";
   if (r.tool === "tools/list" && (r.decision === "error" || r.outcome.startsWith("error"))) {
     return `${r.entry || "A tool server"} could not list its tools for ${r.person}`;
@@ -109,4 +109,10 @@ export function describe(r: ActivityRow): string {
     case "error": return `${tool}${where} failed for ${r.person}`;
     default: return r.outcome.startsWith("error") ? `${tool}${where} failed for ${r.person}` : `${r.person} used ${tool}${where}`;
   }
+}
+
+/** A tool's name as a person would say it. */
+export function label(tool: string): string {
+  return ({ invalidate_memory: "forget a memory", delete_document: "remove a document", ha_call_service: "change something in the house" } as Record<string, string>)[tool]
+    ?? tool.replace(/_/g, " ");
 }

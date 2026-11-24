@@ -97,7 +97,10 @@ export function ago(now: number, then: number): string {
 /** What an audit row means in a sentence, for a person rather than a log reader. */
 export function describe(r: ActivityRow): string {
   const tool = (r.tool || "a tool").replace(/_/g, " ");
-  const where = r.entry && r.entry !== "tools/list" ? ` (${r.entry})` : "";
+  const where = r.entry ? ` (${r.entry})` : "";
+  if (r.tool === "tools/list" && (r.decision === "error" || r.outcome.startsWith("error"))) {
+    return `${r.entry || "A tool server"} could not list its tools for ${r.person}`;
+  }
   switch (r.decision) {
     case "denied": return `${r.person} was refused ${tool}`;
     case "held": return `${r.person} asked to ${tool}${where}; waiting for a yes`;

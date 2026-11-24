@@ -69,4 +69,5 @@ test("ago and describe read like sentences", () => {
   const row = parseToday(sample).activity.recent[0];
   assert.equal(describe(row), "tmeuze used recall (hs)");
   assert.equal(describe({ ...row, decision: "denied" }), "tmeuze was refused recall");
+  assert.equal(describe({ ...row, tool: "tools/list", entry: "tududi-1-tmeuze", decision: "error" }), "tududi-1-tmeuze could not list its tools for tmeuze");
 });

@@ -1,321 +1,136 @@
 # Architecture
 
+How the pieces fit, and why each one sits where it does. The reasoning for each choice is in [decisions.md](decisions.md), and what is true on the running system today is in [STATE.md](STATE.md).
+
+<p align="center">
+  <img src="images/architecture.svg" alt="Clients talk to a services layer made of a router in front of the inference engine, and a gateway that knows who is asking. The gateway reaches memory, notes, tasks, the house and search over MCP. The console reads status from the gateway and sends it change requests." width="100%">
+</p>
+
 ## Principle
 
-The hub is a **services layer**, not a frontend. Models are stateless;
-memory, knowledge, and tools live in standalone services that every client
-consumes. Open WebUI is *a* client, not *the* system — if it disappeared
-tomorrow, nothing of value would be lost.
+The hub is a **services layer**, not a frontend. Models are stateless. Memory, knowledge and tools live in standalone services that every client uses. Open WebUI is one client among several, and if it disappeared nothing of value would be lost.
 
-## Layers
+## The layers
 
-### Inference — pluggable engines behind the router
+### Inference: pluggable engines behind a router
 
-Not one fixed backend: any engine that speaks an OpenAI-compatible
-`/v1/chat/completions` is a valid Novak inference engine, chosen per
-deployment (or per model role — nothing stops mixing engines). See
-decision #28 and [engines.md](engines.md) for the full reasoning and the
-current options. Two are documented today:
+Any engine that speaks an OpenAI-compatible `/v1/chat/completions` can be a Novak engine, chosen per deployment, or even per model role (decision #28, [engines.md](engines.md)). Two are documented:
 
-- **oMLX** — native macOS app (Metal/MLX can't run in a Linux container),
-  multi-model serving with switching, continuous batching, SSD-tiered KV
-  cache. Profiles present one loaded model as several virtual models
-  (`ha-voice`, `chat`, `deep`) with different settings at zero RAM cost.
-  See [omlx-settings.md](omlx-settings.md) for the tuning reasoning.
-- **Ollama** — ordinary Linux container, GPU passthrough via
-  `--device=/dev/dri`, no vendor plugin needed for AMD. Vulkan
-  (`OLLAMA_VULKAN=1`) beats ROCm on RDNA4 specifically. Native
-  `OLLAMA_MAX_LOADED_MODELS`/`OLLAMA_NUM_PARALLEL` give the same
-  multi-model/multi-user behavior oMLX's profiles do.
+- **Ollama** is an ordinary Linux container with GPU passthrough (`--device=/dev/dri`) and no vendor plugin for AMD. Vulkan (`OLLAMA_VULKAN=1`) beats ROCm on RDNA4. It is what the household runs. See [ollama-settings.md](ollama-settings.md).
+- **oMLX** is a native macOS app, because Metal and MLX cannot run in a Linux container. Profiles present one loaded model as several virtual ones (`ha-voice`, `chat`, `deep`) with different settings at no extra memory cost. See [omlx-settings.md](omlx-settings.md).
 
-Everything else in this stack (Hindsight, Open WebUI, the console, voice)
-is plain Docker Compose with no platform assumption baked in — inference
-was always the only piece that needed a specific host, and now that's
-explicit rather than assumed.
+The router (LiteLLM, [router/](../router/)) sits in front of the engine. It injects the persona from `prompts/` into every request for `chat`, `deep` and `ha-voice`, so no client has a copy to keep in sync (decision #23), and clients see model names, not engines. It has its own key. A client can still talk to the engine directly, in which case nothing checks what persona it sends.
 
-### Knowledge — Outline (canonical), via MCP
+Everything else in the stack is plain Docker Compose with no platform assumption. Inference was always the only piece that needed a particular host.
 
-Human-curated documents are the source of truth, and they live in Outline —
-already running, already searchable, and auditable: you can read and correct
-what the AI "knows" in a normal wiki. Outline **serves MCP itself** at
-`https://et.a64.one/mcp` — no wrapper container — giving every model and
-client the same search/read (and optionally write) tools. Prefer this over an
-opaque vector store for anything you'd want to audit, and prefer a service's
-native MCP endpoint over wrapping it whenever one exists.
+### Knowledge: Outline, over MCP
 
-### Memory — Hindsight
+Documents a human curates are the source of truth, and they live in Outline, which is a normal wiki you can read and correct. Outline serves MCP itself, so there is no wrapper. Prefer this over an opaque vector store for anything you want to audit, and prefer a service's native MCP endpoint over wrapping it whenever one exists.
 
-Accumulated per-user facts (preferences, people, ongoing context), stored in
-**banks**. Postgres is embedded in the image, so it is one container.
+### Memory: Hindsight
 
-Hindsight speaks MCP natively at `/mcp/<bank>/`, and each connection is scoped
-to one bank by URL — the tools have no bank parameter. That is what keeps one
-person's memories out of another's context, and out of reach of anything a
-model reads: there is no argument in which to name someone else.
+Hindsight holds per-person facts (preferences, people, ongoing context) in **banks**, with Postgres embedded in the image so it is one container. It speaks MCP at `/mcp/<bank>/`, and each connection is scoped to one bank by its URL. The tools take no bank argument, so a model has nowhere to name someone else's memories. This replaced a Mem0-plus-shim arrangement: the shim existed to add MCP and enforce that scoping, Hindsight does both, and about 400 lines of first-party code were deleted. See [how-memory-works.md](how-memory-works.md) and [memory-setup.md](memory-setup.md).
 
-This replaced a Mem0-plus-shim arrangement. The shim existed to add MCP and to
-enforce exactly that scoping; Hindsight does both, so ~400 lines of first-party
-code were deleted. See [how-memory-works.md](how-memory-works.md) and
-[memory-setup.md](memory-setup.md).
+Do not rely on Open WebUI's built-in Memory feature for anything important. It is siloed inside Open WebUI.
 
-The console is the inspect/edit surface — it authenticates via Pocket ID and
-maps each person to their bank. Do not rely on Open WebUI's built-in Memory
-feature for anything important; it is siloed inside Open WebUI.
+### Tools: one MCP server per capability, behind the gateway
 
-Backend choice stays replaceable, but the bar is now higher: any replacement
-must bind identity to the connection rather than accept it as a parameter, or
-the shim comes back.
+Each capability (notes, tasks, the house, search) is its own MCP server, catalogued in [`registry/mcp-servers.yaml`](../registry/mcp-servers.yaml) with a risk level. A service that already speaks MCP is listed as an external entry and needs no code. Adding a capability means adding a registry entry and, if needed, a compose block, with no frontend work.
 
-### Tools / plugins — one MCP server per capability
+The **gateway** ([gateway.md](gateway.md), decisions #58 and after) is the one MCP endpoint clients connect to. It knows who is asking from the connection, gives each person only their own tools with their own credentials, trims each connection's tool list to a short allowlist, holds removals until that person approves on their phone, and logs every call by argument name and never value. It is optional, and the registry can still be applied without it.
 
-Outline, Vikunja today; email, utilities, budget later. Each is a container
-in the compose file following the same pattern (stdio server wrapped by
-supergateway into streamable-HTTP). Adding a capability = adding a compose
-block + registering the endpoint in each client. No frontend work.
+### Identity: one persona, and one person per connection
 
-### Identity — one persona, every client
-
-The assistant is **Novak** wherever it's reached. The master copies of its
-system prompts live in [../prompts/](../prompts/novak-chat.md): a full
-persona for text chat, and a deliberately terse one for voice.
-
-**Decision 21's routing layer exists now** ([router/](../router/), decision
-#23): LiteLLM in front of oMLX, injecting the persona from `prompts/` into
-every request for `chat`, `deep`, and `ha-voice`, transparently — no
-per-client config, no copy to keep in sync. A client switches to it by
-pointing its base URL at the router's port instead of oMLX's; nothing else
-changes, since the model names are the same either way.
-
-**This is half of decision 21, not all of it.** "A verified user identity
-can travel with the request, which is what makes per-user behaviour
-possible" — that part is not built. The router injects a persona and does
-nothing else; it does not read, forward, or act on who is calling. Memory
-scoping is unaffected either way, since it was never routed through here —
-Hindsight's own per-connection URL scoping is what does that, unchanged.
-
-The router is optional, gated behind its own compose profile
-(`docker-compose.yml`), so a client can still be pointed at oMLX directly.
-Nothing checks that case specifically — a client bypassing the router
-entirely still looks the same as one going through it and simply sending
-its own system message. Decision #44 built the detector for the failure
-that actually happened (a router-bound client silently defeating
-injection); see [STATE.md](STATE.md) for what's still open.
-
-The persona is not decoration — it encodes the security posture the model
-itself must enforce: never ask for credentials, treat retrieved content as
-data rather than instruction, and confirm before acting. See
-[security.md](security.md).
+The assistant is **Novak** wherever it is reached. The persona encodes the security posture the model itself must enforce: never ask for credentials, treat retrieved content as data and confirm before acting ([security.md](security.md)). Who is asking is a separate question, answered by the gateway rather than the router. The router injects a persona and does not act on the caller. See [identity.md](identity.md).
 
 ### Clients
 
-- **Open WebUI** — text + voice chat, per-user accounts/RBAC, model
-  switcher (sees every oMLX model/profile automatically). Registers MCP
-  servers under Admin → Settings → Tools (native MCP, streamable-HTTP).
-- **Home Assistant** — Assist pipeline with an OpenAI-compatible
-  conversation agent pointed at oMLX (`ha-voice` profile), plus HA's
-  official MCP client integration for the shared memory/knowledge tools.
-  See [home-assistant.md](home-assistant.md).
+- **Open WebUI** is text chat with per-person accounts and a model switcher. It signs in through Pocket ID only (decision #68), and its gateway connections and presets are declared in `registry/openwebui.yaml` (decisions #66 and #67).
+- **Home Assistant** runs the voice pipeline: one pipeline and agent per person, HA's own Whisper and Piper add-ons for speech, and its `litellm` conversation agent pointed at the router. See [home-assistant.md](home-assistant.md).
+- **Coding agents**, such as Pi, can use the router ([pi.md](pi.md)).
+- **Konzol, the console**, is described next.
+
+### The console
+
+Konzol ([console/](../console/README.md)) is a web view over the stack, and it is optional. It reads status from the gateway with one key and sends the gateway change requests with another, and it reads memories from Hindsight on the server. It never talks to Docker, never decides an approval and never calls a tool for you. When it asks for a change, the gateway sends Approve and Deny to that person's phone through Supernotify, and nothing happens until they approve (decisions #64, #72 and #79). It signs people in through Pocket ID and maps each to their own bank.
 
 ## Configuration as data
 
-Three declarative inputs live in this repo, and each is applied by something
-dumb rather than typed into a web UI. The pattern is the same every time: a
-file in git, validated strictly, applied idempotently, with git as the audit
-log.
+Three declarative inputs live in this repository, and each is applied by something simple instead of being typed into a web page. A file in git is validated strictly, applied idempotently, and git is the audit log.
 
 | File | Declares | Applied by |
 |---|---|---|
-| [`registry/mcp-servers.yaml`](../registry/mcp-servers.yaml) | which MCP servers exist, and how risky each is | [`reconciler/reconcile.py`](../reconciler/reconcile.py) → compose |
-| [`registry/omlx.yaml`](../registry/omlx.yaml) | which models exist, and what profiles they expose | [`reconciler/omlx_apply.py`](../reconciler/omlx_apply.py) → oMLX's JSON files |
-| [`prompts/`](../prompts/novak-chat.md) | the assistant's personas | [`router/persona_hook.py`](../router/persona_hook.py) → every request, if a client points at the router (decision #23); each client's own config otherwise |
+| [`registry/mcp-servers.yaml`](../registry/mcp-servers.yaml) | Which MCP servers exist and how risky each is | [`reconciler/reconcile.py`](../reconciler/reconcile.py), into compose |
+| [`registry/omlx.yaml`](../registry/omlx.yaml) | Which models exist and what profiles they expose | [`reconciler/omlx_apply.py`](../reconciler/omlx_apply.py), into oMLX's own JSON files |
+| [`prompts/`](../prompts/novak-chat.md) | The assistant's personas | [`router/persona_hook.py`](../router/persona_hook.py), on every request through the router |
 
-**`registry/omlx.yaml`** is [`docs/omlx-settings.md`](omlx-settings.md) reduced to
-values a machine can apply and re-check. settings.md holds the reasoning — why
-the 4B is always resident, why nothing 30B-class fits in 24GB; the YAML holds
-the numbers. Read one to decide, edit the other to apply. Idle TTL sits per
-model rather than per profile because oMLX stores it that way.
-
-It is applied by writing oMLX's own JSON files, not through its admin API,
-because that API needs a second credential the reconciler would have to hold —
-see decision 17.
-
-**Both of the last two are built now.** This paragraph used to say neither
-was — recorded here, not deleted, since the reasoning that led to writing
-them down before anything existed is still worth keeping.
+`registry/omlx.yaml` is [omlx-settings.md](omlx-settings.md) reduced to values a machine can apply and re-check. The settings page holds the reasoning and the YAML holds the numbers. It is applied by writing oMLX's own JSON files and not through its admin API, because that API needs a second credential the reconciler would otherwise have to hold (decision #17).
 
 ### The gap this leaves
 
-The registry ends up in one place — compose — so drift is impossible; the file
-*is* the state.
-
-Prompts had the opposite property, and for any client still pointed at oMLX
-directly, still do: Open WebUI keeps system prompts in its database and
-Home Assistant keeps them in its config entry, so each persona exists as a
-copy that was pushed there, editable in place without the repo knowing.
-
-**A client pointed at the router instead doesn't have this problem** — it
-never holds a copy to drift, since `router/persona_hook.py` reads
-`prompts/` fresh on every request. Decision #44 closed the half of this
-that's actually bitten the project: `persona_hook.py` now logs when a
-router-bound client silently sends its own system message (`chat`/`deep`),
-surfaced via `novak drift --live`. What's still open: whether a client is
-pointed at the router at all, or still talking to oMLX directly with
-whatever persona (or none) its own config holds — that has no detector,
-since a direct-to-oMLX client never reaches the router to be observed. See
-[STATE.md](STATE.md).
+The registry ends up in one place, compose, so it cannot drift. Prompts are different for any client still pointed at the engine directly. Open WebUI keeps system prompts in its database and Home Assistant keeps them in its config, so each persona exists as a pushed copy that can be edited in place without the repo knowing. A client pointed at the router has no copy to drift. Decision #44 added a log line that fires when a router-bound client silently sends its own system message, shown by `novak drift --live`. What has no detector is whether a client is pointed at the router at all. See [STATE.md](STATE.md).
 
 ## Data flow examples
 
-**Text chat**: browser → Open WebUI → oMLX (`chat`); tool calls go Open
-WebUI → MCP servers → Outline/Vikunja/Hindsight.
+**Text chat:** browser, Open WebUI, router, engine (`chat`). Tool calls go from Open WebUI to the gateway, then to the MCP servers.
 
-**Voice via HA**: speaker → HA Assist → HA's own native Whisper add-on
-(STT, decision #39 — no longer a Novak container) → HA's native `litellm`
-conversation agent (decision #42) → the router → Ollama (`ha-voice`) with
-HA's own Assist API for device control → HA's own native Piper add-on
-(TTS) → speaker. Wake word detection is the one voice piece still served
-by Novak itself, via `openwakeword` (Wyoming). Same memory, same
-knowledge, no Open WebUI in the loop.
+**Voice through Home Assistant:** speaker, HA Assist, HA's own Whisper add-on for speech to text (decision #39), HA's `litellm` conversation agent (decision #42), the router, the engine (`ha-voice`) with HA's own Assist API for device control, HA's Piper add-on for text to speech, speaker. Wake word detection is the one voice piece Novak still serves, through `openwakeword` over Wyoming.
 
-## Privacy / leakage model
+**A removal that needs a yes:** a client asks for a removal through the gateway, the gateway holds the call and sends Approve and Deny to the person's phone, a button press becomes a Home Assistant event, and the gateway runs the call only after it sees Approve. An unanswered request expires and changes nothing.
 
-Local weights cannot leak conversations into anyone's training set —
-inference is a local computation with no vendor channel. The residual
-risks are operational (credentials, over-broad tools, prompt injection)
-and are addressed in [security.md](security.md). Outbound traffic from
-this stack: model/image downloads (inbound content), and whatever MCP
-servers you deliberately add that talk to external APIs (email, utilities)
-— each with its own scoped credential, never proxied through a model
-prompt.
+## Privacy and leakage
 
-## Placement — Spire is the primary, sole-host deployment
+Local weights cannot leak conversations into someone's training set, because inference is a local computation with no vendor channel. The remaining risks are operational (credentials, over-broad tools, prompt injection) and are covered in [security.md](security.md). Outbound traffic is model and image downloads, plus whatever MCP servers you deliberately add that call external APIs, each with its own scoped credential that is never passed through a prompt.
 
-**Corrected 2026-09-04, superseding the previous correction below.** The
-migration decision #28 recorded is now complete, not aspirational:
-Hindsight, Open WebUI, the console, `openwakeword` (the one Wyoming voice
-service Novak still runs — whisper/piper were decommissioned, decision
-#39), and Ollama all run together on Spire (Unraid, AMD RDNA4 GPU).
-The original macOS host
-has been taken down as a server and is kept only for oMLX development —
-Novak's household deployment has no dependency on it running.
+## Placement
 
-`docker-compose.yml` reflects this: it is one file supporting both host
-shapes (oMLX-on-host for Apple Silicon, the in-stack `ollama` service
-behind its own compose profile for Linux+GPU), not a file written for one
-specific machine (decision #33). Storage also split on Spire per decision
-#33: compose manifests and `.env` stay under Unraid's appdata path (where
-Compose Manager expects them); databases, media, and model weights live
-under `/mnt/teracache/Novak/{data,models,config}` on bulk storage instead.
+**Spire (Unraid, AMD RDNA4) is the sole production host** (decisions #28 and #33). Hindsight, Open WebUI, the console, the gateway, the router, `openwakeword` and Ollama all run on it together. Home Assistant runs on its own host. The original macOS host is no longer a server and is kept for oMLX development, so the household has no dependency on it.
 
-See [engines.md](engines.md) for the inference-engine side of this, and
-[ollama-settings.md](ollama-settings.md) for what's actually running.
-
-*(Previous correction, 2026-08-27: this section once said Open WebUI runs on
-a separate VPS — true of an earlier plan, not true of any deployment shape
-described above.)* The reverse proxy fronting the portal and Open WebUI
-remains a separate Caddy instance on a LAN-neighboring machine — see
-[proxy.md](proxy.md).
-
-What constrains each piece, now that everything but oMLX is co-located on
-one host:
+`docker-compose.yml` supports both host shapes in one file: oMLX on the host for Apple Silicon, or the in-stack `ollama` service behind its own profile for Linux with a GPU. Compose manifests and config stay under Unraid's appdata path, where Compose Manager expects them. Databases, media and model weights live on bulk storage under `/mnt/teracache/Novak/{data,models,config}`.
 
 | Service | Constraint | Where |
 |---|---|---|
-| oMLX | Metal/MLX — cannot be containerized or moved | A macOS host, kept for development only, not depended on in production |
-| Ollama | needs a GPU worth using | Spire (RDNA4/Vulkan) — the household's real `deep`/`chat`/`ha-voice` engine now |
-| Hindsight | every memory write triggers an LLM extraction call — wants to be next to whichever engine serves it | Spire, pointed at Spire's own Ollama (`HINDSIGHT_LLM_MODEL`/`HINDSIGHT_LLM_PROVIDER`), not oMLX |
-| `openwakeword` (Wyoming) | voice latency budget is ~1–2s end to end; keep close to HA and the satellites | Spire, same LAN as HA |
-| Open WebUI | just a frontend; reaches whichever engine(s) the router points at | Spire |
-| Console | reaches Hindsight often, Pocket ID once per session | Spire, with Hindsight |
+| oMLX | Metal and MLX, so it cannot be containerised or moved | A macOS host, kept for development |
+| Ollama | Needs a GPU worth using | Spire |
+| Hindsight | Every memory write triggers an LLM extraction call, so it wants to sit next to the engine | Spire, pointed at Spire's own Ollama |
+| `openwakeword` | Voice latency budget of about one to two seconds end to end, so it stays close to HA and the satellites | Spire, same LAN as HA |
+| Open WebUI | A frontend that reaches whichever engine the router points at | Spire |
+| Console | Reaches Hindsight often and Pocket ID once per session | Spire, with Hindsight |
 
-The console runs beside Hindsight for data locality. The accepted cost: **Pocket ID
-is on a VPS, so a WAN outage prevents logging in to a console that is otherwise
-entirely local.** Existing sessions survive (8h JWT), so a brief outage is not
-locking. If that becomes annoying, the fix is a break-glass path, not moving
-the console — moving it just relocates the problem onto every memory read.
+The console sits beside Hindsight for data locality. The accepted cost is that Pocket ID is on a VPS, so a WAN outage stops anyone logging in to an otherwise local console. Existing sessions survive (an eight-hour token), so a short outage does not lock anyone out. If it becomes annoying, the fix is a break-glass sign-in, not moving the console.
 
 ### Reachability
 
-**VERIFY before treating this as settled:** the diagram below and decision
-#15's public/private exposure model were both written assuming Open WebUI
-sits behind a VPS Caddy that terminates public internet traffic. That VPS
-placement was corrected above; whether the LAN-neighboring Caddy mentioned
-there *also* takes that public-facing role, or whether this deployment is
-LAN/tailnet-only for now with no public exposure at all, has not been
-confirmed. Decision #15's reasoning about what may and may not face the
-internet is unaffected either way — only the physical location of the
-proxy doing it is in question here.
+Exposure is a per-service decision recorded in decision #15. A service faces the internet only if it was built to: Open WebUI has accounts and sessions and expects strangers, while the engine, Hindsight, the gateway and the console assume friendly callers and stay on the tailnet. The full table is in [security.md](security.md).
 
-```
-   [public internet, if this deployment has any — see the VERIFY above]
-                                     │
-                                     ▼
-                     Caddy (LAN-neighboring host, not Spire)
-                                     │
-                                     ▼
-                          Open WebUI    (Spire)
-                                     │
-                                     ▼
-                    Ollama (Spire) · Hindsight · Konzol   (Spire)
-                                     ▲
-                    HA (own host) ── openwakeword (Spire), HA's own
-                                      native Whisper/Piper add-ons
+Two things follow from putting the frontend behind a proxy on another host:
 
-   LAN / tailnet ──▶ Portal's own Caddy ──▶ TinyAuth ──▶ Open WebUI, Konzol
-                      (decision #22; not the VPS Caddy above,
-                       and not public — see docs/proxy.md)
-```
+- **Open WebUI then depends on the link to think.** Voice through Home Assistant, which is on the same network as the engine, keeps working when the link is down, which is an argument for treating voice as the more reliable interface.
+- **Prompt content transits the proxy host in plain text.** That fits the threat model, since the concern is a public model vendor and a proxy you run is not one, but it puts that host in scope for the same care as the stack's own.
 
-Exposure is a per-service decision recorded in [decisions.md](decisions.md)
-#15. The rule: a service faces the internet only if it was built to — Open
-WebUI has accounts and sessions and expects strangers; oMLX and Hindsight
-assume every caller is friendly, so they stay on Tailscale.
-
-Two consequences worth being explicit about:
-
-- **Open WebUI depends on the WAN link to think.** With oMLX at one site and
-  Open WebUI at another, chat stops working when the link does. Voice through
-  HA, if HA and oMLX are co-located, keeps working. That is an argument for
-  treating voice as the more reliable interface, not the more fragile one.
-- **Prompt content transits whichever host runs the frontend.** That host sees
-  plaintext. This is consistent with the threat model — the concern is a public
-  *model vendor*, and a VPS you control is not one — but it does mean the VPS
-  is now in scope for the same care as the mini.
+**VERIFY:** whether the LAN-side Caddy ([proxy.md](proxy.md)) also takes a public-facing role for Open WebUI, or this deployment is tailnet-only with no public exposure, has not been confirmed. Decision #15's reasoning holds either way. Only the proxy's physical location is in question.
 
 ## Ports
 
-All external ports below are Spire's, in the `134xx` range by convention
-(decision #33) except where noted; the `${VAR:-default}` is each one's
-`.env` override.
+External ports are Spire's, in the `134xx` range by convention (decision #33). Each has an override in `.env`.
 
 | Service | Port |
 |---|---|
-| oMLX | per app config (`OMLX_PORT`), on the macOS host, development only |
 | Ollama | `11434` (`OLLAMA_PORT`) |
 | Router (LiteLLM) | `13402` (`ROUTER_PORT`) |
 | Open WebUI | `13400` (`OPENWEBUI_PORT`) |
-| Outline MCP | external — `https://et.a64.one/mcp` |
-| Vikunja MCP | `8002` |
-| Hindsight (API + MCP) | `13403` (`HINDSIGHT_PORT`) |
-| Hindsight (web UI) | `13404` (`HINDSIGHT_UI_PORT`) |
 | Console | `13401` (`CONSOLE_PORT`) |
+| Hindsight API and MCP | `13403` (`HINDSIGHT_PORT`), on `127.0.0.1` only (decision #62) |
+| Hindsight web UI | `13404` (`HINDSIGHT_UI_PORT`), on `127.0.0.1` by default |
 | Wyoming openWakeWord | `13407` (`OPENWAKEWORD_PORT`) |
-| Persona server (HA pulls) | `13408` (`PERSONA_PORT`, bound by `PERSONA_BIND`) |
-| Gateway (optional extension) | `13410` (`GATEWAY_PORT`, bound by `GATEWAY_BIND`); see [gateway.md](gateway.md) |
-| Ingest (optional extension) | `13409` (`INGEST_PORT`, bound by `INGEST_BIND`); see [ingest.md](ingest.md) |
+| Persona server, which HA pulls | `13408` (`PERSONA_PORT`, `PERSONA_BIND`) |
+| Ingest (optional) | `13409` (`INGEST_PORT`, `INGEST_BIND`), see [ingest.md](ingest.md) |
+| Gateway (optional) | `13410` (`GATEWAY_PORT`, `GATEWAY_BIND`), see [gateway.md](gateway.md) |
+| oMLX | Set in its own app config (`OMLX_PORT`), on the macOS development host |
+| Outline and Tududi | External services, reached by their own addresses |
 
-The router, Ollama and the persona server take a `*_BIND` address (`ROUTER_BIND`, `OLLAMA_BIND`, `PERSONA_BIND`); set them to the host's Tailscale IP so only the tailnet can reach them (decision #54). Containers in the stack reach each other by service name, not through these published ports.
+The portal profile's reverse proxy also defaults to `13408` (`PORTAL_PORT`), the same as the persona server, so set one of them if you run both (VERIFY: read from `docker-compose.yml`, not run).
 
-STT/TTS are no longer Novak-hosted ports at all (decision #39) — they're
-HA's own native Whisper/Piper add-ons, running on whatever host HA itself
-runs on, outside this table's scope.
+The router, Ollama, the persona server, ingest and the gateway take a `*_BIND` address. Set each to the host's Tailscale IP so only the tailnet reaches it (decision #54). Containers in the stack reach each other by service name and never through these published ports. Speech to text and text to speech are no longer Novak ports (decision #39), because they are Home Assistant's own add-ons.
 
-All LAN-only. For remote access use Tailscale; never port-forward.
-
-The container ports above bind `0.0.0.0` and are reachable over the tailnet.
-**oMLX is the exception:** it ships bound to `127.0.0.1`, so nothing off this
-machine reaches it until `server.host` is changed in its own settings.
-Containers still can, because OrbStack forwards loopback through
-`host.docker.internal` — which is why the stack can work while the oMLX row in
-`novak ports` shows no Tailscale reachability. See
-[proxy.md](proxy.md) before putting a proxy in front of it.
+Everything here is LAN or tailnet only. For remote access use Tailscale, and never port-forward. oMLX ships bound to `127.0.0.1`, so nothing off its machine reaches it until `server.host` is changed in its own settings. Containers still can, because OrbStack forwards loopback through `host.docker.internal`, which is why the stack can work while the oMLX row in `novak ports` shows no Tailscale reachability. See [proxy.md](proxy.md) before putting a proxy in front of it.

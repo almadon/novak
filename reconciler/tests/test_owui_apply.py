@@ -275,7 +275,7 @@ class OwuiApplyTests(unittest.TestCase):
     def test_the_shipped_template_is_valid_and_its_prompts_exist(self):
         cfg = owui_apply.load_config(REPO / "registry" / "openwebui.yaml")
         shown = [m for m in cfg["models"] if not m.get("hidden")]
-        self.assertEqual([m["id"] for m in shown], ["novak", "novak-deep", "home", "code"])
+        self.assertEqual([m["id"] for m in shown], ["novak", "novak-deep", "home", "code", "mail"])
         self.assertEqual({m["id"] for m in cfg["models"] if m.get("hidden")}, {"chat", "deep", "task", "ha-voice"})
         for m in shown:
             self.assertTrue(owui_apply.system_prompt(m, REPO))

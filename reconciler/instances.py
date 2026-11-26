@@ -382,7 +382,20 @@ def secret_vars(path=None) -> list[str]:
         names += [c for c in cands if SECRETISH.search(c)]
         if e.get("url_env"):                 # an address that is a credential is one, whatever it is called
             names.append(e["url_env"])
+    names += mail_vars(Path(path or REGISTRY).parent)
     return sorted(set(names))
+
+
+def mail_vars(registry_dir: Path) -> list[str]:
+    """The MailFlow tokens gateway.yaml's `mail` section asks for, so `novak secret` knows them."""
+    f = registry_dir / "gateway.yaml"
+    if not f.is_file():
+        return []
+    mail = ((yaml.safe_load(f.read_text()) or {}).get("gateway") or {}).get("mail") or {}
+    if not mail.get("instance"):
+        return []
+    from gateway_env import mail_token_name
+    return [mail_token_name(mail["instance"], p) for p in mail.get("people") or []]
 
 
 def describe(var_name: str, path=None) -> str:
@@ -400,6 +413,9 @@ def describe(var_name: str, path=None) -> str:
             users.append(f"{e['name']} (MCP address)")
         elif any((i.partition("=")[2] or i) == var_name for i in e.get("env") or []):
             users.append(f"{e['name']} (container)")
+    m = re.fullmatch(r"MAILFLOW_(\w+?)_(.+)_API_TOKEN", var_name)
+    if not users and m:
+        return f"{m.group(2).lower()}'s read-only MailFlow token (instance {m.group(1)})"
     if not users:
         return ""
     return users[0] if " account on instance " in users[0] else "used by " + ", ".join(users)

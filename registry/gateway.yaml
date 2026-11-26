@@ -26,6 +26,12 @@ gateway:
   # See docs/gateway.md.
   house: {ha: 1, people: []}
 
+  # Read-only mail through MailFlow (4.3.0 or later). `instance` numbers your MailFlow, `url` is its
+  # address as this host reaches it, and only the people listed get the tools, each with their own
+  # read-only token in MAILFLOW_<instance>_<USER>_API_TOKEN. Offered only on a connection whose
+  # X-Novak-Scope includes `mail`, and such a connection cannot change anything. Blank turns it off.
+  mail: {}
+
   # Names for several Home Assistant notify services, so one confirmation reaches every
   # phone in a group: `notify: {kind: ha, service: mgmt}` below sends to each of these.
   notify_groups: {}

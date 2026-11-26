@@ -9,6 +9,7 @@ Names come from the registry's `auth:` fields for entries listed under people
 or household, plus the gateway's own settings.
 """
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -17,6 +18,11 @@ import yaml
 NOVAK_HOME = Path(os.environ.get("NOVAK_HOME", Path.home() / ".novak"))
 PLACEHOLDERS = {"", "set-in-keychain", "EDIT-ME", "changeme"}
 OWN = ["GATEWAY_HA_TOKEN"]
+
+
+def mail_token_name(instance, person: str) -> str:
+    """Each person's own read-only MailFlow token: MAILFLOW_<instance>_<USER>_API_TOKEN."""
+    return f"MAILFLOW_{instance}_{re.sub(r'[^A-Z0-9]', '_', str(person).upper())}_API_TOKEN"
 
 
 def needed_names(registry_dir: Path) -> list[str]:
@@ -35,6 +41,9 @@ def needed_names(registry_dir: Path) -> list[str]:
     ha = ((load("gateway.yaml").get("gateway") or {}).get("house") or {}).get("ha")
     if ha:
         names.add(f"HA_{ha}_ADMIN_API_TOKEN")
+    mail = ((load("gateway.yaml").get("gateway") or {}).get("mail") or {})
+    if mail.get("instance"):
+        names |= {mail_token_name(mail["instance"], p) for p in mail.get("people") or []}
     return sorted(names | set(OWN))
 
 

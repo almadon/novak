@@ -3580,3 +3580,41 @@ twelve threads. Nothing was queueing for CPU.
 
 A larger GPU, where `code` could stay resident too, or Ollama growing a native preload setting.
 
+
+## 82. Mail is read-only, on its own connection, enforced by the gateway
+
+Date: 2026-11-26
+
+### What was decided
+
+Mail comes through MailFlow's own API with the person's own token, which should carry only the Read scope
+(MailFlow 4.3.0 added scoped tokens). The gateway has three lean tools for it, `mail_state`, `mail_search` and
+`mail_read`, in place of a third-party MCP server: they return a few short lines that fit an 8,192-token
+window, and no extra code sits between the model and a person's mail.
+
+Because anyone can write mail, the safety rule lives in the gateway and not in a prompt. Mail tools are offered
+only to a connection whose scope names `mail` (never a plain person key, a voice pipeline or the household),
+and on such a connection every call that is not a read is refused. The Open WebUI `Mail` preset uses that
+connection with today's tasks and the person's profile, on the local `chat` model. Results are wrapped as
+data with a warning, fake end markers are neutralized, links are removed, and long messages are cut.
+
+Sync-in was looked at for calendars. It has no CalDAV support today (it is a planned feature in its tracker),
+so calendars will come through Home Assistant's calendar integration instead.
+
+### What it costs
+
+- Mail work happens in its own chat. "Make a task from this" needs a second chat.
+- Reading and searching can still be steered by a hostile message within what that chat can read: it could
+  try to make the model repeat other mail or the task list into its own answer. Nothing can leave through a
+  tool, but a person should treat the answer with the same care as the mail.
+- Tokens expire and must be renewed by hand. An expired token shows as a clear error.
+- The list is what MailFlow calls the unified inbox, newest 50 unread. Older unread mail is only reachable
+  by search.
+- Not yet run against a live MailFlow (**VERIFY**), including the claim that reading a body does not mark it
+  read, which comes from reading MailFlow 4.5.1's source.
+
+### What would make it worth revisiting
+
+A model that reliably ignores injected instructions would not change the rule, since the rule costs little.
+A way to let a person approve a single task from mail, from their phone, would.
+

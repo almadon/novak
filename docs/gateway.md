@@ -250,6 +250,8 @@ its instructions and invents arguments.
   Only that person gets the tool, and only when their file exists. The household never does. The tool's
   description tells the model to call it once at the start of every conversation, which is why no shared
   prompt has to name a per-person tool. Keep it to about 250 tokens; it is cut at 4,000 characters.
+- **Mail** (`mail__mail_state`, `mail__mail_search`, `mail__mail_read`) is built in too, on
+  [MailFlow](https://github.com/maathimself/mailflow) 4.3.0 or later. See [Mail](#mail-read-only-through-mailflow).
 - **The tasks snapshot** (`tasks__tasks_state`, about 100 tokens) is built in the same way on the person's
   own Tududi entry (the first entry whose name starts with `tududi`). It reads `list_tasks` for today and
   upcoming, drops the seventy-odd fields Tududi returns per task, and answers with a few lines: overdue,
@@ -290,6 +292,33 @@ a phone buzz three times and nothing more.
 Today's one action is `forget_memory` (`{bank, memory_id}`): it calls `invalidate_memory` on the person's own
 `hindsight-<name>` or `code-memory-<name>` entry, which retires the memory without erasing it and can be
 reversed with `restore`. The household bank is not on the list.
+
+## Mail, read only, through MailFlow
+
+The gateway can show a person what in their mail needs them. `mail_state` lists the unread messages that
+look like they are from a person or need action, and counts newsletters, promotions and automated mail by
+sender instead of listing them. `mail_search` finds messages, and `mail_read` opens one as short plain
+text. Messages are cut at about 2,500 characters and links are replaced with `[link]`.
+
+**Set it up** (you need MailFlow 4.3.0 or later):
+
+1. In MailFlow, as the person: Settings, Security, API tokens. Make a token with **only the Read scope**.
+   MailFlow then refuses anything that would change mail. Tokens expire (the longest choice is a year), so
+   note the date.
+2. In `gateway.yaml` on the host, set the address and who gets the tools:
+   `mail: {instance: 1, url: "https://your-mailflow", people: [tmeuze]}`. `instance` numbers your
+   MailFlow, and the address is the one the gateway container can reach.
+3. `novak secret set MAILFLOW_1_TMEUZE_API_TOKEN` (the name follows the instance number and the person),
+   then `novak up` and `novak owui apply`.
+4. In Open WebUI, pick the **Mail** preset and ask what needs you.
+
+**Why it is separate.** Mail is the one source anyone in the world can write into, and a message can be
+written to look like an instruction. So the gateway offers mail tools only to a connection whose
+`X-Novak-Scope` names `mail`, and on that connection it refuses everything that isn't a read: no lights, no
+new tasks, no memory writes, whatever the model decides. The household, voice pipelines and the everyday
+presets never get the tools. Each result also tells the model that the text is data. Those instructions
+help, but the read-only rule is what you can rely on. The Mail preset runs on a local model, and mail
+should never be sent to a hosted one.
 
 ## See also
 

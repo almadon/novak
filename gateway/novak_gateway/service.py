@@ -13,6 +13,7 @@ from .house import ALIAS as HOUSE_ALIAS, House
 from .profile import Profile, SEP as PROFILE_SEP, TOOL as PROFILE_TOOL
 from .tasks import ALIAS as TASKS_ALIAS, Tasks
 from .homeassistant import HAClient
+from .mail import ALIAS as MAIL_ALIAS, Mail, MailFlowClient
 from .mcp import MCPError, Upstream
 from .policy import classify, relaxed
 
@@ -29,7 +30,7 @@ class Gateway:
     def __init__(self, registry_dir, audit, approvals, public_url, env=os.environ,
                  notifier=notify_mod.send, upstream_factory=Upstream, clock=time.time,
                  helper_reader=notify_mod.read_state, helper_poll_s=1.5, publisher=notify_mod._post,
-                 ha_factory=HAClient):
+                 ha_factory=HAClient, mail_factory=MailFlowClient):
         self.registry_dir = Path(registry_dir)
         self.audit, self.approvals = audit, approvals
         self.public_url, self.env, self.notifier = public_url.rstrip("/"), env, notifier
@@ -39,6 +40,8 @@ class Gateway:
         self._upstreams: dict[str, Upstream] = {}
         self._tools: dict[str, tuple[float, list]] = {}
         self.ha_factory = ha_factory
+        self.mail_factory = mail_factory
+        self.mail = Mail(self)
         self.house = House(self)
         self.tasks = Tasks(self)
         self.profile = Profile(self)
@@ -100,14 +103,19 @@ class Gateway:
                 kind = self._kind(entry, t["name"])
                 if identity.kind == "household" and kind == "destructive":
                     continue      # nobody to confirm it: not offered at all
+                if self._reads_mail(identity) and kind != "read":
+                    continue      # a connection that reads mail cannot change anything
                 out.append({**t, "name": f"{entry.alias}{SEP}{t['name']}",
                             "description": f"[{entry.name}] {t.get('description') or ''}".strip()})
         if self._house_entry(identity):
-            out += self.house.tools()
+            out += [t for t in self.house.tools()
+                    if not (self._reads_mail(identity) and t["name"].endswith(SEP + "lights_set"))]
         if self._tasks_entry(identity):
             out += self.tasks.tools()
         if self._profile_alias(identity):
             out += self.profile.tools(identity)
+        if self._mail_client(identity):
+            out += self.mail.tools()
         if identity.tools:
             out = [t for t in out if self._tool_wanted(identity, t["name"])]
         return out
@@ -115,6 +123,16 @@ class Gateway:
     @staticmethod
     def _tool_wanted(identity, namespaced: str) -> bool:
         return not identity.tools or any(fnmatch.fnmatchcase(namespaced, g) for g in identity.tools)
+
+    @staticmethod
+    def _reads_mail(identity) -> bool:
+        """The connection asked for mail by name. Mail is text anyone can send, so such a connection may only
+        read: nothing it is told to do by a message can be carried out (decision #82)."""
+        return MAIL_ALIAS in (identity.scope or ())
+
+    def _mail_client(self, identity):
+        """The person's mail client, only on a connection that names `mail` in its scope."""
+        return self.mail.client_for(identity) if self._reads_mail(identity) else None
 
     def _house_entry(self, identity):
         """Where the lean house tools run for this caller, if they may use them (the config names them
@@ -195,8 +213,28 @@ class Gateway:
         self.audit.record(identity, alias, PROFILE_TOOL, "read", "allowed", outcome, (self.clock() - t0) * 1000)
         return result
 
+    def _call_mail(self, identity, namespaced: str, args: dict) -> dict:
+        t0 = self.clock()
+        client = self._mail_client(identity)
+        tool = namespaced.partition(SEP)[2]
+        if not client or not self._tool_wanted(identity, namespaced):
+            self.audit.record(identity, None, namespaced, None, "denied", "not one of this caller's tools", args=args)
+            return text_result(f"Unknown tool '{namespaced}'.", True)
+        try:
+            result = self.mail.call(client, identity.name, tool, args)
+            outcome = "error" if result.get("isError") else "ok"
+        except Exception as exc:
+            result, outcome = text_result(f"The mail tools could not reach MailFlow: {exc}", True), f"error: {exc}"
+        self.audit.record(identity, MAIL_ALIAS, tool, "read", "allowed", outcome, (self.clock() - t0) * 1000, args)
+        return result
+
     def call_tool(self, identity, namespaced: str, args: dict) -> dict:
         t0 = self.clock()
+        if namespaced.startswith(MAIL_ALIAS + SEP):
+            return self._call_mail(identity, namespaced, args)
+        if self._reads_mail(identity) and namespaced == f"{HOUSE_ALIAS}{SEP}lights_set":
+            self.audit.record(identity, HOUSE_ALIAS, "lights_set", "modify", "denied", "mail connection is read only", args=args)
+            return text_result("This connection reads mail, so it cannot change anything.", True)
         if identity.kind == "person" and identity.name and namespaced.startswith(identity.name + PROFILE_SEP) \
                 and namespaced.endswith(PROFILE_SEP + PROFILE_TOOL):
             return self._call_profile(identity, namespaced)
@@ -212,6 +250,9 @@ class Gateway:
             self.audit.record(identity, entry.name, tool, None, "denied", "not offered", args=args)
             return text_result(f"Unknown tool '{namespaced}'.", True)
         kind = self._kind(entry, tool, args)
+        if self._reads_mail(identity) and kind != "read":
+            self.audit.record(identity, entry.name, tool, kind, "denied", "mail connection is read only", args=args)
+            return text_result("This connection reads mail, so it cannot change anything.", True)
         if kind in self.dir.settings.get("confirm", ["destructive"]):
             if identity.kind == "household":
                 self.audit.record(identity, entry.name, tool, kind, "denied", "household cannot confirm", args=args)

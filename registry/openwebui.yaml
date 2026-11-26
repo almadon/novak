@@ -54,6 +54,18 @@ openwebui:
       key_env: OWUI_GATEWAY_KEY
       headers: {X-Novak-User: "{{USER_EMAIL}}", X-Novak-Scope: "code-memory-*", X-Novak-Tools: "code_memory_*__recall,code_memory_*__retain"}
 
+    # Mail, and only things that read (decision #82). The gateway offers mail tools only to a connection that
+    # names `mail` in its scope, and refuses anything on it that is not a read, because a message can try to
+    # give instructions. It runs on a local model only.
+    - id: novak-mail
+      name: Novak mail
+      description: Read-only mail, with today's tasks and the person's profile.
+      type: mcp
+      url: http://gateway:8000/mcp
+      auth_type: bearer
+      key_env: OWUI_GATEWAY_KEY
+      headers: {X-Novak-User: "{{USER_EMAIL}}", X-Novak-Scope: "mail,tasks,profile", X-Novak-Tools: "mail__*,tasks__tasks_state,*__profile"}
+
   # What people pick from. The router's own roles (chat, deep, task, ha-voice) are plumbing,
   # not choices, so they are hidden from the picker (they keep working underneath, and keep
   # their sharing) and these presets sit on top of them. A new preset is shared with the same
@@ -92,6 +104,14 @@ openwebui:
       capabilities: {builtin_tools: false}   # no ask_user and friends: the persona and gateway tools do the work
       tools: [novak-code]
       system_files: [prompts/novak-code.md]
+
+    - id: mail
+      name: Mail
+      description: What in your mail needs you. Read only, local model, nothing else can be changed.
+      base: chat                       # local only: mail never goes to a hosted model
+      capabilities: {builtin_tools: false}
+      tools: [novak-mail]
+      system_files: [prompts/novak-chat.md, prompts/novak-tools.md, prompts/novak-mail.md]
 
     - {id: chat, hidden: true}
     - {id: deep, hidden: true}

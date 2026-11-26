@@ -124,6 +124,7 @@ DEFAULT_SETTINGS = {
     "tool_overrides": {},
     "arg_rules": {},
     "house": {},
+    "mail": {},
     "notify_groups": {},
     "approval_helper": "",
     "pending_helper": "",

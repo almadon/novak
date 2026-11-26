@@ -27,24 +27,50 @@ Three commitments follow:
 
 ## Themes
 
-**Both are authored, neither is derived.** Deriving dark from light produces
-cold, muddy colour, and warmth is the point here. The dark palette is a warm
-charcoal — brown-black rather than blue-black — with the accent lifted and
-desaturated, because clay that reads rich on paper turns to mud on charcoal.
+A theme is data: a light and a dark palette in
+[`src/lib/themes.ts`](src/lib/themes.ts). Four are built in: **Clay** (Novak's
+own, and the default), **Sage**, **Harbour** and **Plum**. They change the
+accent and tint the neutrals, and all of them keep the neutrals warm. Status
+colours are shared, so a failure looks the same in every scheme.
 
-The OS preference wins by default; an explicit `data-theme` attribute overrides
-it in either direction.
+**Both modes are authored, neither is derived.** Deriving dark from light
+produces cold, muddy colour, and warmth is the point here.
 
-**Every pair meets WCAG AA** (4.5:1 for body text, 3:1 for the intentionally
-faint tier). That was measured, not judged by eye — the warm palette's low
-contrast between adjacent neutrals makes eyeballing unreliable. If you change a
-colour, re-check it rather than trusting it looks fine.
+**Every theme is checked.** A test measures each text and background pair in
+light and dark (4.5:1, or 3:1 for the faint tier). If you change a colour, the
+test tells you whether it is still readable.
+
+### Adding your own
+
+Put a file in `registry/themes/`, named for the theme (`moss.yaml`). No rebuild
+is needed.
+
+```yaml
+label: Moss
+about: Added by this household.
+extends: sage          # optional, clay if left out: list only what you change
+light: { accent: "#3d5a2f" }
+dark:  { accent: "#a9c795" }
+```
+
+The colour names are the ones in `KEYS` in `themes.ts`, and values are
+six-digit hex colours in quotes. The same contrast test applies. A file that
+fails it, or contains anything else, is not offered, and the Appearance page
+says why.
+
+### What each person can change
+
+The Appearance page offers colour scheme, light or dark, text size, high
+contrast and reduced motion. Each follows the device until someone overrides
+it, and the choice is kept in a cookie on that device. A new setting is one entry
+in [`src/lib/appearance.ts`](src/lib/appearance.ts) and the CSS for it.
 
 ## Using the tokens
 
-Everything is a CSS custom property in
-[`src/styles/tokens.css`](src/styles/tokens.css). **A literal colour, size or
-radius anywhere else is a bug.**
+Everything is a CSS custom property. Colours come from the chosen theme; type,
+space and shape are in [`src/styles/tokens.css`](src/styles/tokens.css). **A
+literal colour, size or radius in a component or stylesheet is a bug.** The one
+exception is `src/app/icon.svg`, because a favicon cannot read the page's tokens.
 
 Tokens are named by **role**, not by shade:
 
@@ -96,13 +122,15 @@ there; the indirection is the point.
   users must see where they are.
 - **No literal values.** If a token is missing, add one — don't inline a hex.
 
-## Status, and what comes next
+## Extending the console
 
-The token layer exists and is loaded. **There are no components yet**, and that
-is deliberate: Konzol currently has three placeholder pages, and designing
-components for screens that do not exist means guessing.
+| To add | Change |
+|---|---|
+| A colour scheme for one household | A file in `registry/themes/` |
+| A built-in colour scheme | One entry in `BUILTIN` in `src/lib/themes.ts` |
+| A display setting | `src/lib/appearance.ts`, plus CSS keyed on its data attribute |
+| A page in the header | One line in `src/components/nav.tsx` |
 
-Build them as real screens arrive. Once there is a genuine component library
-with exported parts, `/design-sync` becomes worth running — it can then teach a
-design agent to build new Konzol screens from Novak's actual components rather
-than generic ones. Running it today would sync an empty shell.
+Shared page pieces are plain CSS classes in `globals.css` (`.page`, `.list`,
+`.empty`, `.pill`, `.summary`, `.notice`, `.button`). Reuse them before adding
+new ones.

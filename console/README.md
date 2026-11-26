@@ -19,7 +19,14 @@ It does not hold power of its own. When a person asks it to do something, such a
 | Approvals | What is waiting, and what was decided recently, with a way to ask for a test notification |
 | Memory | Your own memories (and the household's, if you are an admin), with a request to forget one |
 | Profiles | Persona and attached tools per person |
+| Appearance | Colour scheme, light or dark, text size, contrast and motion, per device |
 | Admin | The tool catalog, over the registry files. A placeholder for now |
+
+## Accessibility
+
+The console follows the device's light or dark and reduced-motion settings until someone overrides them on the Appearance page, which also offers four text sizes, high contrast and a choice of colour scheme. Every scheme, including ones you add, has to pass a contrast test. There is no "larger marks" option, because the console has no small data marks. Buttons, page links and form controls are at least 44px tall.
+
+**Tested:** the contrast test over the built-in schemes; five pages at 320, 390, 768 and 1280px wide with the largest text, checked for sideways scrolling and, at 320px, for small controls. That was one manual run in one browser with made-up data. **Not tested:** 200% browser zoom, a phone in landscape, keyboard-only use, a screen reader, other browsers. There is no automated viewport test yet.
 
 ## Use cases
 
@@ -59,7 +66,7 @@ The console is an optional client. The stack runs without it, and everything it 
 
 | Read | For |
 |---|---|
-| [DESIGN.md](DESIGN.md) | Colours, type and layout, and why |
+| [DESIGN.md](DESIGN.md) | Themes, type and layout, why, and how to extend them |
 | [docs/gateway.md](../docs/gateway.md) | The status endpoint, the change endpoint and the keys |
 | [docs/decisions.md](../docs/decisions.md) | "Konzol is the configuration plane" and the decisions around it |
 | [docs/security.md](../docs/security.md) | Trust boundaries |

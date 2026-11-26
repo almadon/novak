@@ -114,3 +114,89 @@ input[type="search"], select {
   border-radius: var(--radius); padding: var(--space-2) var(--space-3);
 }
 input[type="search"] { flex: 1 1 14rem; }
+
+/* Masthead: the same on every page. */
+.skip { position: absolute; left: var(--space-4); top: -100%; background: var(--surface); padding: var(--space-2) var(--space-4); border-radius: var(--radius); z-index: 2; }
+.skip:focus { top: var(--space-2); }
+.masthead { background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+.masthead-inner { max-width: 52rem; margin: 0 auto; padding: var(--space-2) var(--space-4); display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); align-items: center; justify-content: space-between; }
+.brand { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--target); color: var(--text); text-decoration: none; font-weight: var(--weight-bold); font-size: var(--text-lg); }
+.brand:hover { color: var(--text); }
+.nav { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.nav a { display: inline-flex; align-items: center; min-height: var(--target); padding: 0 var(--space-3); border-radius: var(--radius-full); color: var(--text-muted); text-decoration: none; }
+.nav a:hover { background: var(--surface-sunken); color: var(--text); }
+.nav a[aria-current="page"] { background: var(--accent-quiet); color: var(--accent); font-weight: var(--weight-medium); }
+
+.page > h1 { margin-bottom: var(--space-1); }
+.page h2 { font-size: var(--text-lg); margin-bottom: 0; }
+
+/* The one-line answer at the top of Today. The sentence carries the meaning; the dot only repeats it. */
+.summary { display: flex; gap: var(--space-3); align-items: center; max-width: none; padding: var(--space-4); border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-sm); font-size: var(--text-lg); margin-bottom: var(--space-8); }
+.summary .dot { flex: none; width: var(--space-3); height: var(--space-3); border-radius: var(--radius-full); background: var(--ok); }
+.summary.attention { background: var(--warn-quiet); border-color: var(--warn); }
+.summary.attention .dot { background: var(--warn); }
+.summary.trouble .dot { background: var(--danger); }
+
+/* Lists read as one card with rows, not a pile of boxes. */
+.list { gap: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden; }
+.list li { margin: 0; background: none; border: 0; border-radius: 0; padding: var(--space-3) var(--space-4); }
+.list li + li { border-top: 1px solid var(--border); }
+.list li.notice.warn { background: var(--warn-quiet); }
+.list:empty { display: none; }
+.feed li { padding-block: var(--space-2); }
+.row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+li.row > .meta:last-child { white-space: nowrap; } /* timestamps only: longer notes must wrap */
+.stack { grid-template-columns: minmax(0, 1fr); }
+
+.empty { max-width: none; margin: 0; padding: var(--space-4); border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); color: var(--text-muted); text-align: center; }
+
+.pill { display: inline-block; padding: 0 var(--space-2); border-radius: var(--radius-full); border: 1px solid var(--border-strong); font-size: var(--text-xs); font-weight: var(--weight-medium); color: var(--text-muted); margin-right: var(--space-1); }
+.pill.approved { background: var(--ok-quiet); border-color: var(--ok); color: var(--ok); }
+.pill.denied { background: var(--danger-quiet); border-color: var(--danger); color: var(--danger); }
+.pill.expired { background: var(--warn-quiet); border-color: var(--warn); color: var(--warn); }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); }
+.stats div { border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); min-width: 0; }
+.stats dd { font-size: var(--text-2xl); line-height: var(--leading-tight); font-variant-numeric: tabular-nums; }
+
+.memory p:first-child { margin-bottom: var(--space-2); }
+.memory .button { margin-top: var(--space-2); }
+
+.button { min-height: var(--target); border-radius: var(--radius-full); }
+.button.ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border-strong); padding: 0 var(--space-4); }
+.button.ghost:hover { background: var(--accent-quiet); color: var(--accent); border-color: var(--accent); }
+.button.quiet:hover { color: var(--on-accent); }
+input[type="search"], select { min-height: var(--target); }
+.tabs { flex-wrap: wrap; }
+.tabs a { display: inline-flex; align-items: center; min-height: var(--target); }
+
+/* Display options (lib/appearance.ts). Type is sized in rem, so one root size scales everything. */
+html[data-text="small"] { font-size: 90%; }
+html[data-text="large"] { font-size: 115%; }
+html[data-text="largest"] { font-size: 130%; }
+html:root[data-contrast="high"] { --text-muted: var(--text); --text-faint: var(--text); --border: var(--text-muted); --border-strong: var(--text); }
+html[data-contrast="high"] a { text-decoration-line: underline; }
+html[data-contrast="high"] .nav a[aria-current="page"], html[data-contrast="high"] .tabs a[aria-current="page"] { outline: 2px solid var(--accent); }
+html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-motion="reduce"] *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+
+/* Appearance page */
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+legend { font-weight: var(--weight-bold); font-size: var(--text-lg); padding: 0; margin-bottom: var(--space-2); }
+.themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(11rem, 100%), 1fr)); gap: var(--space-3); }
+.theme { display: grid; gap: var(--space-1); align-content: start; padding: var(--space-3); background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius-lg); cursor: pointer; }
+.theme input { justify-self: start; accent-color: var(--accent); }
+.theme:has(input:checked) { border-color: var(--accent); background: var(--accent-quiet); }
+.theme:has(input:checked) .meta { color: var(--text); }
+.theme:has(input:focus-visible), .choice:has(input:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+.swatches { display: grid; grid-template-columns: 1fr 1fr; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
+.swatches svg { display: block; width: 100%; height: auto; }
+.choices { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.choice { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--target); padding: 0 var(--space-4); background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-full); cursor: pointer; }
+.choice input { accent-color: var(--accent); margin: 0; }
+.choice:has(input:checked) { border-color: var(--accent); background: var(--accent-quiet); }
+
+/* On a phone the page links get tighter, so the header does not push the page off the screen. */
+@media (max-width: 30rem) {
+  .nav a { padding: 0 var(--space-2); font-size: var(--text-sm); }
+  .masthead-inner { gap: 0 var(--space-4); }
+}

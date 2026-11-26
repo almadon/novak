@@ -28,7 +28,7 @@ export default async function Approvals() {
         <>
           <section className="stack" aria-labelledby="waiting">
             <h2 id="waiting">Waiting</h2>
-            {r.data.pending.length === 0 ? <p className="meta">Nothing is waiting.</p> : (
+            {r.data.pending.length === 0 ? <p className="empty">Nothing is waiting. New requests appear here and on your phone.</p> : (
               <ul className="list">
                 {r.data.pending.map((p) => (
                   <li key={p.id} className="row">
@@ -42,11 +42,11 @@ export default async function Approvals() {
           </section>
           <section className="stack" aria-labelledby="decided">
             <h2 id="decided">Recently answered</h2>
-            {r.data.decided.length === 0 ? <p className="meta">Nothing yet.</p> : (
+            {r.data.decided.length === 0 ? <p className="empty">Nothing yet. Answered requests are listed here.</p> : (
               <ul className="list">
                 {r.data.decided.map((d) => (
                   <li key={d.id} className="row">
-                    <span>{d.person}: {label(d.tool)} was <strong className={d.status === "approved" ? undefined : "danger"}>{d.status}</strong></span>
+                    <span>{d.person}: {label(d.tool)} was <span className={`pill ${d.status}`}>{d.status}</span></span>
                     <span className="meta">{ago(r.data.now, d.decidedAt ?? d.createdAt)}</span>
                   </li>
                 ))}

@@ -96,7 +96,7 @@ export default async function MemoryPage({ searchParams }: { searchParams: Searc
               <li key={m.id} className="memory">
                 <p>{m.text}</p>
                 <p className="meta">
-                  {m.type}{m.date && ` · ${m.date.slice(0, 10)}`}{m.tags.length > 0 && ` · ${m.tags.join(", ")}`}
+                  <span className="pill">{m.type}</span>{m.date && ` · ${m.date.slice(0, 10)}`}{m.tags.length > 0 && ` · ${m.tags.join(", ")}`}
                   {m.state && m.state !== "valid" && ` · ${m.state}`}
                 </p>
                 {m.context && <p className="meta">{m.context}</p>}
@@ -104,7 +104,7 @@ export default async function MemoryPage({ searchParams }: { searchParams: Searc
                   <form action={forgetMemoryAction}>
                     <input type="hidden" name="bank" value={open.id} />
                     <input type="hidden" name="memory_id" value={m.id} />
-                    <button type="submit" className="button quiet">Forget</button>
+                    <button type="submit" className="button ghost">Forget</button>
                   </form>
                 )}
               </li>

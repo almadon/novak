@@ -46,6 +46,15 @@ export default async function Today() {
         const a = t.activity;
         return (
           <>
+            <p className={`summary ${t.pending.length ? "attention" : a.errors ? "trouble" : "calm"}`} role="status">
+              <span className="dot" aria-hidden="true" />
+              {t.pending.length
+                ? `${t.pending.length} ${t.pending.length === 1 ? "request is" : "requests are"} waiting for a yes.`
+                : a.errors
+                  ? `Nothing is waiting. ${a.errors} ${a.errors === 1 ? "call has" : "calls have"} failed since midnight.`
+                  : "All quiet. Nothing is waiting on anyone."}
+            </p>
+
             {admin && t.gateway.problems.length > 0 && (
               <section className="stack" aria-labelledby="problems">
                 <h2 id="problems">Needs fixing</h2>
@@ -58,7 +67,7 @@ export default async function Today() {
             <section className="stack" aria-labelledby="waiting">
               <h2 id="waiting">Waiting for a yes</h2>
               {t.pending.length === 0 ? (
-                <p className="meta">Nothing is waiting. Removals ask for confirmation on the phone of the person who asked.</p>
+                <p className="empty">Nothing is waiting. Removals ask for confirmation on the phone of the person who asked.</p>
               ) : (
                 <ul className="list">
                   {t.pending.map((p) => (
@@ -89,9 +98,9 @@ export default async function Today() {
             <section className="stack" aria-labelledby="recent">
               <h2 id="recent">Latest</h2>
               {a.recent.length === 0 ? (
-                <p className="meta">Nothing yet.</p>
+                <p className="empty">Nothing yet. Calls show up here as Novak works.</p>
               ) : (
-                <ul className="list">
+                <ul className="list feed">
                   {a.recent.slice(0, 15).map((r, i) => (
                     <li key={`${r.ts}-${i}`} className="row">
                       <span className={r.decision === "denied" || r.decision === "error" || r.outcome.startsWith("error") ? "danger" : undefined}>{describe(r)}</span>
@@ -109,7 +118,7 @@ export default async function Today() {
                 <ul className="list">
                   {t.decided.slice(0, 5).map((d) => (
                     <li key={d.id} className="row">
-                      <span>{d.person}: {d.tool.replace(/_/g, " ")} was <strong>{d.status}</strong></span>
+                      <span>{d.person}: {d.tool.replace(/_/g, " ")} was <span className={`pill ${d.status}`}>{d.status}</span></span>
                       <span className="meta">{ago(t.now, d.decidedAt ?? d.createdAt)}</span>
                     </li>
                   ))}
@@ -120,9 +129,7 @@ export default async function Today() {
         );
       })()}
 
-      <p className="meta">
-        <Link href="/approvals">Approvals</Link> · <Link href="/memory">Memory</Link> · <Link href="/profiles">Profiles</Link>{admin && <> · <Link href="/admin">Admin: tool catalog</Link></>}
-      </p>
+      {admin && <p className="meta"><Link href="/admin">Admin: tool catalog</Link></p>}
     </main>
   );
 }
